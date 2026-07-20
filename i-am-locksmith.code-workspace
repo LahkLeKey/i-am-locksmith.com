@@ -7,6 +7,7 @@
   "settings": {
     "files.exclude": {
       "**/.vercel": true
-    }
+    },
+    "prisma.pinToPrisma6": false
   }
 }

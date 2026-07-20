@@ -30,43 +30,37 @@ describe('buildLandingWorkflows', () => {
        expect(byId.reports?.state).toBe('ready');
        expect(byId.jobs?.state).toBe('permission_required');
        expect(byId.invoices?.state).toBe('permission_required');
-      expect(byId.jobs?.ctaHref).toBe('/access');
+       expect(byId.jobs?.ctaHref).toBe('/access');
      });
 });
 
 describe('buildPrimaryAction', () => {
   it('uses sign-in for guests', () => {
-      expect(buildPrimaryAction({isAuthenticated: false, permissions: new Set()}))
+    expect(buildPrimaryAction({isAuthenticated: false, permissions: new Set()}))
         .toEqual({label: 'Sign in', href: '/sign-in'});
   });
 
   it('routes authenticated users with inventory access to inventory workflow',
      () => {
-         expect(
-             buildPrimaryAction({
-               isAuthenticated: true,
-               permissions: new Set(['inventory.read']),
-             }))
-             .toEqual({label: 'Open inventory', href: '/inventory'});
+       expect(buildPrimaryAction({
+         isAuthenticated: true,
+         permissions: new Set(['inventory.read']),
+       })).toEqual({label: 'Open inventory', href: '/inventory'});
      });
 
-    it('routes to first permitted workflow when inventory is not permitted',
+  it('routes to first permitted workflow when inventory is not permitted',
      () => {
-         expect(
-             buildPrimaryAction({
-               isAuthenticated: true,
-               permissions: new Set(['jobs.read']),
-             }))
-             .toEqual({label: 'Open workflow', href: '/jobs'});
-       });
+       expect(buildPrimaryAction({
+         isAuthenticated: true,
+         permissions: new Set(['jobs.read']),
+       })).toEqual({label: 'Open workflow', href: '/jobs'});
+     });
 
-    it('uses access guidance when authenticated user has no workflow permissions',
-       () => {
-         expect(
-             buildPrimaryAction({
-               isAuthenticated: true,
-               permissions: new Set(),
-             }))
-             .toEqual({label: 'Review access guidance', href: '/access'});
+  it('uses access guidance when authenticated user has no workflow permissions',
+     () => {
+       expect(buildPrimaryAction({
+         isAuthenticated: true,
+         permissions: new Set(),
+       })).toEqual({label: 'Review access guidance', href: '/access'});
      });
 });

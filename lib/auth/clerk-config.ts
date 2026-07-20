@@ -68,8 +68,9 @@ export function validateClerkEnvironment(env: PublicEnv = process.env): void {
   });
 
   if (missingKeys.length > 0) {
-    throw new Error(
-        `Missing required Clerk environment variables: ${missingKeys.join(', ')}. Set them in both Vercel Production and Preview environments, then restart the app.`);
+    throw new Error(`Missing required Clerk environment variables: ${
+        missingKeys.join(
+            ', ')}. Set them in both Vercel Production and Preview environments, then restart the app.`);
   }
 }
 
