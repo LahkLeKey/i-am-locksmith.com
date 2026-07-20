@@ -1,21 +1,13 @@
 import {describe, expect, it} from 'vitest';
 
-import {
-  CLERK_POST_AUTH_PATH,
-  CLERK_PROXY_PATH,
-  CLERK_SIGN_IN_PATH,
-  CLERK_SIGN_UP_PATH,
-  getAllowedRedirectOrigins,
-  getClerkMiddlewareOptions,
-  getClerkProviderProps,
-} from './clerk-config';
+import {CLERK_POST_AUTH_PATH, CLERK_PROXY_PATH, CLERK_SIGN_IN_PATH, CLERK_SIGN_UP_PATH, getAllowedRedirectOrigins, getClerkMiddlewareOptions, getClerkProviderProps,} from './clerk-config';
 
 describe('getAllowedRedirectOrigins', () => {
   it('includes default production and local origins', () => {
     const origins = getAllowedRedirectOrigins({});
 
-    expect(origins).toContain('https://www.ali-d.com');
-    expect(origins).toContain('https://ali-d.com');
+    expect(origins).toContain('https://www.i-am-locksmith.com');
+    expect(origins).toContain('https://i-am-locksmith.com');
     expect(origins).toContain('http://localhost:3000');
   });
 
@@ -25,8 +17,28 @@ describe('getAllowedRedirectOrigins', () => {
     });
 
     expect(origins).toContain(
-      'https://locksmith-dashboard-kyle-haleks-projects.vercel.app'
-    );
+        'https://locksmith-dashboard-kyle-haleks-projects.vercel.app');
+  });
+
+  it('accepts fully qualified app and site URLs', () => {
+    const origins = getAllowedRedirectOrigins({
+      NEXT_PUBLIC_APP_URL: 'https://app.i-am-locksmith.com/path',
+      NEXT_PUBLIC_SITE_URL: 'https://preview.i-am-locksmith.com',
+    });
+
+    expect(origins).toContain('https://app.i-am-locksmith.com');
+    expect(origins).toContain('https://preview.i-am-locksmith.com');
+  });
+
+  it('normalizes Vercel production URL and de-dupes defaults', () => {
+    const origins = getAllowedRedirectOrigins({
+      VERCEL_PROJECT_PRODUCTION_URL: 'www.i-am-locksmith.com',
+      VERCEL_URL: 'www.i-am-locksmith.com',
+    });
+
+    expect(
+        origins.filter((origin) => origin === 'https://www.i-am-locksmith.com'))
+        .toHaveLength(1);
   });
 });
 
