@@ -1,18 +1,28 @@
 import { UserDetails } from "../components/user-details";
 import { UserButton } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
 import { CodeSwitcher } from "../components/code-switcher";
 import { LearnMore } from "../_template/components/learn-more";
 import { Footer } from "../_template/components/footer";
 import { ClerkLogo } from "../_template/components/clerk-logo";
 import { NextLogo } from "../_template/components/next-logo";
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { authorizePermission } from "@/lib/rbac/server";
+import { ROUTE_PERMISSION_MAP } from "@/lib/rbac/policy";
 
 import { DASHBOARD_CARDS } from "../_template/content/cards";
 import { DeployButton } from "../_template/components/deploy-button";
 
 export default async function DashboardPage() {
-  await auth.protect();
+  const decision = await authorizePermission(ROUTE_PERMISSION_MAP["/dashboard"]);
+
+  if (decision.state === "unauthenticated") {
+    redirect("/sign-in");
+  }
+
+  if (decision.state === "forbidden") {
+    notFound();
+  }
 
   return (
     <>
