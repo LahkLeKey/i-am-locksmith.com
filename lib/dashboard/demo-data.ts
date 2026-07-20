@@ -1,47 +1,32 @@
-export type TrendDirection = "up" | "down" | "flat";
+export type TrendDirection = 'up'|'down'|'flat';
 
 export type TrendPoint = {
-  at: string;
-  value: number;
+  at: string; value: number;
 };
 
 export type KpiCard = {
-  id: string;
-  label: string;
-  value: number;
-  unit?: "count" | "usd" | "minutes" | "percent";
-  changePct: number;
+  id: string; label: string; value: number;
+  unit?: 'count' | 'usd' | 'minutes' | 'percent'; changePct: number;
   direction: TrendDirection;
   trend: TrendPoint[];
 };
 
-export type JobQueueStatus =
-  | "queued"
-  | "scheduled"
-  | "in_progress"
-  | "blocked";
+export type JobQueueStatus =|'queued'|'scheduled'|'in_progress'|'blocked';
 
-export type JobQueuePriority = "low" | "normal" | "high" | "urgent";
+export type JobQueuePriority = 'low'|'normal'|'high'|'urgent';
 
 export type JobQueueItem = {
-  id: string;
-  customerName: string;
-  site: string;
-  priority: JobQueuePriority;
+  id: string; customerName: string; site: string; priority: JobQueuePriority;
   status: JobQueueStatus;
   scheduledFor: string | null;
   etaMinutes: number | null;
   requiredSkus: string[];
 };
 
-export type ReplenishmentSeverity = "low" | "medium" | "high" | "critical";
+export type ReplenishmentSeverity = 'low'|'medium'|'high'|'critical';
 
 export type ReplenishmentAlert = {
-  id: string;
-  sku: string;
-  itemName: string;
-  location: string;
-  onHand: number;
+  id: string; sku: string; itemName: string; location: string; onHand: number;
   reorderPoint: number;
   suggestedOrderQty: number;
   severity: ReplenishmentSeverity;
@@ -51,24 +36,19 @@ export type ReplenishmentAlert = {
 };
 
 export type DashboardDemoData = {
-  generatedAt: string;
-  revenueToday: number;
-  openInvoices: number;
+  generatedAt: string; revenueToday: number; openInvoices: number;
   grossMarginWeek: number;
   lowStockSkus: number;
   vansBelowMin: number;
-  financialTrend: {
-    revenue: TrendPoint[];
-    expenses: TrendPoint[];
-    profit: TrendPoint[];
-  };
+  financialTrend:
+      {revenue: TrendPoint[]; expenses: TrendPoint[]; profit: TrendPoint[];};
   kpis: KpiCard[];
   jobsQueue: JobQueueItem[];
   replenishmentAlerts: ReplenishmentAlert[];
 };
 
 export const DASHBOARD_DEMO_DATA: DashboardDemoData = {
-  generatedAt: "2026-07-20T09:00:00.000Z",
+  generatedAt: '2026-07-20T09:00:00.000Z',
   revenueToday: 4280,
   openInvoices: 18,
   grossMarginWeek: 46.2,
@@ -76,157 +56,157 @@ export const DASHBOARD_DEMO_DATA: DashboardDemoData = {
   vansBelowMin: 1,
   financialTrend: {
     revenue: [
-      {at: "2026-07-14", value: 3510},
-      {at: "2026-07-15", value: 3720},
-      {at: "2026-07-16", value: 3890},
-      {at: "2026-07-17", value: 4010},
-      {at: "2026-07-18", value: 4175},
-      {at: "2026-07-19", value: 4230},
-      {at: "2026-07-20", value: 4280},
+      {at: '2026-07-14', value: 3510},
+      {at: '2026-07-15', value: 3720},
+      {at: '2026-07-16', value: 3890},
+      {at: '2026-07-17', value: 4010},
+      {at: '2026-07-18', value: 4175},
+      {at: '2026-07-19', value: 4230},
+      {at: '2026-07-20', value: 4280},
     ],
     expenses: [
-      {at: "2026-07-14", value: 1980},
-      {at: "2026-07-15", value: 2030},
-      {at: "2026-07-16", value: 2100},
-      {at: "2026-07-17", value: 2150},
-      {at: "2026-07-18", value: 2215},
-      {at: "2026-07-19", value: 2270},
-      {at: "2026-07-20", value: 2305},
+      {at: '2026-07-14', value: 1980},
+      {at: '2026-07-15', value: 2030},
+      {at: '2026-07-16', value: 2100},
+      {at: '2026-07-17', value: 2150},
+      {at: '2026-07-18', value: 2215},
+      {at: '2026-07-19', value: 2270},
+      {at: '2026-07-20', value: 2305},
     ],
     profit: [
-      {at: "2026-07-14", value: 1530},
-      {at: "2026-07-15", value: 1690},
-      {at: "2026-07-16", value: 1790},
-      {at: "2026-07-17", value: 1860},
-      {at: "2026-07-18", value: 1960},
-      {at: "2026-07-19", value: 1960},
-      {at: "2026-07-20", value: 1975},
+      {at: '2026-07-14', value: 1530},
+      {at: '2026-07-15', value: 1690},
+      {at: '2026-07-16', value: 1790},
+      {at: '2026-07-17', value: 1860},
+      {at: '2026-07-18', value: 1960},
+      {at: '2026-07-19', value: 1960},
+      {at: '2026-07-20', value: 1975},
     ],
   },
   kpis: [
     {
-      id: "open-jobs",
-      label: "Open Jobs",
+      id: 'open-jobs',
+      label: 'Open Jobs',
       value: 37,
-      unit: "count",
+      unit: 'count',
       changePct: 8.4,
-      direction: "up",
+      direction: 'up',
       trend: [
-        { at: "2026-07-14", value: 28 },
-        { at: "2026-07-15", value: 31 },
-        { at: "2026-07-16", value: 29 },
-        { at: "2026-07-17", value: 34 },
-        { at: "2026-07-18", value: 35 },
-        { at: "2026-07-19", value: 36 },
-        { at: "2026-07-20", value: 37 },
+        {at: '2026-07-14', value: 28},
+        {at: '2026-07-15', value: 31},
+        {at: '2026-07-16', value: 29},
+        {at: '2026-07-17', value: 34},
+        {at: '2026-07-18', value: 35},
+        {at: '2026-07-19', value: 36},
+        {at: '2026-07-20', value: 37},
       ],
     },
     {
-      id: "jobs-completed-today",
-      label: "Jobs Completed Today",
+      id: 'jobs-completed-today',
+      label: 'Jobs Completed Today',
       value: 14,
-      unit: "count",
+      unit: 'count',
       changePct: -6.7,
-      direction: "down",
+      direction: 'down',
       trend: [
-        { at: "2026-07-14", value: 15 },
-        { at: "2026-07-15", value: 16 },
-        { at: "2026-07-16", value: 14 },
-        { at: "2026-07-17", value: 17 },
-        { at: "2026-07-18", value: 15 },
-        { at: "2026-07-19", value: 15 },
-        { at: "2026-07-20", value: 14 },
+        {at: '2026-07-14', value: 15},
+        {at: '2026-07-15', value: 16},
+        {at: '2026-07-16', value: 14},
+        {at: '2026-07-17', value: 17},
+        {at: '2026-07-18', value: 15},
+        {at: '2026-07-19', value: 15},
+        {at: '2026-07-20', value: 14},
       ],
     },
     {
-      id: "avg-time-to-dispatch",
-      label: "Avg Time to Dispatch",
+      id: 'avg-time-to-dispatch',
+      label: 'Avg Time to Dispatch',
       value: 42,
-      unit: "minutes",
+      unit: 'minutes',
       changePct: 0,
-      direction: "flat",
+      direction: 'flat',
       trend: [
-        { at: "2026-07-14", value: 44 },
-        { at: "2026-07-15", value: 43 },
-        { at: "2026-07-16", value: 42 },
-        { at: "2026-07-17", value: 41 },
-        { at: "2026-07-18", value: 42 },
-        { at: "2026-07-19", value: 42 },
-        { at: "2026-07-20", value: 42 },
+        {at: '2026-07-14', value: 44},
+        {at: '2026-07-15', value: 43},
+        {at: '2026-07-16', value: 42},
+        {at: '2026-07-17', value: 41},
+        {at: '2026-07-18', value: 42},
+        {at: '2026-07-19', value: 42},
+        {at: '2026-07-20', value: 42},
       ],
     },
   ],
   jobsQueue: [
     {
-      id: "JOB-1042",
-      customerName: "Northside Medical",
-      site: "Denver, CO",
-      priority: "urgent",
-      status: "in_progress",
-      scheduledFor: "2026-07-20T10:30:00.000Z",
+      id: 'JOB-1042',
+      customerName: 'Northside Medical',
+      site: 'Denver, CO',
+      priority: 'urgent',
+      status: 'in_progress',
+      scheduledFor: '2026-07-20T10:30:00.000Z',
       etaMinutes: 25,
-      requiredSkus: ["LOCK-CYL-01", "STRIKE-PLATE-02"],
+      requiredSkus: ['LOCK-CYL-01', 'STRIKE-PLATE-02'],
     },
     {
-      id: "JOB-1046",
-      customerName: "Arcadia Storage",
-      site: "Boulder, CO",
-      priority: "high",
-      status: "scheduled",
-      scheduledFor: "2026-07-20T13:00:00.000Z",
+      id: 'JOB-1046',
+      customerName: 'Arcadia Storage',
+      site: 'Boulder, CO',
+      priority: 'high',
+      status: 'scheduled',
+      scheduledFor: '2026-07-20T13:00:00.000Z',
       etaMinutes: 90,
-      requiredSkus: ["PADLOCK-HEAVY-10"],
+      requiredSkus: ['PADLOCK-HEAVY-10'],
     },
     {
-      id: "JOB-1050",
-      customerName: "Elm Street Retail",
-      site: "Aurora, CO",
-      priority: "normal",
-      status: "queued",
+      id: 'JOB-1050',
+      customerName: 'Elm Street Retail',
+      site: 'Aurora, CO',
+      priority: 'normal',
+      status: 'queued',
       scheduledFor: null,
       etaMinutes: null,
-      requiredSkus: ["DEADBOLT-STD-04"],
+      requiredSkus: ['DEADBOLT-STD-04'],
     },
   ],
   replenishmentAlerts: [
     {
-      id: "ALERT-2001",
-      sku: "LOCK-CYL-01",
-      itemName: "Cylinder Lock Core",
-      location: "Warehouse A",
+      id: 'ALERT-2001',
+      sku: 'LOCK-CYL-01',
+      itemName: 'Cylinder Lock Core',
+      location: 'Warehouse A',
       onHand: 6,
       reorderPoint: 12,
       suggestedOrderQty: 24,
-      severity: "critical",
-      supplier: "KeyCore Supply",
+      severity: 'critical',
+      supplier: 'KeyCore Supply',
       etaDays: 2,
-      createdAt: "2026-07-20T08:15:00.000Z",
+      createdAt: '2026-07-20T08:15:00.000Z',
     },
     {
-      id: "ALERT-2005",
-      sku: "PADLOCK-HEAVY-10",
-      itemName: "Hardened Padlock 70mm",
-      location: "Warehouse B",
+      id: 'ALERT-2005',
+      sku: 'PADLOCK-HEAVY-10',
+      itemName: 'Hardened Padlock 70mm',
+      location: 'Warehouse B',
       onHand: 11,
       reorderPoint: 15,
       suggestedOrderQty: 20,
-      severity: "high",
-      supplier: "SecureSteel Inc",
+      severity: 'high',
+      supplier: 'SecureSteel Inc',
       etaDays: 4,
-      createdAt: "2026-07-20T08:45:00.000Z",
+      createdAt: '2026-07-20T08:45:00.000Z',
     },
     {
-      id: "ALERT-2008",
-      sku: "STRIKE-PLATE-02",
-      itemName: "Reinforced Strike Plate",
-      location: "Van Stock - Team 3",
+      id: 'ALERT-2008',
+      sku: 'STRIKE-PLATE-02',
+      itemName: 'Reinforced Strike Plate',
+      location: 'Van Stock - Team 3',
       onHand: 4,
       reorderPoint: 5,
       suggestedOrderQty: 10,
-      severity: "medium",
-      supplier: "DoorGuard Parts",
+      severity: 'medium',
+      supplier: 'DoorGuard Parts',
       etaDays: null,
-      createdAt: "2026-07-20T09:00:00.000Z",
+      createdAt: '2026-07-20T09:00:00.000Z',
     },
   ],
 };

@@ -1,9 +1,11 @@
 export function formatUsd(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
+  return new Intl
+      .NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      })
+      .format(value);
 }
 
 export function formatPercent(value: number): string {
@@ -23,7 +25,7 @@ export function formatTimeLabel(isoDate: string): string {
   return date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
 }
 
-export function formatSchedule(isoDate: string | null): string {
+export function formatSchedule(isoDate: string|null): string {
   if (!isoDate) {
     return 'Unscheduled';
   }

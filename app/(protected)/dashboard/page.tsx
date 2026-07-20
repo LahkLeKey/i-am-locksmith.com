@@ -1,8 +1,8 @@
-import {requireRoutePermission} from '@/lib/rbac/guard';
-import {getAuthorizationContext} from '@/lib/rbac/server';
-import {formatPercent, formatSchedule, formatTimeLabel, formatUsd} from '@/lib/dashboard/format';
-import {DASHBOARD_DEMO_DATA} from '@/lib/dashboard/demo-data';
-import {buildVisibleWidgets} from '@/lib/dashboard/widget-policy';
+import { requireRoutePermission } from '@/lib/rbac/guard';
+import { getAuthorizationContext } from '@/lib/rbac/server';
+import { formatPercent, formatSchedule, formatTimeLabel, formatUsd } from '@/lib/dashboard/format';
+import { DASHBOARD_DEMO_DATA } from '@/lib/dashboard/demo-data';
+import { buildVisibleWidgets } from '@/lib/dashboard/widget-policy';
 
 export default async function DashboardPage() {
   await requireRoutePermission('/dashboard');

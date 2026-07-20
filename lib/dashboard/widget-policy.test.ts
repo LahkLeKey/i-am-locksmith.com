@@ -34,7 +34,8 @@ describe('buildVisibleWidgets', () => {
   });
 
   it('hides financial widgets for technician profile', () => {
-    const permissions = new Set(['dashboard.read', 'jobs.read', 'inventory.read']);
+    const permissions =
+        new Set(['dashboard.read', 'jobs.read', 'inventory.read']);
 
     const visible = buildVisibleWidgets(permissions as never);
 
@@ -47,7 +48,8 @@ describe('buildVisibleWidgets', () => {
   });
 
   it('fails closed when dashboard.read is missing', () => {
-    const permissions = new Set(['jobs.read', 'inventory.read', 'reports.read']);
+    const permissions =
+        new Set(['jobs.read', 'inventory.read', 'reports.read']);
 
     const visible = buildVisibleWidgets(permissions as never);
 
