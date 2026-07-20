@@ -1,12 +1,18 @@
-import { requireRoutePermission } from '@/lib/rbac/guard';
-import { getAuthorizationContext } from '@/lib/rbac/server';
+import { UnscopedOnboardingPanel } from '@/app/components/unscoped-onboarding-panel';
+import { requireAuthenticatedContext } from '@/lib/rbac/guard';
 import { formatPercent, formatSchedule, formatTimeLabel, formatUsd } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';
 import { buildVisibleWidgets } from '@/lib/dashboard/widget-policy';
+import { hasPermission } from '@/lib/rbac/policy';
 
 export default async function DashboardPage() {
-  await requireRoutePermission('/dashboard');
-  const context = await getAuthorizationContext();
+  const context = await requireAuthenticatedContext();
+  const canViewDashboard = hasPermission(context.effectivePermissions, 'dashboard.read');
+
+  if (!canViewDashboard) {
+    return <UnscopedOnboardingPanel context={context} />;
+  }
+
   const dashboardData = await getDashboardData();
 
   const widgets = buildVisibleWidgets(context?.effectivePermissions ?? new Set());

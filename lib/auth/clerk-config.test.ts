@@ -73,7 +73,8 @@ describe('Clerk config helpers', () => {
     expect(options.proxyUrl).toBe(CLERK_PROXY_PATH);
     expect(options.signInUrl).toBe(CLERK_SIGN_IN_PATH);
     expect(options.signUpUrl).toBe(CLERK_SIGN_UP_PATH);
-    expect(options.frontendApiProxy.enabled).toBe(true);
+    expect(options.frontendApiProxy).toBeDefined();
+    expect(options.frontendApiProxy?.enabled).toBe(true);
   });
 
   it('disables middleware frontend api proxy in production by default', () => {
