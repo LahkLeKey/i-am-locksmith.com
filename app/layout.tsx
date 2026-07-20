@@ -5,6 +5,7 @@ import "./globals.css";
 import Script from "next/script";
 import localFont from "next/font/local";
 import { templateMetadata } from "./_template/content/metadata";
+import { getClerkProviderProps } from "@/lib/auth/clerk-config";
 
 export const metadata = templateMetadata;
 
@@ -41,9 +42,15 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const clerkProviderProps = getClerkProviderProps();
+
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <ClerkProvider ui={ui} appearance={clerkAppearanceObject}>
+      <ClerkProvider
+        ui={ui}
+        appearance={clerkAppearanceObject}
+        {...clerkProviderProps}
+      >
         <body className={`min-h-screen flex flex-col antialiased`}>
           {children}
         </body>
