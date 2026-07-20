@@ -30,8 +30,10 @@ function toOrigin(candidate: string|undefined): string|null {
 
 export function getAllowedRedirectOrigins(env: PublicEnv = process.env):
     string[] {
-  const defaults =
-      ['https://www.ali-d.com', 'https://ali-d.com', 'http://localhost:3000'];
+  const defaults = [
+    'https://www.i-am-locksmith.com', 'https://i-am-locksmith.com',
+    'http://localhost:3000'
+  ];
   const dynamic = [
     env.NEXT_PUBLIC_APP_URL,
     env.NEXT_PUBLIC_SITE_URL,
