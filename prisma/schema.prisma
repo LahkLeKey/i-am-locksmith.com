@@ -1,0 +1,26 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model DashboardSnapshot {
+    id                  String   @id @default(cuid())
+    generatedAt         DateTime
+    revenueToday        Int
+    openInvoices        Int
+    grossMarginWeek     Decimal  @db.Decimal(6, 2)
+    lowStockSkus        Int
+    vansBelowMin        Int
+    financialTrend      Json
+    kpis                Json
+    jobsQueue           Json
+    replenishmentAlerts Json
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    @@index([generatedAt])
+}

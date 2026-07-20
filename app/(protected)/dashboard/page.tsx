@@ -1,26 +1,27 @@
 import { requireRoutePermission } from '@/lib/rbac/guard';
 import { getAuthorizationContext } from '@/lib/rbac/server';
 import { formatPercent, formatSchedule, formatTimeLabel, formatUsd } from '@/lib/dashboard/format';
-import { DASHBOARD_DEMO_DATA } from '@/lib/dashboard/demo-data';
+import { getDashboardData } from '@/lib/dashboard/repository';
 import { buildVisibleWidgets } from '@/lib/dashboard/widget-policy';
 
 export default async function DashboardPage() {
   await requireRoutePermission('/dashboard');
   const context = await getAuthorizationContext();
+  const dashboardData = await getDashboardData();
 
   const widgets = buildVisibleWidgets(context?.effectivePermissions ?? new Set());
   const visibleWidgetIds = new Set(widgets.map((widget) => widget.id));
 
-  const revenueToday = DASHBOARD_DEMO_DATA.revenueToday;
-  const openInvoices = DASHBOARD_DEMO_DATA.openInvoices;
-  const grossMarginWeek = DASHBOARD_DEMO_DATA.grossMarginWeek;
-  const lowStockSkus = DASHBOARD_DEMO_DATA.lowStockSkus;
-  const vansBelowMin = DASHBOARD_DEMO_DATA.vansBelowMin;
+  const revenueToday = dashboardData.revenueToday;
+  const openInvoices = dashboardData.openInvoices;
+  const grossMarginWeek = dashboardData.grossMarginWeek;
+  const lowStockSkus = dashboardData.lowStockSkus;
+  const vansBelowMin = dashboardData.vansBelowMin;
 
   return (
     <section className="space-y-4">
       <h1 className="text-2xl font-semibold">Operations Dashboard</h1>
-      <p className="text-sm text-[#4b5563]">Live role-aware view with seeded demo signals for dispatch and inventory.</p>
+      <p className="text-sm text-[#4b5563]">Live role-aware view backed by Prisma for dispatch and inventory.</p>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {visibleWidgetIds.has('kpi_revenue_today') ? (
@@ -60,11 +61,11 @@ export default async function DashboardPage() {
           <article className="rounded-md border border-[#e5e7eb] p-4">
             <h2 className="text-sm font-semibold">Revenue / Expense / Profit Trend</h2>
             <ul className="mt-3 space-y-2 text-xs text-[#4b5563]">
-              {DASHBOARD_DEMO_DATA.financialTrend.revenue.map((point, index) => (
+              {dashboardData.financialTrend.revenue.map((point, index) => (
                 <li key={point.at} className="flex items-center justify-between rounded bg-[#f8fafc] px-3 py-2">
                   <span>{formatTimeLabel(point.at)}</span>
                   <span className="font-semibold">
-                    Rev {formatUsd(point.value)} / Exp {formatUsd(DASHBOARD_DEMO_DATA.financialTrend.expenses[index]?.value ?? 0)} / Profit {formatUsd(DASHBOARD_DEMO_DATA.financialTrend.profit[index]?.value ?? 0)}
+                    Rev {formatUsd(point.value)} / Exp {formatUsd(dashboardData.financialTrend.expenses[index]?.value ?? 0)} / Profit {formatUsd(dashboardData.financialTrend.profit[index]?.value ?? 0)}
                   </span>
                 </li>
               ))}
@@ -76,7 +77,7 @@ export default async function DashboardPage() {
           <article className="rounded-md border border-[#e5e7eb] p-4">
             <h2 className="text-sm font-semibold">Jobs In Progress</h2>
             <ul className="mt-3 space-y-2 text-xs text-[#4b5563]">
-              {DASHBOARD_DEMO_DATA.jobsQueue.map((job) => (
+              {dashboardData.jobsQueue.map((job) => (
                 <li key={job.id} className="rounded bg-[#f8fafc] px-3 py-2">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{job.id}</span>
@@ -96,7 +97,7 @@ export default async function DashboardPage() {
           <article className="rounded-md border border-[#e5e7eb] p-4">
             <h2 className="text-sm font-semibold">Critical Replenishment</h2>
             <ul className="mt-3 space-y-2 text-xs text-[#4b5563]">
-              {DASHBOARD_DEMO_DATA.replenishmentAlerts.map((alert) => (
+              {dashboardData.replenishmentAlerts.map((alert) => (
                 <li key={alert.id} className="rounded bg-[#fff7ed] px-3 py-2">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{alert.sku}</span>

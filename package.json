@@ -7,6 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:seed": "prisma db seed",
+    "vercel:pull:dev": "vercel env pull .env.development.local --environment=development --yes",
+    "vercel:pull:preview": "vercel env pull .env.preview.local --environment=preview --yes",
+    "vercel:pull:prod": "vercel env pull .env.production.local --environment=production --yes",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -14,6 +20,7 @@
   "dependencies": {
     "@clerk/nextjs": "^7.2.2",
     "@clerk/ui": "^1.6.2",
+    "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^24.0.3",
     "@types/react": "^19.2.14",
@@ -30,7 +37,11 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
+    "prisma": "^6.19.3",
     "vitest": "^4.1.10"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
   },
   "packageManager": "pnpm@10.33.4+sha512.1c67b3b359b2d408119ba1ed289f34b8fc3c6873412bec6fd264fbdc82489e510fcbecb9ce9d22dae7f3b76269d8441046014bdca53b9979cd7a561ad631b800"
 }
