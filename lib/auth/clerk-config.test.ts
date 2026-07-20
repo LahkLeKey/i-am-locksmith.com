@@ -1,14 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {
-  CLERK_POST_AUTH_PATH,
-  CLERK_PROXY_PATH,
-  CLERK_SIGN_IN_PATH,
-  CLERK_SIGN_UP_PATH,
-  getAllowedRedirectOrigins,
-  getClerkMiddlewareOptions,
-  getClerkProviderProps,
-} from './clerk-config';
+import {CLERK_POST_AUTH_PATH, CLERK_PROXY_PATH, CLERK_SIGN_IN_PATH, CLERK_SIGN_UP_PATH, getAllowedRedirectOrigins, getClerkMiddlewareOptions, getClerkProviderProps,} from './clerk-config';
 
 describe('getAllowedRedirectOrigins', () => {
   it('includes default production and local origins', () => {
@@ -25,8 +17,26 @@ describe('getAllowedRedirectOrigins', () => {
     });
 
     expect(origins).toContain(
-      'https://locksmith-dashboard-kyle-haleks-projects.vercel.app'
-    );
+        'https://locksmith-dashboard-kyle-haleks-projects.vercel.app');
+  });
+
+  it('accepts fully qualified app and site URLs', () => {
+    const origins = getAllowedRedirectOrigins({
+      NEXT_PUBLIC_APP_URL: 'https://app.ali-d.com/path',
+      NEXT_PUBLIC_SITE_URL: 'https://preview.ali-d.com',
+    });
+
+    expect(origins).toContain('https://app.ali-d.com');
+    expect(origins).toContain('https://preview.ali-d.com');
+  });
+
+  it('normalizes Vercel production URL and de-dupes defaults', () => {
+    const origins = getAllowedRedirectOrigins({
+      VERCEL_PROJECT_PRODUCTION_URL: 'www.ali-d.com',
+      VERCEL_URL: 'www.ali-d.com',
+    });
+
+    expect(origins.filter((origin) => origin === 'https://www.ali-d.com')).toHaveLength(1);
   });
 });
 
