@@ -68,11 +68,37 @@ describe('Clerk config helpers', () => {
   });
 
   it('builds middleware options for frontend api proxying', () => {
-    const options = getClerkMiddlewareOptions();
+    const options = getClerkMiddlewareOptions({});
 
     expect(options.proxyUrl).toBe(CLERK_PROXY_PATH);
     expect(options.signInUrl).toBe(CLERK_SIGN_IN_PATH);
     expect(options.signUpUrl).toBe(CLERK_SIGN_UP_PATH);
     expect(options.frontendApiProxy.enabled).toBe(true);
+  });
+
+  it('disables middleware frontend api proxy in production by default', () => {
+    const options = getClerkMiddlewareOptions({VERCEL_ENV: 'production'});
+
+    expect(options.proxyUrl).toBeUndefined();
+    expect(options.signInUrl).toBe(CLERK_SIGN_IN_PATH);
+    expect(options.signUpUrl).toBe(CLERK_SIGN_UP_PATH);
+    expect(options.frontendApiProxy).toBeUndefined();
+  });
+
+  it('disables provider proxy in production by default', () => {
+    const props = getClerkProviderProps({VERCEL_ENV: 'production'});
+
+    expect(props.proxyUrl).toBeUndefined();
+    expect(props.signInUrl).toBe(CLERK_SIGN_IN_PATH);
+    expect(props.signUpUrl).toBe(CLERK_SIGN_UP_PATH);
+  });
+
+  it('supports forcing provider proxy usage in production', () => {
+    const props = getClerkProviderProps({
+      VERCEL_ENV: 'production',
+      NEXT_PUBLIC_CLERK_USE_PROXY: 'true',
+    });
+
+    expect(props.proxyUrl).toBe(CLERK_PROXY_PATH);
   });
 });
