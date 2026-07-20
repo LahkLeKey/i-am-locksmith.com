@@ -5,9 +5,11 @@ import "./globals.css";
 import Script from "next/script";
 import localFont from "next/font/local";
 import { templateMetadata } from "./_template/content/metadata";
-import { getClerkProviderProps } from "@/lib/auth/clerk-config";
+import { getClerkProviderProps, validateClerkEnvironment } from "@/lib/auth/clerk-config";
 
 export const metadata = templateMetadata;
+
+validateClerkEnvironment();
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
