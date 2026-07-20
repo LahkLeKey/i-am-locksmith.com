@@ -132,12 +132,23 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 Current map lives in lib/rbac/policy.ts via ROUTE_PERMISSION_MAP.
 
 - /dashboard => dashboard.read
+- /jobs => jobs.read
+- /inventory => inventory.read
+- /customers => customers.read
+- /quotes => quotes.read
+- /invoices => invoices.read
+- /reports => reports.read
+- /settings => settings.read
 - GET /api/protected => dashboard.read
 - POST /api/protected => settings.update
 
 ## Effective permission calculation
 
-1. Determine org role from Clerk org role mapping.
+1. Determine org role from Clerk org role parsing:
+- org:admin maps to owner_admin.
+- org:member is neutral and can be specialized by org-scoped user role.
+- org:<custom> attempts normalization to known app roles.
+- unknown or missing active-org role fails closed.
 2. Determine optional user role from Clerk user publicMetadata.orgRoles[orgId].
 3. Effective permissions:
 - No active org: none.
