@@ -13,7 +13,9 @@ type DashboardSnapshotRecord = {
 
 type DashboardSnapshotClient = {
   dashboardSnapshot: {
-    findFirst: (args: {orderBy: {generatedAt: 'desc'}}) =>
+    findFirst: (args: {
+      orderBy: Array<{generatedAt?: 'desc'; id?: 'desc'}>;
+    }) =>
         Promise<DashboardSnapshotRecord|null>;
   };
 };
@@ -41,7 +43,7 @@ export async function getDashboardData(client?: DashboardSnapshotClient):
     const resolvedClient = client ?? await getPrismaClient();
 
     const snapshot = await resolvedClient.dashboardSnapshot.findFirst({
-      orderBy: {generatedAt: 'desc'},
+      orderBy: [{generatedAt: 'desc'}, {id: 'desc'}],
     });
 
     if (!snapshot) {
@@ -57,6 +59,8 @@ export async function getDashboardData(client?: DashboardSnapshotClient):
 
 function mapSnapshotToDashboardData(snapshot: DashboardSnapshotRecord):
     DashboardData {
+  const financialTrend = parseFinancialTrend(snapshot.financialTrend);
+
   return {
     generatedAt: snapshot.generatedAt.toISOString(),
     revenueToday: snapshot.revenueToday,
@@ -64,8 +68,7 @@ function mapSnapshotToDashboardData(snapshot: DashboardSnapshotRecord):
     grossMarginWeek: toFiniteNumber(snapshot.grossMarginWeek),
     lowStockSkus: snapshot.lowStockSkus,
     vansBelowMin: snapshot.vansBelowMin,
-    financialTrend: parseObject(snapshot.financialTrend, 'financialTrend') as
-        DashboardData['financialTrend'],
+    financialTrend,
     kpis: parseArray(snapshot.kpis, 'kpis') as DashboardData['kpis'],
     jobsQueue: parseArray(snapshot.jobsQueue, 'jobsQueue') as
         DashboardData['jobsQueue'],
@@ -105,4 +108,17 @@ function toFiniteNumber(value: unknown): number {
   }
 
   return numericValue;
+}
+
+function parseFinancialTrend(value: unknown): DashboardData['financialTrend'] {
+  const parsed = parseObject(value, 'financialTrend');
+
+  return {
+    revenue: parseArray(parsed.revenue, 'financialTrend.revenue') as
+        DashboardData['financialTrend']['revenue'],
+    expenses: parseArray(parsed.expenses, 'financialTrend.expenses') as
+        DashboardData['financialTrend']['expenses'],
+    profit: parseArray(parsed.profit, 'financialTrend.profit') as
+        DashboardData['financialTrend']['profit'],
+  };
 }

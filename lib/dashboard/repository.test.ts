@@ -11,7 +11,8 @@ describe('getDashboardData', () => {
          dashboardSnapshot: {findFirst},
        });
 
-       expect(findFirst).toHaveBeenCalledWith({orderBy: {generatedAt: 'desc'}});
+       expect(findFirst).toHaveBeenCalledWith(
+           {orderBy: [{generatedAt: 'desc'}, {id: 'desc'}]});
        expect(data.revenueToday).toBe(0);
        expect(data.kpis).toEqual([]);
        expect(data.jobsQueue).toEqual([]);
@@ -108,4 +109,27 @@ describe('getDashboardData', () => {
     expect(data.revenueToday).toBe(0);
     expect(data.grossMarginWeek).toBe(0);
   });
+
+  it('falls back to zero-state when financial trend arrays are missing',
+     async () => {
+       const findFirst = vi.fn().mockResolvedValue({
+         generatedAt: new Date('2026-07-20T09:00:00.000Z'),
+         revenueToday: 100,
+         openInvoices: 4,
+         grossMarginWeek: 10,
+         lowStockSkus: 1,
+         vansBelowMin: 0,
+         financialTrend: {revenue: [], expenses: []},
+         kpis: [],
+         jobsQueue: [],
+         replenishmentAlerts: [],
+       });
+
+       const data = await getDashboardData({
+         dashboardSnapshot: {findFirst},
+       });
+
+       expect(data.revenueToday).toBe(0);
+       expect(data.financialTrend.profit).toEqual([]);
+     });
 });
