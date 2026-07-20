@@ -1,7 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {CLERK_POST_AUTH_PATH, CLERK_PROXY_PATH, CLERK_SIGN_IN_PATH, CLERK_SIGN_UP_PATH, getAllowedRedirectOrigins, getClerkMiddlewareOptions, getClerkProviderProps,} from './clerk-config';
-import {validateClerkEnvironment} from './clerk-config';
+import {CLERK_POST_AUTH_PATH, CLERK_PROXY_PATH, CLERK_SIGN_IN_PATH, CLERK_SIGN_UP_PATH, getAllowedRedirectOrigins, getClerkMiddlewareOptions, getClerkProviderProps, validateClerkEnvironment,} from './clerk-config';
 
 describe('getAllowedRedirectOrigins', () => {
   it('includes default production and local origins', () => {
@@ -45,15 +44,17 @@ describe('getAllowedRedirectOrigins', () => {
 
 describe('Clerk config helpers', () => {
   it('fails fast when required env vars are missing', () => {
-    expect(() => validateClerkEnvironment({})).toThrow(
-        'Missing required Clerk environment variables: CLERK_SECRET_KEY, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY. Set them in both Vercel Production and Preview environments, then restart the app.');
+    expect(() => validateClerkEnvironment({}))
+        .toThrow(
+            'Missing required Clerk environment variables: CLERK_SECRET_KEY, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY. Set them in both Vercel Production and Preview environments, then restart the app.');
   });
 
   it('accepts populated auth env vars', () => {
     expect(() => validateClerkEnvironment({
-      CLERK_SECRET_KEY: 'sk_test_123',
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_123',
-    })).not.toThrow();
+             CLERK_SECRET_KEY: 'sk_test_123',
+             NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_123',
+           }))
+        .not.toThrow();
   });
 
   it('builds provider props for same-origin auth flows', () => {

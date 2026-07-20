@@ -10,7 +10,9 @@ export type LandingWorkflow = {
   ctaHref: string;
 };
 
-export type LandingPrimaryAction = {label: string; href: string};
+export type LandingPrimaryAction = {
+  label: string; href: string
+};
 
 const WORKFLOW_DEFINITIONS: Array<{
   id: string; title: string; description: string; href: string;
@@ -105,8 +107,8 @@ export function buildPrimaryAction({
     return {label: 'Open inventory', href: '/inventory'};
   }
 
-  const firstPermittedWorkflow = WORKFLOW_DEFINITIONS.find((workflow) =>
-    hasPermission(permissions, workflow.requiredPermission));
+  const firstPermittedWorkflow = WORKFLOW_DEFINITIONS.find(
+      (workflow) => hasPermission(permissions, workflow.requiredPermission));
 
   if (firstPermittedWorkflow) {
     return {label: 'Open workflow', href: firstPermittedWorkflow.href};

@@ -1,7 +1,7 @@
 const DATABASE_URL_ENV_VAR = 'DATABASE_URL';
 
 export function warnIfDatabaseUrlMissing(
-  environment: Record<string, string|undefined> = process.env,
+    environment: Record<string, string|undefined> = process.env,
     warn: (message: string) => void = console.warn): void {
   if (environment.NODE_ENV === 'test') {
     return;

@@ -1,28 +1,18 @@
 export type PlatformPillar = {
-  id: string;
-  title: string;
-  summary: string;
+  id: string; title: string; summary: string;
 };
 
 export type RoadmapPhase = {
-  id: 'mvp'|'v1'|'v2';
-  title: string;
-  duration: string;
-  team: string;
+  id: 'mvp'|'v1'|'v2'; title: string; duration: string; team: string;
   highlights: string[];
 };
 
 export type IntegrationCategory = {
-  category: string;
-  providers: string[];
-  rationale: string;
+  category: string; providers: string[]; rationale: string;
 };
 
 export type ReportTemplate = {
-  id: string;
-  name: string;
-  purpose: string;
-  coreColumns: string[];
+  id: string; name: string; purpose: string; coreColumns: string[];
 };
 
 export const PLATFORM_PILLARS: PlatformPillar[] = [
@@ -30,25 +20,25 @@ export const PLATFORM_PILLARS: PlatformPillar[] = [
     id: 'inventory-core',
     title: 'Inventory-First Core',
     summary:
-      'Van, shop, and multi-location stock as the center of daily operations.',
+        'Van, shop, and multi-location stock as the center of daily operations.',
   },
   {
     id: 'audit-truth',
     title: 'Immutable Operational Truth',
     summary:
-      'Append-only stock movements and accounting journals for reliable reconciliation.',
+        'Append-only stock movements and accounting journals for reliable reconciliation.',
   },
   {
     id: 'field-speed',
     title: 'Field-Speed Workflow',
     summary:
-      'Fast quote-to-job execution with mobile-friendly, role-scoped actions.',
+        'Fast quote-to-job execution with mobile-friendly, role-scoped actions.',
   },
   {
     id: 'accounting-rigor',
     title: 'Accounting Discipline',
     summary:
-      'Costing policy awareness, COGS linkage, and job-level profitability outputs.',
+        'Costing policy awareness, COGS linkage, and job-level profitability outputs.',
   },
 ];
 
@@ -128,7 +118,8 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
     id: 'inventory-valuation',
     name: 'Inventory Valuation by Location',
     purpose: 'Track stock value and costing method outcomes across locations.',
-    coreColumns: ['SKU', 'Location', 'Qty On Hand', 'Unit Cost', 'Extended Cost'],
+    coreColumns:
+        ['SKU', 'Location', 'Qty On Hand', 'Unit Cost', 'Extended Cost'],
   },
   {
     id: 'reorder',

@@ -13,9 +13,7 @@ type DashboardSnapshotRecord = {
 
 type DashboardSnapshotClient = {
   dashboardSnapshot: {
-    findFirst: (args: {
-      orderBy: Array<{generatedAt?: 'desc'; id?: 'desc'}>;
-    }) =>
+    findFirst: (args: {orderBy: Array<{generatedAt?: 'desc'; id?: 'desc'}>;}) =>
         Promise<DashboardSnapshotRecord|null>;
   };
 };

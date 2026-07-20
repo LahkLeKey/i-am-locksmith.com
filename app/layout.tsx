@@ -1,6 +1,4 @@
 import { ClerkProvider } from "@clerk/nextjs";
-import { ui } from "@clerk/ui";
-import type { Appearance } from "@clerk/ui";
 import "./globals.css";
 import Script from "next/script";
 import localFont from "next/font/local";
@@ -8,6 +6,7 @@ import { templateMetadata } from "./_template/content/metadata";
 import { getClerkProviderProps, validateClerkEnvironment } from "@/lib/auth/clerk-config";
 
 export const metadata = templateMetadata;
+export const dynamic = "force-dynamic";
 
 validateClerkEnvironment();
 
@@ -37,7 +36,7 @@ const clerkAppearanceObject = {
       "bg-black border border-black border-solid hover:bg-white hover:text-black",
     card: "bg-[#fafafa]",
   },
-} satisfies Appearance;
+};
 
 export default function RootLayout({
   children,
@@ -49,7 +48,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <ClerkProvider
-        ui={ui}
         appearance={clerkAppearanceObject}
         {...clerkProviderProps}
       >
