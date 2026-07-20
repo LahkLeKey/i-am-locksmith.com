@@ -1,19 +1,11 @@
 import {hasPermission, type Permission} from '../rbac/policy';
 
-export type DashboardWidgetId =
-  | 'kpi_revenue_today'
-  | 'kpi_open_invoices'
-  | 'kpi_gross_margin'
-  | 'kpi_low_stock_skus'
-  | 'kpi_vans_below_min'
-  | 'trend'
-  | 'jobs_queue'
-  | 'critical_replenishment';
+export type DashboardWidgetId =|'kpi_revenue_today'|'kpi_open_invoices'|
+    'kpi_gross_margin'|'kpi_low_stock_skus'|'kpi_vans_below_min'|'trend'|
+    'jobs_queue'|'critical_replenishment';
 
 export type DashboardWidget = {
-  id: DashboardWidgetId;
-  title: string;
-  requiredAny: Permission[];
+  id: DashboardWidgetId; title: string; requiredAny: Permission[];
 };
 
 export const DASHBOARD_WIDGETS: readonly DashboardWidget[] = [
@@ -59,14 +51,13 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidget[] = [
   },
 ] as const;
 
-export function buildVisibleWidgets(
-  permissions: Set<Permission>
-): DashboardWidget[] {
+export function buildVisibleWidgets(permissions: Set<Permission>):
+    DashboardWidget[] {
   if (!hasPermission(permissions, 'dashboard.read')) {
     return [];
   }
 
-  return DASHBOARD_WIDGETS.filter((widget) =>
-    widget.requiredAny.some((permission) => hasPermission(permissions, permission))
-  );
+  return DASHBOARD_WIDGETS.filter(
+      (widget) => widget.requiredAny.some(
+          (permission) => hasPermission(permissions, permission)));
 }
