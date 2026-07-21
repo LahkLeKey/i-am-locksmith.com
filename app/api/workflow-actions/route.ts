@@ -1,6 +1,4 @@
-import {Prisma} from '@prisma/client';
-import {getDashboardData} from '@/lib/dashboard/repository';
-import {prisma} from '@/lib/db/prisma';
+import {getDashboardDataForSnapshot, getOrCreateOrgSnapshot, persistDashboardData} from '@/lib/dashboard/snapshotMutations';
 import type {Permission} from '@/lib/rbac/policy';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {applyWorkflowAction, type WorkflowActionType} from '@/lib/workspaces/workflow-actions';
@@ -15,7 +13,7 @@ const ACTION_PERMISSION_MAP: Record<WorkflowActionType, Permission> = {
   'jobs.dispatch_next': 'jobs.assign',
   'quotes.approve_pending': 'quotes.approve',
   'invoices.send_one': 'invoices.send',
-  'reports.refresh_snapshot': 'settings.update',
+  'reports.refresh_snapshot': 'reports.read',
   'settings.apply_replenishment_guardrail': 'settings.update',
 };
 
@@ -25,15 +23,6 @@ function isWorkflowActionType(value: unknown): value is WorkflowActionType {
   }
 
   return Object.prototype.hasOwnProperty.call(ACTION_PERMISSION_MAP, value);
-}
-
-function asInputJson(value: Prisma.JsonValue): Prisma.InputJsonValue|
-    Prisma.JsonNullValueInput {
-  if (value === null) {
-    return Prisma.JsonNull;
-  }
-
-  return value as Prisma.InputJsonValue;
 }
 
 export async function POST(request: Request) {
@@ -71,60 +60,19 @@ export async function POST(request: Request) {
     return NextResponse.json({error: 'Forbidden'}, {status: 403});
   }
 
-  let currentSnapshot = await prisma.dashboardSnapshot.findFirst({
-    where: {orgId: context.orgId},
-    orderBy: [{generatedAt: 'desc'}, {id: 'desc'}],
-  });
+  const currentSnapshot = await getOrCreateOrgSnapshot(context.orgId);
+  const dashboardData = await getDashboardDataForSnapshot(currentSnapshot);
+  const next = applyWorkflowAction(dashboardData, body.actionType);
 
-  if (!currentSnapshot) {
-    const fallbackSnapshot = await prisma.dashboardSnapshot.findFirst({
-      orderBy: [{generatedAt: 'desc'}, {id: 'desc'}],
-    });
-
-    if (!fallbackSnapshot) {
-      return NextResponse.json(
-          {error: 'No dashboard snapshot found'}, {status: 404});
-    }
-
-    currentSnapshot = await prisma.dashboardSnapshot.create({
-      data: {
-        orgId: context.orgId,
-        generatedAt: fallbackSnapshot.generatedAt,
-        revenueToday: fallbackSnapshot.revenueToday,
-        openInvoices: fallbackSnapshot.openInvoices,
-        grossMarginWeek: fallbackSnapshot.grossMarginWeek,
-        lowStockSkus: fallbackSnapshot.lowStockSkus,
-        vansBelowMin: fallbackSnapshot.vansBelowMin,
-        financialTrend: asInputJson(fallbackSnapshot.financialTrend),
-        kpis: asInputJson(fallbackSnapshot.kpis),
-        jobsQueue: asInputJson(fallbackSnapshot.jobsQueue),
-        replenishmentAlerts: asInputJson(fallbackSnapshot.replenishmentAlerts),
-      },
+  if (body.actionType === 'reports.refresh_snapshot') {
+    return NextResponse.json({
+      ok: true,
+      message: next.message,
+      generatedAt: next.data.generatedAt,
     });
   }
 
-  const dashboardData = await getDashboardData({
-    dashboardSnapshot: {
-      findFirst: async () => currentSnapshot,
-    },
-  });
-  const next = applyWorkflowAction(dashboardData, body.actionType);
-
-  await prisma.dashboardSnapshot.update({
-    where: {id: currentSnapshot.id},
-    data: {
-      generatedAt: new Date(next.data.generatedAt),
-      revenueToday: next.data.revenueToday,
-      openInvoices: next.data.openInvoices,
-      grossMarginWeek: next.data.grossMarginWeek,
-      lowStockSkus: next.data.lowStockSkus,
-      vansBelowMin: next.data.vansBelowMin,
-      financialTrend: next.data.financialTrend,
-      kpis: next.data.kpis,
-      jobsQueue: next.data.jobsQueue,
-      replenishmentAlerts: next.data.replenishmentAlerts,
-    },
-  });
+  await persistDashboardData(currentSnapshot.id, next.data);
 
   return NextResponse.json({
     ok: true,

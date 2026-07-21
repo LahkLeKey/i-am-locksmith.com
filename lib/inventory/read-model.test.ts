@@ -21,9 +21,9 @@ const BASE_DATA: DashboardData = {
   replenishmentAlerts: [
     {
       id: 'ALERT-1',
-      sku: 'SKU-A',
-      itemName: 'Item A',
-      location: 'Warehouse A',
+      sku: 'AUTO-FOB-01',
+      itemName: 'Automotive fob shell',
+      location: 'Van 3',
       onHand: 1,
       reorderPoint: 10,
       suggestedOrderQty: 20,
@@ -34,8 +34,8 @@ const BASE_DATA: DashboardData = {
     },
     {
       id: 'ALERT-2',
-      sku: 'SKU-B',
-      itemName: 'Item B',
+      sku: 'CYL-CORE-02',
+      itemName: 'Cylinder core kit',
       location: 'Warehouse B',
       onHand: 5,
       reorderPoint: 12,
@@ -47,8 +47,8 @@ const BASE_DATA: DashboardData = {
     },
     {
       id: 'ALERT-3',
-      sku: 'SKU-C',
-      itemName: 'Item C',
+      sku: 'VAN-KIT-03',
+      itemName: 'Mobile rekey kit',
       location: 'Van 3',
       onHand: 3,
       reorderPoint: 5,
@@ -174,5 +174,25 @@ describe('buildInventoryReadModel', () => {
       'event-ALERT-GOOD-TIME',
       'event-ALERT-BAD-TIME',
     ]);
+  });
+
+  it('builds a parts catalog with service-line coverage notes', () => {
+    const model = buildInventoryReadModel(BASE_DATA);
+
+    const automotiveRow = model.catalogRows.find((value) => value.id === 'ALERT-1');
+    const shopRow = model.catalogRows.find((value) => value.id === 'ALERT-2');
+    const mobileRow = model.catalogRows.find((value) => value.id === 'ALERT-3');
+
+    expect(automotiveRow?.serviceLines).toContain('automotive');
+    expect(shopRow?.serviceLines).toContain('shop');
+    expect(mobileRow?.serviceLines).toContain('mobile');
+    expect(model.serviceLineSummary.map((entry) => entry.id)).toEqual([
+      'automotive',
+      'mobile',
+      'shop',
+    ]);
+    expect(model.serviceLineSummary[0]?.count).toBe(1);
+    expect(model.serviceLineSummary[1]?.count).toBe(3);
+    expect(model.serviceLineSummary[2]?.count).toBe(1);
   });
 });

@@ -86,6 +86,16 @@ export function applyWorkflowAction(
     };
   }
 
+  if (actionType === 'reports.refresh_snapshot') {
+    return {
+      data: {
+        ...dashboardData,
+        generatedAt: nowIso,
+      },
+      message: 'Reporting snapshot refreshed.',
+    };
+  }
+
   return {
     data: {
       ...dashboardData,

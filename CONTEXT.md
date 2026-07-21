@@ -5,6 +5,26 @@ The primary purpose of the product. It covers tracking stock levels, stock movem
 
 The first must-win workflow in this core is low-stock replenishment.
 
+### Parts Catalog
+The canonical inventory master for all sellable or consumable items.
+
+Parts catalog records should be shared across service lines and specialized with tags, defaults, and compatibility metadata instead of duplicated into separate tables per service.
+
+### Service Line
+A locksmith business segment that changes defaults without changing the underlying inventory model.
+
+Examples include automotive locksmith work, mobile locksmith work, and storefront/shop work. Service lines may change the default parts, price book, stock location, and equipment requirements, but they reuse the same inventory and job workflow vocabulary.
+
+### Workflow Template
+A reusable sequence of steps for a service line or job type.
+
+Workflow templates describe the shape of the work, not the stock records themselves. A workflow may reference parts bundles, but it should not own a separate parts catalog.
+
+### Parts Bundle
+A named set of parts commonly used together for a specific service line or job type.
+
+Bundles help with quick job setup, but they are projections over the parts catalog rather than separate sources of truth.
+
 ## Reporting Add-on
 A secondary capability that derives insights from persisted operational data. Reporting is valuable but must not define core workflow priorities for initial delivery.
 
