@@ -1,12 +1,11 @@
 import {requireRoutePermission} from '@/lib/rbac/guard';
+import {getWorkspaceMvpSnapshot} from '@/lib/workspaces/mvp';
+
+import {WorkspaceMvpView} from '@/app/components/workspace-mvp-view';
 
 export default async function JobsPage() {
   await requireRoutePermission('/jobs');
+  const snapshot = getWorkspaceMvpSnapshot('jobs');
 
-  return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Jobs</h1>
-      <p className="text-sm text-[#4b5563]">Jobs workspace placeholder for MVP.</p>
-    </section>
-  );
+  return <WorkspaceMvpView snapshot={snapshot} />;
 }

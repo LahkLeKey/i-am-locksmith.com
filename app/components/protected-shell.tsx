@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import {UserButton} from '@clerk/nextjs';
+import { UserButton } from '@clerk/nextjs';
 
-import type {AuthorizationContext} from '@/lib/rbac/server';
-import {buildVisibleNavigation} from '@/lib/rbac/navigation';
+import { OrganizationMembershipsPanel } from '@/app/components/organization-memberships-panel';
+import type { AuthorizationContext } from '@/lib/rbac/server';
+import { buildVisibleNavigation } from '@/lib/rbac/navigation';
 
 function formatRoleLabel(value: string | null): string {
   if (!value) {
@@ -10,8 +11,8 @@ function formatRoleLabel(value: string | null): string {
   }
 
   return value.split('_')
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(' ');
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(' ');
 }
 
 function buildRoleSummary(context: AuthorizationContext): string {
@@ -89,6 +90,7 @@ export function ProtectedShell({
               <p>Verify your organization and role mapping.</p>
             </div>
           )}
+          <OrganizationMembershipsPanel />
         </aside>
         <main className="rounded-lg border border-[#e6e8ef] bg-white p-6">
           {children}
