@@ -9,6 +9,7 @@ datasource db {
 
 model DashboardSnapshot {
     id                  String   @id @default(cuid())
+    orgId               String   @default("org_seed_default")
     generatedAt         DateTime
     revenueToday        Int
     openInvoices        Int
@@ -23,4 +24,5 @@ model DashboardSnapshot {
     updatedAt           DateTime @updatedAt
 
     @@index([generatedAt])
+    @@index([orgId, generatedAt])
 }

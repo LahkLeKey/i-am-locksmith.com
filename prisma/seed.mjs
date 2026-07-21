@@ -3,6 +3,7 @@ import {PrismaClient} from '@prisma/client';
 const prisma = new PrismaClient();
 
 const snapshot = {
+  orgId: 'org_seed_default',
   generatedAt: new Date('2026-07-20T09:00:00.000Z'),
   revenueToday: 4280,
   openInvoices: 18,

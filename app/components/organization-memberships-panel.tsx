@@ -4,6 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useOrganization, useOrganizationList } from "@clerk/nextjs";
 
+const ORG_ROLE_MODULE_PREVIEW: Record<string, string[]> = {
+    admin: ["Dashboard", "Jobs", "Inventory", "Customers", "Quotes", "Invoices", "Reports", "Settings"],
+    member: ["Requires scoped role mapping"],
+    dispatcher: ["Dashboard", "Jobs", "Customers", "Quotes", "Invoices", "Reports"],
+    technician: ["Dashboard", "Jobs", "Customers", "Inventory"],
+    inventory_manager: ["Dashboard", "Inventory", "Reports"],
+    accountant: ["Dashboard", "Invoices", "Reports", "Settings"],
+    viewer_auditor: ["Dashboard", "Customers", "Jobs", "Quotes", "Invoices", "Inventory", "Reports", "Settings"],
+};
+
 function formatClerkRole(role: string | null | undefined): string {
     if (!role) {
         return "Member";
@@ -17,6 +27,17 @@ function formatClerkRole(role: string | null | undefined): string {
         .split("_")
         .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
         .join(" ");
+}
+
+function getModulePreview(role: string | null | undefined): string {
+    if (!role || !role.startsWith("org:")) {
+        return ORG_ROLE_MODULE_PREVIEW.member.join(", ");
+    }
+
+    const normalizedRole = role.slice(4);
+    const modules = ORG_ROLE_MODULE_PREVIEW[normalizedRole] ?? ["Module preview unavailable"];
+
+    return modules.join(", ");
 }
 
 export function OrganizationMembershipsPanel() {
@@ -68,6 +89,9 @@ export function OrganizationMembershipsPanel() {
                                     </p>
                                     <p className="truncate text-[11px] text-[#64748b]">
                                         {formatClerkRole(membership.role)}
+                                    </p>
+                                    <p className="truncate text-[11px] text-[#94a3b8]" title={getModulePreview(membership.role)}>
+                                        {getModulePreview(membership.role)}
                                     </p>
                                 </div>
                                 <button

@@ -1,6 +1,8 @@
 import {formatPercent, formatUsd} from '../dashboard/format';
 import type {DashboardData} from '../dashboard/types';
 
+import type {WorkflowActionType} from './workflow-actions';
+
 export const MVP_WORKSPACE_KEYS = [
   'customers',
   'jobs',
@@ -16,6 +18,12 @@ export type WorkspaceMvpSnapshot = {
   title: string; subtitle: string;
   generatedAtLabel?: string;
   dataSourceLabel?: string;
+  telemetry?: {
+    blockedJobs: number; criticalAlerts: number; openInvoices: number;
+    lowStockSkus: number;
+  };
+  primaryAction:
+      {label: string; actionType: WorkflowActionType; summary: string;};
   kpis: Array<{label: string; value: string; trend: string;}>;
   queue: Array<{
     title: string; detail: string; status: 'urgent' | 'attention' | 'scheduled';
@@ -28,6 +36,12 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
     title: 'Customer Workspace',
     subtitle:
         'Track customer records, service history, and outreach tasks tied to active field work.',
+    primaryAction: {
+      label: 'Record customer follow-up',
+      actionType: 'customers.record_follow_up',
+      summary:
+          'Logs outreach completion and refreshes customer pipeline context.',
+    },
     kpis: [
       {label: 'Active customers', value: '182', trend: '+7 this week'},
       {label: 'Service agreements', value: '64', trend: '91% renewed on time'},
@@ -64,6 +78,11 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
     title: 'Jobs Workspace',
     subtitle:
         'Move work from quote-approved to dispatched and completed with inventory context.',
+    primaryAction: {
+      label: 'Dispatch next queued job',
+      actionType: 'jobs.dispatch_next',
+      summary: 'Promotes the next queued job into active dispatch with ETA.',
+    },
     kpis: [
       {label: 'Open jobs', value: '37', trend: '9 assigned this morning'},
       {label: 'On-time completion', value: '94%', trend: '+3% vs last week'},
@@ -100,6 +119,11 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
     title: 'Quotes Workspace',
     subtitle:
         'Prepare scoped quotes with labor, parts, and approval timing at a glance.',
+    primaryAction: {
+      label: 'Approve pending quote',
+      actionType: 'quotes.approve_pending',
+      summary: 'Advances quote workflow and updates projected daily revenue.',
+    },
     kpis: [
       {label: 'Draft quotes', value: '23', trend: '6 created today'},
       {label: 'Approval rate', value: '62%', trend: '+8% month over month'},
@@ -132,6 +156,11 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
     title: 'Invoices Workspace',
     subtitle:
         'Close completed jobs with accurate billing, status tracking, and follow-through.',
+    primaryAction: {
+      label: 'Send next invoice',
+      actionType: 'invoices.send_one',
+      summary: 'Closes one invoice send step and updates open invoice counts.',
+    },
     kpis: [
       {label: 'Open invoices', value: '41', trend: '12 due this week'},
       {
@@ -168,6 +197,12 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
     title: 'Reports Workspace',
     subtitle:
         'Review operational trends, profitability, and service outcomes from persisted events.',
+    primaryAction: {
+      label: 'Refresh reporting snapshot',
+      actionType: 'reports.refresh_snapshot',
+      summary:
+          'Recalculates freshness timestamp for operational reporting views.',
+    },
     kpis: [
       {
         label: 'Weekly gross margin',
@@ -204,6 +239,11 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
     title: 'Settings Workspace',
     subtitle:
         'Manage access controls, workflow defaults, and operational guardrails for your org.',
+    primaryAction: {
+      label: 'Apply replenishment guardrail',
+      actionType: 'settings.apply_replenishment_guardrail',
+      summary: 'Enforces safer reorder quantities across replenishment alerts.',
+    },
     kpis: [
       {label: 'Active users', value: '29', trend: '3 pending invites'},
       {
@@ -253,14 +293,28 @@ function toDashboardTimestampLabel(generatedAtIso: string): string {
   })}`;
 }
 
+function buildTelemetry(dashboardData: DashboardData):
+    WorkspaceMvpSnapshot['telemetry'] {
+  return {
+    blockedJobs:
+        dashboardData.jobsQueue.filter((job) => job.status === 'blocked')
+            .length,
+    criticalAlerts: dashboardData.replenishmentAlerts
+                        .filter((alert) => alert.severity === 'critical')
+                        .length,
+    openInvoices: dashboardData.openInvoices,
+    lowStockSkus: dashboardData.lowStockSkus,
+  };
+}
+
 function buildSignalQueue(
-    dashboardData: DashboardData,
-    fallbackQueue: WorkspaceMvpSnapshot['queue']): WorkspaceMvpSnapshot['queue'] {
+    dashboardData: DashboardData, fallbackQueue: WorkspaceMvpSnapshot['queue']):
+    WorkspaceMvpSnapshot['queue'] {
   const signalQueue: WorkspaceMvpSnapshot['queue'] = [];
 
-  const blockedJobs = dashboardData.jobsQueue
-      .filter((job) => job.status === 'blocked')
-      .slice(0, 1);
+  const blockedJobs =
+      dashboardData.jobsQueue.filter((job) => job.status === 'blocked')
+          .slice(0, 1);
   blockedJobs.forEach((job) => {
     signalQueue.push({
       title: `Blocked job ${job.id}`,
@@ -270,19 +324,20 @@ function buildSignalQueue(
   });
 
   const criticalAlerts = dashboardData.replenishmentAlerts
-      .filter((alert) => alert.severity === 'critical')
-      .slice(0, 1);
+                             .filter((alert) => alert.severity === 'critical')
+                             .slice(0, 1);
   criticalAlerts.forEach((alert) => {
     signalQueue.push({
       title: `Critical stock ${alert.sku}`,
-      detail: `${alert.location}: on hand ${alert.onHand} / min ${alert.reorderPoint}`,
+      detail: `${alert.location}: on hand ${alert.onHand} / min ${
+          alert.reorderPoint}`,
       status: 'attention',
     });
   });
 
-  const scheduledJobs = dashboardData.jobsQueue
-      .filter((job) => job.status === 'scheduled')
-      .slice(0, 1);
+  const scheduledJobs =
+      dashboardData.jobsQueue.filter((job) => job.status === 'scheduled')
+          .slice(0, 1);
   scheduledJobs.forEach((job) => {
     signalQueue.push({
       title: `Scheduled ${job.id}`,
@@ -299,24 +354,27 @@ function buildSignalQueue(
 }
 
 function withDashboardSignals(
-    workspaceKey: MvpWorkspaceKey,
-    baseSnapshot: WorkspaceMvpSnapshot,
+    workspaceKey: MvpWorkspaceKey, baseSnapshot: WorkspaceMvpSnapshot,
     dashboardData: DashboardData): WorkspaceMvpSnapshot {
   const blockedJobCount =
       dashboardData.jobsQueue.filter((job) => job.status === 'blocked').length;
-  const urgentJobCount = dashboardData.jobsQueue
-      .filter((job) => job.priority === 'urgent' || job.status === 'blocked')
-      .length;
+  const urgentJobCount =
+      dashboardData.jobsQueue
+          .filter(
+              (job) => job.priority === 'urgent' || job.status === 'blocked')
+          .length;
   const activeCustomers =
       new Set(dashboardData.jobsQueue.map((job) => job.customerName)).size;
-  const criticalAlertCount = dashboardData.replenishmentAlerts
-      .filter((alert) => alert.severity === 'critical')
-      .length;
+  const criticalAlertCount =
+      dashboardData.replenishmentAlerts
+          .filter((alert) => alert.severity === 'critical')
+          .length;
 
   const shared = {
     ...baseSnapshot,
     generatedAtLabel: toDashboardTimestampLabel(dashboardData.generatedAt),
     dataSourceLabel: 'Computed from persisted dashboard events',
+    telemetry: buildTelemetry(dashboardData),
     queue: buildSignalQueue(dashboardData, baseSnapshot.queue),
   };
 

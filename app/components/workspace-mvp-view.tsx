@@ -1,5 +1,7 @@
 import type { WorkspaceMvpSnapshot } from '@/lib/workspaces/mvp';
 
+import { WorkspaceActionPanel } from './workspace-action-panel';
+
 function badgeForStatus(status: WorkspaceMvpSnapshot['queue'][number]['status']) {
     if (status === 'urgent') {
         return 'bg-[#fee2e2] text-[#991b1b]';
@@ -25,6 +27,33 @@ export function WorkspaceMvpView({ snapshot }: { snapshot: WorkspaceMvpSnapshot 
                     <p className="text-xs text-[#64748b]">{snapshot.dataSourceLabel}</p>
                 ) : null}
             </div>
+
+            {snapshot.telemetry ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <article className="rounded-md border border-[#e5e7eb] bg-[#f8fafc] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#64748b]">Blocked Jobs</p>
+                        <p className="mt-1 text-lg font-semibold text-[#0f172a]">{snapshot.telemetry.blockedJobs}</p>
+                    </article>
+                    <article className="rounded-md border border-[#e5e7eb] bg-[#f8fafc] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#64748b]">Critical Alerts</p>
+                        <p className="mt-1 text-lg font-semibold text-[#0f172a]">{snapshot.telemetry.criticalAlerts}</p>
+                    </article>
+                    <article className="rounded-md border border-[#e5e7eb] bg-[#f8fafc] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#64748b]">Open Invoices</p>
+                        <p className="mt-1 text-lg font-semibold text-[#0f172a]">{snapshot.telemetry.openInvoices}</p>
+                    </article>
+                    <article className="rounded-md border border-[#e5e7eb] bg-[#f8fafc] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-[#64748b]">Low-stock SKUs</p>
+                        <p className="mt-1 text-lg font-semibold text-[#0f172a]">{snapshot.telemetry.lowStockSkus}</p>
+                    </article>
+                </div>
+            ) : null}
+
+            <WorkspaceActionPanel
+                actionType={snapshot.primaryAction.actionType}
+                label={snapshot.primaryAction.label}
+                summary={snapshot.primaryAction.summary}
+            />
 
             <div className="grid gap-3 sm:grid-cols-3">
                 {snapshot.kpis.map((kpi) => (

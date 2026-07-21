@@ -1,5 +1,5 @@
-import {describe, expect, it} from 'vitest';
 import type {DashboardData} from '@/lib/dashboard/types';
+import {describe, expect, it} from 'vitest';
 
 import {getWorkspaceMvpSnapshot, MVP_WORKSPACE_KEYS} from './mvp';
 
@@ -73,6 +73,7 @@ describe('workspace mvp snapshots', () => {
 
       expect(snapshot.title.length).toBeGreaterThan(3);
       expect(snapshot.subtitle.toLowerCase()).not.toContain('placeholder');
+      expect(snapshot.primaryAction.label.length).toBeGreaterThan(3);
       expect(snapshot.kpis.length).toBeGreaterThanOrEqual(3);
       expect(snapshot.queue.length).toBeGreaterThanOrEqual(3);
       expect(snapshot.checklist.length).toBeGreaterThanOrEqual(3);
@@ -83,8 +84,10 @@ describe('workspace mvp snapshots', () => {
     const snapshot = getWorkspaceMvpSnapshot('invoices', SIGNAL_DASHBOARD_DATA);
 
     expect(snapshot.generatedAtLabel).toContain('Live snapshot from');
-    expect(snapshot.dataSourceLabel).toBe(
-        'Computed from persisted dashboard events');
+    expect(snapshot.dataSourceLabel)
+        .toBe('Computed from persisted dashboard events');
+    expect(snapshot.telemetry?.openInvoices).toBe(17);
+    expect(snapshot.primaryAction.actionType).toBe('invoices.send_one');
     expect(snapshot.kpis[0]?.label).toBe('Open invoices');
     expect(snapshot.kpis[0]?.value).toBe('17');
     expect(snapshot.queue[0]?.title).toContain('Blocked job');
