@@ -5,48 +5,37 @@ vi.mock('@/lib/rbac/server', () => ({
   getAuthorizationContext: vi.fn(),
 }));
 
-vi.mock('@/lib/dashboard/repository', () => ({
-                                        getDashboardData: vi.fn(),
-                                      }));
-
 vi.mock('@/lib/workspaces/workflow-actions', () => ({
-                                               applyWorkflowAction: vi.fn(),
-                                             }));
-
-vi.mock('@/lib/db/prisma', () => ({
-  prisma: {
-    dashboardSnapshot: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-    },
-  },
+  applyWorkflowAction: vi.fn(),
 }));
 
+vi.mock('@/lib/dashboard/snapshotMutations', () => ({
+  getOrCreateOrgSnapshot: vi.fn(),
+  getDashboardDataForSnapshot: vi.fn(),
+  persistDashboardData: vi.fn(),
+}));
+
+import {getDashboardDataForSnapshot, getOrCreateOrgSnapshot, persistDashboardData} from '@/lib/dashboard/snapshotMutations';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
-import {getDashboardData} from '@/lib/dashboard/repository';
 import {applyWorkflowAction} from '@/lib/workspaces/workflow-actions';
-import {prisma} from '@/lib/db/prisma';
 
 import {POST} from './route';
 
 const mockedAuthorizePermission = vi.mocked(authorizePermission);
 const mockedGetAuthorizationContext = vi.mocked(getAuthorizationContext);
-const mockedGetDashboardData = vi.mocked(getDashboardData);
+const mockedGetOrCreateOrgSnapshot = vi.mocked(getOrCreateOrgSnapshot);
+const mockedGetDashboardDataForSnapshot = vi.mocked(getDashboardDataForSnapshot);
+const mockedPersistDashboardData = vi.mocked(persistDashboardData);
 const mockedApplyWorkflowAction = vi.mocked(applyWorkflowAction);
-const mockedFindFirst = vi.mocked(prisma.dashboardSnapshot.findFirst);
-const mockedCreate = vi.mocked(prisma.dashboardSnapshot.create);
-const mockedUpdate = vi.mocked(prisma.dashboardSnapshot.update);
 
 describe('workflow actions route', () => {
   beforeEach(() => {
     mockedAuthorizePermission.mockReset();
     mockedGetAuthorizationContext.mockReset();
-    mockedGetDashboardData.mockReset();
+    mockedGetOrCreateOrgSnapshot.mockReset();
+    mockedGetDashboardDataForSnapshot.mockReset();
+    mockedPersistDashboardData.mockReset();
     mockedApplyWorkflowAction.mockReset();
-    mockedFindFirst.mockReset();
-    mockedCreate.mockReset();
-    mockedUpdate.mockReset();
 
     mockedGetAuthorizationContext.mockResolvedValue({
       userId: 'user_1',
@@ -121,11 +110,11 @@ describe('workflow actions route', () => {
 
   it('updates snapshot on authorized action', async () => {
     mockedAuthorizePermission.mockResolvedValue({state: 'authorized'});
-    mockedFindFirst.mockResolvedValue({
+    mockedGetOrCreateOrgSnapshot.mockResolvedValue({
       id: 'snap_1',
       orgId: 'org_1',
     } as never);
-    mockedGetDashboardData.mockResolvedValue({
+    mockedGetDashboardDataForSnapshot.mockResolvedValue({
       generatedAt: '2026-07-21T10:00:00.000Z',
       revenueToday: 1,
       openInvoices: 1,
@@ -162,68 +151,52 @@ describe('workflow actions route', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(200);
-    expect(mockedUpdate).toHaveBeenCalledOnce();
+    expect(mockedPersistDashboardData).toHaveBeenCalledOnce();
   });
 
-  it('bootstraps org snapshot from fallback when none exists for active org',
-     async () => {
-       mockedAuthorizePermission.mockResolvedValue({state: 'authorized'});
-       mockedFindFirst
-           .mockResolvedValueOnce(null as never)
-           .mockResolvedValueOnce({
-             id: 'fallback_1',
-             generatedAt: new Date('2026-07-21T10:00:00.000Z'),
-             revenueToday: 10,
-             openInvoices: 2,
-             grossMarginWeek: 10,
-             lowStockSkus: 1,
-             vansBelowMin: 1,
-             financialTrend: {revenue: [], expenses: [], profit: []},
-             kpis: [],
-             jobsQueue: [],
-             replenishmentAlerts: [],
-           } as never);
-       mockedCreate.mockResolvedValue({
-         id: 'snap_bootstrap',
-         orgId: 'org_1',
-       } as never);
-       mockedGetDashboardData.mockResolvedValue({
-         generatedAt: '2026-07-21T10:00:00.000Z',
-         revenueToday: 1,
-         openInvoices: 1,
-         grossMarginWeek: 1,
-         lowStockSkus: 1,
-         vansBelowMin: 1,
-         financialTrend: {revenue: [], expenses: [], profit: []},
-         kpis: [],
-         jobsQueue: [],
-         replenishmentAlerts: [],
-       });
-       mockedApplyWorkflowAction.mockReturnValue({
-         data: {
-           generatedAt: '2026-07-21T10:01:00.000Z',
-           revenueToday: 2,
-           openInvoices: 1,
-           grossMarginWeek: 1,
-           lowStockSkus: 1,
-           vansBelowMin: 1,
-           financialTrend: {revenue: [], expenses: [], profit: []},
-           kpis: [],
-           jobsQueue: [],
-           replenishmentAlerts: [],
-         },
-         message: 'ok',
-       } as never);
+  it('initializes org snapshot when missing and proceeds', async () => {
+    mockedAuthorizePermission.mockResolvedValue({state: 'authorized'});
+    mockedGetOrCreateOrgSnapshot.mockResolvedValue({
+      id: 'snap_bootstrap',
+      orgId: 'org_1',
+    } as never);
+    mockedGetDashboardDataForSnapshot.mockResolvedValue({
+      generatedAt: '2026-07-21T10:00:00.000Z',
+      revenueToday: 0,
+      openInvoices: 0,
+      grossMarginWeek: 0,
+      lowStockSkus: 0,
+      vansBelowMin: 0,
+      financialTrend: {revenue: [], expenses: [], profit: []},
+      kpis: [],
+      jobsQueue: [],
+      replenishmentAlerts: [],
+    });
+    mockedApplyWorkflowAction.mockReturnValue({
+      data: {
+        generatedAt: '2026-07-21T10:01:00.000Z',
+        revenueToday: 0,
+        openInvoices: 0,
+        grossMarginWeek: 0,
+        lowStockSkus: 0,
+        vansBelowMin: 0,
+        financialTrend: {revenue: [], expenses: [], profit: []},
+        kpis: [],
+        jobsQueue: [],
+        replenishmentAlerts: [],
+      },
+      message: 'ok',
+    } as never);
 
-       const request = new Request('http://localhost/api/workflow-actions', {
-         method: 'POST',
-         headers: {'content-type': 'application/json'},
-         body: JSON.stringify({actionType: 'jobs.dispatch_next'}),
-       });
+    const request = new Request('http://localhost/api/workflow-actions', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({actionType: 'jobs.dispatch_next'}),
+    });
 
-       const response = await POST(request);
+    const response = await POST(request);
 
-       expect(response.status).toBe(200);
-       expect(mockedCreate).toHaveBeenCalledOnce();
-     });
+    expect(response.status).toBe(200);
+    expect(mockedGetOrCreateOrgSnapshot).toHaveBeenCalledWith('org_1');
+  });
 });

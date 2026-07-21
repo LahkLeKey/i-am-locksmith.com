@@ -1,7 +1,7 @@
 import {type DashboardData} from './types';
 
 type DashboardSnapshotRecord = {
-  generatedAt: Date; revenueToday: number; openInvoices: number;
+  orgId: string; generatedAt: Date; revenueToday: number; openInvoices: number;
   grossMarginWeek: unknown;
   lowStockSkus: number;
   vansBelowMin: number;
@@ -13,9 +13,16 @@ type DashboardSnapshotRecord = {
 
 type DashboardSnapshotClient = {
   dashboardSnapshot: {
-    findFirst: (args: {orderBy: Array<{generatedAt?: 'desc'; id?: 'desc'}>;}) =>
-        Promise<DashboardSnapshotRecord|null>;
+    findFirst: (args: {
+      where?: {orgId: string};
+      orderBy: Array<{generatedAt?: 'desc'; id?: 'desc'}>;
+    }) => Promise<DashboardSnapshotRecord|null>;
   };
+};
+
+type GetDashboardDataOptions = {
+  orgId?: string|null;
+  client?: DashboardSnapshotClient;
 };
 
 const EMPTY_DASHBOARD_DATA: DashboardData = {
@@ -35,12 +42,14 @@ const EMPTY_DASHBOARD_DATA: DashboardData = {
   replenishmentAlerts: [],
 };
 
-export async function getDashboardData(client?: DashboardSnapshotClient):
+export async function getDashboardData(options: GetDashboardDataOptions = {}):
     Promise<DashboardData> {
   try {
-    const resolvedClient = client ?? await getPrismaClient();
+    const resolvedClient = options.client ?? await getPrismaClient();
+    const where = options.orgId ? {orgId: options.orgId} : undefined;
 
     const snapshot = await resolvedClient.dashboardSnapshot.findFirst({
+      ...(where ? {where} : {}),
       orderBy: [{generatedAt: 'desc'}, {id: 'desc'}],
     });
 

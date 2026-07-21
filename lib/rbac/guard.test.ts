@@ -18,7 +18,7 @@ import {notFound, redirect} from 'next/navigation';
 
 import type {AuthorizationContext} from './server';
 import {authorizePermission, getAuthorizationContext} from './server';
-import {requireAuthenticatedContext, requireRoutePermission} from './guard';
+import {requireAuthenticatedContext, requireRouteContext, requireRoutePermission} from './guard';
 
 const mockedRedirect = vi.mocked(redirect);
 const mockedNotFound = vi.mocked(notFound);
@@ -77,5 +77,38 @@ describe('rbac guard', () => {
 
     expect(result).toEqual(context);
     expect(mockedRedirect).not.toHaveBeenCalled();
+  });
+
+  it('returns context when route context permission is granted', async () => {
+    const context: AuthorizationContext = {
+      userId: 'user_123',
+      orgId: 'org_123',
+      clerkOrgRole: 'org:member',
+      orgRole: null,
+      userRole: 'dispatcher',
+      effectivePermissions: new Set(['customers.read']),
+    };
+    mockedGetAuthorizationContext.mockResolvedValue(context);
+
+    const result = await requireRouteContext('/customers');
+
+    expect(result).toEqual(context);
+    expect(mockedNotFound).not.toHaveBeenCalled();
+  });
+
+  it('calls notFound when route context permission is missing', async () => {
+    const context: AuthorizationContext = {
+      userId: 'user_123',
+      orgId: 'org_123',
+      clerkOrgRole: 'org:member',
+      orgRole: null,
+      userRole: 'dispatcher',
+      effectivePermissions: new Set(),
+    };
+    mockedGetAuthorizationContext.mockResolvedValue(context);
+
+    await requireRouteContext('/customers');
+
+    expect(mockedNotFound).toHaveBeenCalledTimes(1);
   });
 });

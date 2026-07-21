@@ -8,11 +8,12 @@ describe('getDashboardData', () => {
        const findFirst = vi.fn().mockResolvedValue(null);
 
        const data = await getDashboardData({
-         dashboardSnapshot: {findFirst},
+         client: {dashboardSnapshot: {findFirst}},
        });
 
-       expect(findFirst).toHaveBeenCalledWith(
-           {orderBy: [{generatedAt: 'desc'}, {id: 'desc'}]});
+       expect(findFirst).toHaveBeenCalledWith({
+         orderBy: [{generatedAt: 'desc'}, {id: 'desc'}],
+       });
        expect(data.revenueToday).toBe(0);
        expect(data.kpis).toEqual([]);
        expect(data.jobsQueue).toEqual([]);
@@ -21,6 +22,7 @@ describe('getDashboardData', () => {
   it('maps a persisted snapshot into dashboard data', async () => {
     const findFirst = vi.fn().mockResolvedValue({
       id: 'snapshot_1',
+      orgId: 'org_1',
       generatedAt: new Date('2026-07-20T09:00:00.000Z'),
       revenueToday: 4280,
       openInvoices: 18,
@@ -68,7 +70,7 @@ describe('getDashboardData', () => {
     });
 
     const data = await getDashboardData({
-      dashboardSnapshot: {findFirst},
+      client: {dashboardSnapshot: {findFirst}},
     });
 
     expect(data.generatedAt).toBe('2026-07-20T09:00:00.000Z');
@@ -77,11 +79,25 @@ describe('getDashboardData', () => {
     expect(data.replenishmentAlerts).toHaveLength(1);
   });
 
+  it('queries snapshots scoped to the provided org id', async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
+
+    await getDashboardData({
+      orgId: 'org_123',
+      client: {dashboardSnapshot: {findFirst}},
+    });
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {orgId: 'org_123'},
+      orderBy: [{generatedAt: 'desc'}, {id: 'desc'}],
+    });
+  });
+
   it('falls back to zero-state when database query fails', async () => {
     const findFirst = vi.fn().mockRejectedValue(new Error('db unavailable'));
 
     const data = await getDashboardData({
-      dashboardSnapshot: {findFirst},
+      client: {dashboardSnapshot: {findFirst}},
     });
 
     expect(data.revenueToday).toBe(0);
@@ -90,6 +106,7 @@ describe('getDashboardData', () => {
 
   it('falls back to zero-state when snapshot shape is invalid', async () => {
     const findFirst = vi.fn().mockResolvedValue({
+      orgId: 'org_1',
       generatedAt: new Date('2026-07-20T09:00:00.000Z'),
       revenueToday: 100,
       openInvoices: 4,
@@ -103,7 +120,7 @@ describe('getDashboardData', () => {
     });
 
     const data = await getDashboardData({
-      dashboardSnapshot: {findFirst},
+      client: {dashboardSnapshot: {findFirst}},
     });
 
     expect(data.revenueToday).toBe(0);
@@ -113,6 +130,7 @@ describe('getDashboardData', () => {
   it('falls back to zero-state when financial trend arrays are missing',
      async () => {
        const findFirst = vi.fn().mockResolvedValue({
+         orgId: 'org_1',
          generatedAt: new Date('2026-07-20T09:00:00.000Z'),
          revenueToday: 100,
          openInvoices: 4,
@@ -126,7 +144,7 @@ describe('getDashboardData', () => {
        });
 
        const data = await getDashboardData({
-         dashboardSnapshot: {findFirst},
+         client: {dashboardSnapshot: {findFirst}},
        });
 
        expect(data.revenueToday).toBe(0);

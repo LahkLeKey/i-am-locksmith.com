@@ -13,7 +13,7 @@ export default async function DashboardPage() {
     return <UnscopedOnboardingPanel context={context} />;
   }
 
-  const dashboardData = await getDashboardData();
+  const dashboardData = await getDashboardData({ orgId: context.orgId });
 
   const widgets = buildVisibleWidgets(context?.effectivePermissions ?? new Set());
   const visibleWidgetIds = new Set(widgets.map((widget) => widget.id));
