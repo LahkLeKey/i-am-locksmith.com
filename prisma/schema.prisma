@@ -26,3 +26,23 @@ model DashboardSnapshot {
     @@index([generatedAt])
     @@index([orgId, generatedAt])
 }
+
+model InventoryPart {
+    id                String   @id @default(cuid())
+    orgId             String
+    sku               String
+    itemName          String
+    serviceLines      Json
+    location          String
+    onHand            Int
+    reorderPoint      Int
+    suggestedOrderQty Int
+    supplier          String
+    severity          String
+    compatibilityNote String
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+
+    @@index([orgId, sku])
+    @@index([orgId, location])
+}

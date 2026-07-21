@@ -1,9 +1,13 @@
 import { requireRouteContext } from '@/lib/rbac/guard';
 import { formatSchedule } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';
-import { buildInventoryReadModel } from '@/lib/inventory/read-model';
+import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
+import { listInventoryParts } from '@/lib/inventory/parts-repository';
 
 import { InventoryAlertsCrudPanel } from '@/app/components/inventory-alerts-crud-panel';
+import { InventoryPartsPanel } from '@/app/components/inventory-parts-panel';
+
+const INVENTORY_SERVICE_LINES = ['automotive', 'mobile', 'shop'] as const;
 
 function formatScheduleSafe(isoDate: string): string {
   const timestamp = Date.parse(isoDate);
@@ -15,10 +19,35 @@ function formatScheduleSafe(isoDate: string): string {
   return formatSchedule(isoDate);
 }
 
+function requireOrgId(orgId: string | null): string {
+  if (!orgId) {
+    throw new Error('Inventory requires an active organization');
+  }
+
+  return orgId;
+}
+
+function toInventoryPartSource(part: Awaited<ReturnType<typeof listInventoryParts>>[number]): InventoryPartSource {
+  return {
+    ...part,
+    serviceLines: part.serviceLines.filter(
+      (serviceLine): serviceLine is typeof INVENTORY_SERVICE_LINES[number] =>
+        INVENTORY_SERVICE_LINES.includes(serviceLine as typeof INVENTORY_SERVICE_LINES[number]),
+    ),
+    severity: part.severity === 'critical' || part.severity === 'high' || part.severity === 'medium' || part.severity === 'low' ?
+      part.severity : 'medium',
+  };
+}
+
 export default async function InventoryPage() {
   const context = await requireRouteContext('/inventory');
-  const dashboardData = await getDashboardData({ orgId: context.orgId });
-  const inventory = buildInventoryReadModel(dashboardData);
+  const orgId = requireOrgId(context.orgId);
+
+  const dashboardData = await getDashboardData({ orgId });
+  const inventoryParts = await listInventoryParts(orgId);
+  const inventory = buildInventoryReadModel(
+    dashboardData,
+    inventoryParts.map(toInventoryPartSource));
 
   const serviceLineBadgeClasses = {
     automotive: 'bg-[#ecfeff] text-[#155e75]',
@@ -108,66 +137,7 @@ export default async function InventoryPage() {
         </article>
       </div>
 
-      <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Parts Catalog</h2>
-            <p className="mt-1 text-xs text-[#475569]">
-              Shared inventory rows filtered for automotive, mobile, and shop workflows.
-            </p>
-          </div>
-          <p className="text-xs text-[#64748b]">
-            Service-line tags are derived from the same parts master, not separate tables.
-          </p>
-        </div>
-
-        <div className="mt-4 overflow-hidden rounded-md border border-[#e5e7eb]">
-          <table className="min-w-full divide-y divide-[#e5e7eb] text-left text-xs">
-            <thead className="bg-[#f8fafc] text-[#475569]">
-              <tr>
-                <th className="px-3 py-2 font-semibold">Part</th>
-                <th className="px-3 py-2 font-semibold">Service lines</th>
-                <th className="px-3 py-2 font-semibold">Stock</th>
-                <th className="px-3 py-2 font-semibold">Supplier</th>
-                <th className="px-3 py-2 font-semibold">Fit note</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e5e7eb] bg-white text-[#334155]">
-              {inventory.catalogRows.map((row) => (
-                <tr key={row.id} className="align-top">
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-[#0f172a]">{row.itemName}</p>
-                    <p className="text-[11px] text-[#64748b]">{row.sku} · {row.location}</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      {row.serviceLines.map((line) => (
-                        <span
-                          key={`${row.id}-${line}`}
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${serviceLineBadgeClasses[line]}`}
-                        >
-                          {line}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-[#0f172a]">
-                      {row.onHand} / {row.reorderPoint}
-                    </p>
-                    <p className="text-[11px] text-[#64748b]">Order {row.suggestedOrderQty} when replenishing</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-[#0f172a]">{row.supplier}</p>
-                    <p className="text-[11px] uppercase tracking-wide text-[#64748b]">{row.severity}</p>
-                  </td>
-                  <td className="px-3 py-3 text-[#475569]">{row.compatibilityNote}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </article>
+      <InventoryPartsPanel initialParts={inventory.catalogRows} />
 
       <InventoryAlertsCrudPanel initialAlerts={dashboardData.replenishmentAlerts} />
     </section>

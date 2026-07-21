@@ -1,11 +1,20 @@
 import {type DashboardData, type ReplenishmentAlert} from '../dashboard/types';
 
+export type InventoryPartSource = {
+  id: string; sku: string; itemName: string; serviceLines: string[];
+  location: string;
+  onHand: number;
+  reorderPoint: number;
+  suggestedOrderQty: number;
+  supplier: string;
+  severity: ReplenishmentAlert['severity'];
+  compatibilityNote: string;
+};
+
 export type InventoryServiceLine = 'automotive'|'mobile'|'shop';
 
 export type InventoryCatalogRow = {
-  id: string;
-  sku: string;
-  itemName: string;
+  id: string; sku: string; itemName: string;
   serviceLines: InventoryServiceLine[];
   location: string;
   onHand: number;
@@ -17,10 +26,7 @@ export type InventoryCatalogRow = {
 };
 
 export type InventoryServiceLineSummary = {
-  id: InventoryServiceLine;
-  label: string;
-  count: number;
-  note: string;
+  id: InventoryServiceLine; label: string; count: number; note: string;
 };
 
 export type InventoryTimelineEvent = {
@@ -45,11 +51,13 @@ const SEVERITY_PRIORITY: Record<ReplenishmentAlert['severity'], number> = {
   low: 3,
 };
 
-export function buildInventoryReadModel(dashboardData: DashboardData):
-    InventoryReadModel {
+export function buildInventoryReadModel(
+    dashboardData: DashboardData,
+    inventoryParts: InventoryPartSource[] = []): InventoryReadModel {
   const queue = sortAlertsForQueue(dashboardData.replenishmentAlerts);
   const timeline = buildTimelineEvents(dashboardData.replenishmentAlerts);
-  const catalogRows = buildCatalogRows(queue);
+  const catalogRows =
+      buildCatalogRows(inventoryParts.length > 0 ? inventoryParts : queue);
   const serviceLineSummary = buildServiceLineSummary(catalogRows);
 
   return {
@@ -63,59 +71,76 @@ export function buildInventoryReadModel(dashboardData: DashboardData):
   };
 }
 
-function buildCatalogRows(alerts: ReplenishmentAlert[]): InventoryCatalogRow[] {
-  return alerts.map((alert) => {
-    const serviceLines = classifyServiceLines(alert);
+function buildCatalogRows(parts: Array<ReplenishmentAlert|InventoryPartSource>):
+    InventoryCatalogRow[] {
+  return parts.map((part) => {
+    const serviceLines =
+        'serviceLines' in part && part.serviceLines.length > 0 ?
+        normalizeServiceLines(part.serviceLines) :
+        classifyServiceLines(part);
+    const compatibilityNote = 'compatibilityNote' in part ?
+        part.compatibilityNote :
+        buildCompatibilityNote(serviceLines, part.location);
 
     return {
-      id: alert.id,
-      sku: alert.sku,
-      itemName: alert.itemName,
+      id: part.id,
+      sku: part.sku,
+      itemName: part.itemName,
       serviceLines,
-      location: alert.location,
-      onHand: alert.onHand,
-      reorderPoint: alert.reorderPoint,
-      suggestedOrderQty: alert.suggestedOrderQty,
-      supplier: alert.supplier,
-      severity: alert.severity,
-      compatibilityNote: buildCompatibilityNote(serviceLines, alert.location),
+      location: part.location,
+      onHand: part.onHand,
+      reorderPoint: part.reorderPoint,
+      suggestedOrderQty: part.suggestedOrderQty,
+      supplier: part.supplier,
+      severity: part.severity,
+      compatibilityNote,
     };
   });
 }
 
-function buildServiceLineSummary(
-    catalogRows: InventoryCatalogRow[]): InventoryServiceLineSummary[] {
-  const automotiveCount = catalogRows.filter((row) => row.serviceLines.includes('automotive')).length;
-  const mobileCount = catalogRows.filter((row) => row.serviceLines.includes('mobile')).length;
-  const shopCount = catalogRows.filter((row) => row.serviceLines.includes('shop')).length;
+function buildServiceLineSummary(catalogRows: InventoryCatalogRow[]):
+    InventoryServiceLineSummary[] {
+  const automotiveCount =
+      catalogRows.filter((row) => row.serviceLines.includes('automotive'))
+          .length;
+  const mobileCount =
+      catalogRows.filter((row) => row.serviceLines.includes('mobile')).length;
+  const shopCount =
+      catalogRows.filter((row) => row.serviceLines.includes('shop')).length;
 
   return [
     {
       id: 'automotive',
       label: 'Automotive-ready parts',
       count: automotiveCount,
-      note: automotiveCount > 0 ? 'Parts with vehicle or transponder fit.' : 'No automotive-specific parts flagged yet.',
+      note: automotiveCount > 0 ? 'Parts with vehicle or transponder fit.' :
+                                  'No automotive-specific parts flagged yet.',
     },
     {
       id: 'mobile',
       label: 'Mobile van stock',
       count: mobileCount,
-      note: mobileCount > 0 ? 'Parts suitable for field vans and route work.' : 'No van or field-service items flagged yet.',
+      note: mobileCount > 0 ? 'Parts suitable for field vans and route work.' :
+                              'No van or field-service items flagged yet.',
     },
     {
       id: 'shop',
       label: 'Shop / counter stock',
       count: shopCount,
-      note: shopCount > 0 ? 'Parts suited to bench work and storefront jobs.' : 'No shop stock items flagged yet.',
+      note: shopCount > 0 ? 'Parts suited to bench work and storefront jobs.' :
+                            'No shop stock items flagged yet.',
     },
   ];
 }
 
-function classifyServiceLines(alert: ReplenishmentAlert): InventoryServiceLine[] {
-  const haystack = `${alert.sku} ${alert.itemName} ${alert.location}`.toLowerCase();
+function classifyServiceLines(alert: ReplenishmentAlert|InventoryPartSource):
+    InventoryServiceLine[] {
+  const haystack =
+      `${alert.sku} ${alert.itemName} ${alert.location}`.toLowerCase();
   const serviceLines = new Set<InventoryServiceLine>();
 
-  if (/(auto|automotive|vehicle|car|transponder|remote|fob|ignition|programmer)/.test(haystack)) {
+  if (/(auto|automotive|vehicle|car|transponder|remote|fob|ignition|programmer)/
+          .test(haystack)) {
     serviceLines.add('automotive');
   }
 
@@ -123,7 +148,8 @@ function classifyServiceLines(alert: ReplenishmentAlert): InventoryServiceLine[]
     serviceLines.add('mobile');
   }
 
-  if (/(shop|warehouse|counter|bench|core|cylinder|blank|deadbolt|mortise|rim|pin|wafer)/.test(haystack)) {
+  if (/(shop|warehouse|counter|bench|core|cylinder|blank|deadbolt|mortise|rim|pin|wafer)/
+          .test(haystack)) {
     serviceLines.add('shop');
   }
 
@@ -133,6 +159,19 @@ function classifyServiceLines(alert: ReplenishmentAlert): InventoryServiceLine[]
   }
 
   return [...serviceLines];
+}
+
+function normalizeServiceLines(serviceLines: string[]): InventoryServiceLine[] {
+  const normalized: InventoryServiceLine[] = [];
+
+  for (const serviceLine of serviceLines) {
+    if (serviceLine === 'automotive' || serviceLine === 'mobile' ||
+        serviceLine === 'shop') {
+      normalized.push(serviceLine);
+    }
+  }
+
+  return normalized;
 }
 
 function buildCompatibilityNote(

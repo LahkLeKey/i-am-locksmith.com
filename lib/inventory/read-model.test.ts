@@ -179,7 +179,8 @@ describe('buildInventoryReadModel', () => {
   it('builds a parts catalog with service-line coverage notes', () => {
     const model = buildInventoryReadModel(BASE_DATA);
 
-    const automotiveRow = model.catalogRows.find((value) => value.id === 'ALERT-1');
+    const automotiveRow =
+        model.catalogRows.find((value) => value.id === 'ALERT-1');
     const shopRow = model.catalogRows.find((value) => value.id === 'ALERT-2');
     const mobileRow = model.catalogRows.find((value) => value.id === 'ALERT-3');
 

@@ -169,7 +169,51 @@ const snapshot = {
 
 async function main() {
   await prisma.dashboardSnapshot.deleteMany();
+  await prisma.inventoryPart.deleteMany();
   await prisma.dashboardSnapshot.create({data: snapshot});
+  await prisma.inventoryPart.createMany({
+    data: [
+      {
+        orgId: 'org_seed_default',
+        sku: 'AUTO-FOB-01',
+        itemName: 'Automotive fob shell',
+        serviceLines: ['automotive', 'mobile'],
+        location: 'Van 3',
+        onHand: 12,
+        reorderPoint: 18,
+        suggestedOrderQty: 24,
+        supplier: 'KeyCore Supply',
+        severity: 'high',
+        compatibilityNote: 'Move-ready for van stock and automotive calls from Van 3.',
+      },
+      {
+        orgId: 'org_seed_default',
+        sku: 'CYL-CORE-02',
+        itemName: 'Cylinder core kit',
+        serviceLines: ['shop'],
+        location: 'Warehouse A',
+        onHand: 6,
+        reorderPoint: 12,
+        suggestedOrderQty: 20,
+        supplier: 'Banner Lock Supply',
+        severity: 'critical',
+        compatibilityNote: 'Bench and counter stock suited to shop workflows.',
+      },
+      {
+        orgId: 'org_seed_default',
+        sku: 'VAN-KIT-03',
+        itemName: 'Mobile rekey kit',
+        serviceLines: ['mobile', 'shop'],
+        location: 'Van 3',
+        onHand: 9,
+        reorderPoint: 10,
+        suggestedOrderQty: 16,
+        supplier: 'DoorGuard Parts',
+        severity: 'medium',
+        compatibilityNote: 'Best for mobile van restock and field work.',
+      },
+    ],
+  });
 }
 
 main()
