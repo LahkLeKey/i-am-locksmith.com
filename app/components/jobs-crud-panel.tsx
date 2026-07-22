@@ -1025,7 +1025,7 @@ export function JobsCrudPanel({
                                         </div>
 
                                         {activeJobWizardStep === 1 ? (
-                                            <div className="grid gap-2">
+                                            <div className="grid gap-2 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
                                                 <label className="space-y-1">
                                                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer</span>
                                                     <input
@@ -1152,7 +1152,7 @@ export function JobsCrudPanel({
                                         ) : null}
 
                                         {activeJobWizardStep === 2 ? (
-                                            <div className="space-y-3 border-y border-[#dbe3f0] py-5">
+                                            <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
                                                 <div className="grid gap-2 sm:grid-cols-2">
                                                     <label className="space-y-1">
                                                         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
@@ -1247,7 +1247,7 @@ export function JobsCrudPanel({
                                         ) : null}
 
                                         {activeJobWizardStep === 3 ? (
-                                            <div className="space-y-3 border-y border-[#dbe3f0] py-5">
+                                            <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
                                                 <div className="grid gap-2 sm:grid-cols-2">
                                                     <p className="text-xs text-[#475569]">Clock In: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.clockedInAt ? new Date(selectedJob.timeClock.clockedInAt).toLocaleString() : 'Not started'}</span></p>
                                                     <p className="text-xs text-[#475569]">Clock Out: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.clockedOutAt ? new Date(selectedJob.timeClock.clockedOutAt).toLocaleString() : 'In progress'}</span></p>
