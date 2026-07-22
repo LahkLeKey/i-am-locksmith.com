@@ -19,9 +19,14 @@ vi.mock('@/lib/jobs/repository', () => ({
                                    updateJobRecord: vi.fn(),
                                  }));
 
+vi.mock('@/lib/technicians/repository', () => ({
+                                          getTechnicianById: vi.fn(),
+                                        }));
+
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
 import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
+import {getTechnicianById} from '@/lib/technicians/repository';
 
 import {DELETE, GET, PATCH, POST} from './route';
 
@@ -37,6 +42,7 @@ const mockedDeleteJobRecord = vi.mocked(deleteJobRecord);
 const mockedGetJobRecord = vi.mocked(getJobRecord);
 const mockedListJobRecords = vi.mocked(listJobRecords);
 const mockedUpdateJobRecord = vi.mocked(updateJobRecord);
+const mockedGetTechnicianById = vi.mocked(getTechnicianById);
 
 const BASE_JOB = {
   id: 'JOB-1',
@@ -48,6 +54,7 @@ const BASE_JOB = {
   etaMinutes: null,
   requiredSkus: [],
   followUpNote: null,
+  assignedTechnician: null,
   quote: {
     partEstimate: 100,
     laborEstimate: 50,
@@ -96,6 +103,16 @@ describe('jobs api route', () => {
     mockedDeleteJobRecord.mockResolvedValue({...BASE_JOB} as never);
     mockedGetJobRecord.mockResolvedValue({...BASE_JOB} as never);
     mockedListJobRecords.mockResolvedValue([{...BASE_JOB}] as never);
+    mockedGetTechnicianById.mockResolvedValue({
+      id: 'tech_1',
+      orgId: 'org_1',
+      fullName: 'Taylor Ford',
+      lockpickingSkills: ['residential'],
+      hourlyRate: 95,
+      availabilityStatus: 'available',
+      availabilityNote: null,
+      isActive: true,
+    } as never);
 
     mockedListInventoryParts.mockResolvedValue([
       {
@@ -130,11 +147,12 @@ describe('jobs api route', () => {
         scheduledFor: '2026-07-23T15:00:00.000Z',
         requiredSkus: ['SKU-1', 'SKU-2'],
         followUpNote: 'Call customer before arrival',
+        assignedTechnicianId: 'tech_1',
         quote: {
           partEstimate: 100,
-          laborEstimate: 80,
+          laborEstimate: 0,
           estimatedMinutes: 45,
-          estimatedTotal: 180,
+          estimatedTotal: 0,
           notes: 'Initial quote',
         },
       }),
@@ -153,8 +171,12 @@ describe('jobs api route', () => {
               priority: 'high',
               requiredSkus: ['SKU-1', 'SKU-2'],
               followUpNote: 'Call customer before arrival',
+              assignedTechnicianId: 'tech_1',
+              assignedTechnicianName: 'Taylor Ford',
+              laborRate: 95,
             }),
         );
+    expect(mockedGetTechnicianById).toHaveBeenCalledWith('org_1', 'tech_1');
   });
 
   it('lists jobs', async () => {

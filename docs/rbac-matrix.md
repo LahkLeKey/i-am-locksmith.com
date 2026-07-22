@@ -24,6 +24,7 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 
 - dashboard.read
 - jobs.read|create|assign|update|complete
+- technicians.read|manage
 - invoices.read|create|send|void
 - inventory.read|adjust|transfer|receive|reserve
 - reports.read
@@ -40,6 +41,8 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 - jobs.assign
 - jobs.update
 - jobs.complete
+- technicians.read
+- technicians.manage
 - invoices.read
 - invoices.create
 - invoices.send
@@ -73,6 +76,7 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 
 - dashboard.read
 - jobs.read
+- technicians.read
 - jobs.update
 - jobs.complete
 - inventory.read
@@ -92,6 +96,7 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 
 - dashboard.read
 - invoices.read
+- technicians.read
 - invoices.create
 - invoices.send
 - invoices.void
@@ -102,6 +107,7 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 
 - dashboard.read
 - jobs.read
+- technicians.read
 - invoices.read
 - inventory.read
 - reports.read
@@ -114,12 +120,16 @@ Current map lives in lib/rbac/policy.ts via ROUTE_PERMISSION_MAP.
 
 - /dashboard => dashboard.read
 - /jobs => jobs.read
+- /technicians => technicians.manage
 - /inventory => inventory.read
 - /invoices => invoices.read
 - /reports => reports.read
 - /settings => settings.read
 - GET /api/protected => dashboard.read
 - POST /api/protected => settings.update
+- GET /api/technicians => technicians.read
+- POST /api/technicians => technicians.manage
+- PATCH /api/technicians => technicians.manage
 
 ## Effective permission calculation
 

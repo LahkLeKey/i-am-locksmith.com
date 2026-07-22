@@ -12,13 +12,14 @@ export const ROLES = [
 export type Role = (typeof ROLES)[number];
 
 export const ALL_PERMISSIONS = [
-  'dashboard.read',    'jobs.read',         'jobs.create',
-  'jobs.assign',       'jobs.update',       'jobs.complete',
-  'invoices.read',     'invoices.create',   'invoices.send',
-  'invoices.void',     'inventory.read',    'inventory.adjust',
-  'inventory.transfer', 'inventory.receive', 'inventory.reserve',
-  'reports.read',      'settings.read',     'settings.update',
-  'users.read',        'users.invite',      'users.role.update',
+  'dashboard.read',    'jobs.read',          'jobs.create',
+  'jobs.assign',       'jobs.update',        'jobs.complete',
+  'technicians.read',  'technicians.manage', 'invoices.read',
+  'invoices.create',   'invoices.send',      'invoices.void',
+  'inventory.read',    'inventory.adjust',   'inventory.transfer',
+  'inventory.receive', 'inventory.reserve',  'reports.read',
+  'settings.read',     'settings.update',    'users.read',
+  'users.invite',      'users.role.update',
 ] as const;
 
 export type Permission = (typeof ALL_PERMISSIONS)[number];
@@ -31,6 +32,7 @@ const DISPATCHER_PERMISSIONS: Permission[] = [
   'jobs.assign',
   'jobs.update',
   'jobs.complete',
+  'technicians.read',
   'invoices.read',
   'invoices.create',
   'invoices.send',
@@ -39,6 +41,7 @@ const DISPATCHER_PERMISSIONS: Permission[] = [
 const TECHNICIAN_PERMISSIONS: Permission[] = [
   'dashboard.read',
   'jobs.read',
+  'technicians.read',
   'jobs.update',
   'jobs.complete',
   'inventory.read',
@@ -55,6 +58,7 @@ const INVENTORY_MANAGER_PERMISSIONS: Permission[] = [
 ];
 const ACCOUNTANT_PERMISSIONS: Permission[] = [
   'dashboard.read',
+  'technicians.read',
   'invoices.read',
   'invoices.create',
   'invoices.send',
@@ -65,6 +69,7 @@ const ACCOUNTANT_PERMISSIONS: Permission[] = [
 const VIEWER_AUDITOR_PERMISSIONS: Permission[] = [
   'dashboard.read',
   'jobs.read',
+  'technicians.read',
   'invoices.read',
   'inventory.read',
   'reports.read',
@@ -84,12 +89,16 @@ export const RBAC_MATRIX: Record<Role, readonly Permission[]> = {
 export const ROUTE_PERMISSION_MAP = {
   '/dashboard': 'dashboard.read',
   '/jobs': 'jobs.read',
+  '/technicians': 'technicians.manage',
   '/inventory': 'inventory.read',
   '/invoices': 'invoices.read',
   '/reports': 'reports.read',
   '/settings': 'settings.read',
   'GET /api/protected': 'dashboard.read',
   'POST /api/protected': 'settings.update',
+  'GET /api/technicians': 'technicians.read',
+  'POST /api/technicians': 'technicians.manage',
+  'PATCH /api/technicians': 'technicians.manage',
 } as const satisfies Record<string, Permission>;
 
 export function normalizeRole(value: unknown): Role|null {

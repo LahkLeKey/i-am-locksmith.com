@@ -17,6 +17,14 @@ type InventoryLookupPart = {
     onHand: number;
 };
 
+type TechnicianOption = {
+    id: string;
+    fullName: string;
+    hourlyRate: number;
+    availabilityStatus: 'available' | 'busy' | 'off_shift';
+    isActive: boolean;
+};
+
 type JobDraft = {
     customerName: string;
     site: string;
@@ -40,7 +48,7 @@ type CloseoutDraft = {
     resolutionNotes: string;
 };
 
-type AddJobWizardStep = 1 | 2 | 3;
+type AddJobWizardStep = 1 | 2 | 3 | 4;
 
 function toNumber(value: string): number {
     return Number(value);
@@ -79,19 +87,27 @@ function closeoutAsDraft(job: JobQueueItem): CloseoutDraft {
     };
 }
 
-export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJobs: JobQueueItem[]; inventoryLookupParts: InventoryLookupPart[] }) {
+export function JobsCrudPanel({
+    initialJobs,
+    inventoryLookupParts,
+    technicians,
+}: {
+    initialJobs: JobQueueItem[];
+    inventoryLookupParts: InventoryLookupPart[];
+    technicians: TechnicianOption[];
+}) {
     const router = useRouter();
 
     const [customerName, setCustomerName] = useState('');
     const [site, setSite] = useState('');
     const [priority, setPriority] = useState<JobQueuePriority>('normal');
     const [scheduledFor, setScheduledFor] = useState('');
-    const [requiredSkus, setRequiredSkus] = useState('');
+    const [requiredSkus, setRequiredSkus] = useState<string[]>([]);
+    const [partsLookupQuery, setPartsLookupQuery] = useState('');
     const [followUpNote, setFollowUpNote] = useState('');
+    const [assignedTechnicianId, setAssignedTechnicianId] = useState('');
+    const [estimatedMinutes, setEstimatedMinutes] = useState('60');
     const [quotePartEstimate, setQuotePartEstimate] = useState('0');
-    const [quoteLaborEstimate, setQuoteLaborEstimate] = useState('0');
-    const [quoteEstimatedMinutes, setQuoteEstimatedMinutes] = useState('0');
-    const [quoteEstimatedTotal, setQuoteEstimatedTotal] = useState('0');
     const [quoteNotes, setQuoteNotes] = useState('');
 
     const [isPending, setIsPending] = useState(false);
@@ -131,6 +147,40 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
             }),
         [inventoryLookupParts],
     );
+    const selectableTechnicians = useMemo(
+        () => technicians.filter((entry) => entry.isActive),
+        [technicians],
+    );
+    const selectedTechnician = useMemo(
+        () => selectableTechnicians.find((entry) => entry.id === assignedTechnicianId) ?? null,
+        [assignedTechnicianId, selectableTechnicians],
+    );
+    const quoteLaborEstimate = useMemo(() => {
+        const minutes = Number(estimatedMinutes);
+        if (!selectedTechnician || !Number.isFinite(minutes) || minutes < 0) {
+            return 0;
+        }
+
+        return Number(((minutes / 60) * selectedTechnician.hourlyRate).toFixed(2));
+    }, [estimatedMinutes, selectedTechnician]);
+    const quoteEstimatedTotal = useMemo(() => {
+        const partEstimate = Number(quotePartEstimate);
+        if (!Number.isFinite(partEstimate) || partEstimate < 0) {
+            return quoteLaborEstimate;
+        }
+
+        return Number((partEstimate + quoteLaborEstimate).toFixed(2));
+    }, [quotePartEstimate, quoteLaborEstimate]);
+    const filteredPartsForWizard = useMemo(() => {
+        const query = partsLookupQuery.trim().toLowerCase();
+        return sortedInventoryLookupParts.filter((part) => {
+            if (!query) {
+                return true;
+            }
+
+            return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
+        });
+    }, [partsLookupQuery, sortedInventoryLookupParts]);
 
     useEffect(() => {
         if (jobs.length === 0) {
@@ -219,12 +269,12 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
         setSite('');
         setPriority('normal');
         setScheduledFor('');
-        setRequiredSkus('');
+        setRequiredSkus([]);
+        setPartsLookupQuery('');
         setFollowUpNote('');
+        setAssignedTechnicianId('');
+        setEstimatedMinutes('60');
         setQuotePartEstimate('0');
-        setQuoteLaborEstimate('0');
-        setQuoteEstimatedMinutes('0');
-        setQuoteEstimatedTotal('0');
         setQuoteNotes('');
     }
 
@@ -235,6 +285,10 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
 
         if (step === 2) {
             return true;
+        }
+
+        if (step === 3) {
+            return assignedTechnicianId.trim().length > 0 && Number(estimatedMinutes) > 0;
         }
 
         return false;
@@ -260,16 +314,14 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                             site,
                             priority,
                             scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
-                            requiredSkus: requiredSkus
-                                .split(',')
-                                .map((entry) => entry.trim())
-                                .filter(Boolean),
+                            requiredSkus,
                             followUpNote,
+                            assignedTechnicianId: selectedTechnician?.id ?? null,
                             quote: {
                                 partEstimate: toNumber(quotePartEstimate),
-                                laborEstimate: toNumber(quoteLaborEstimate),
-                                estimatedMinutes: toNumber(quoteEstimatedMinutes),
-                                estimatedTotal: toNumber(quoteEstimatedTotal),
+                                laborEstimate: 0,
+                                estimatedMinutes: toNumber(estimatedMinutes),
+                                estimatedTotal: 0,
                                 notes: quoteNotes,
                             },
                         }),
@@ -280,18 +332,21 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
             >
                 <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[#334155]">Add Job Wizard</p>
-                    <p className="text-[11px] text-[#64748b]">Step {wizardStep} of 3</p>
+                    <p className="text-[11px] text-[#64748b]">Step {wizardStep} of 4</p>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 1 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
-                        1. Customer + Site
+                        1. Customer Details
                     </div>
                     <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 2 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
                         2. Schedule + Parts
                     </div>
                     <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 3 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
-                        3. Quote + Submit
+                        3. Technician + Labor
+                    </div>
+                    <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 4 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
+                        4. Review + Submit
                     </div>
                 </div>
 
@@ -335,39 +390,108 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                 ) : null}
 
                 {wizardStep === 2 ? (
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        <label className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Scheduled For</span>
-                            <input
-                                type="datetime-local"
-                                value={scheduledFor}
-                                onChange={(event) => setScheduledFor(event.target.value)}
-                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                            />
-                        </label>
-                        <label className="space-y-1 sm:col-span-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Required SKUs</span>
-                            <input
-                                value={requiredSkus}
-                                onChange={(event) => setRequiredSkus(event.target.value)}
-                                placeholder="Comma separated (e.g. SKU-100, SKU-200)"
-                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                            />
-                        </label>
-                        <label className="space-y-1 sm:col-span-2 lg:col-span-3">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Follow-up Note</span>
-                            <input
-                                value={followUpNote}
-                                onChange={(event) => setFollowUpNote(event.target.value)}
-                                placeholder="Call-ahead instructions or customer context"
-                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                            />
-                        </label>
+                    <div className="space-y-3">
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            <label className="space-y-1">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Scheduled For</span>
+                                <input
+                                    type="datetime-local"
+                                    value={scheduledFor}
+                                    onChange={(event) => setScheduledFor(event.target.value)}
+                                    className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                />
+                            </label>
+                            <label className="space-y-1 sm:col-span-2 lg:col-span-3">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer Note</span>
+                                <input
+                                    value={followUpNote}
+                                    onChange={(event) => setFollowUpNote(event.target.value)}
+                                    placeholder="Call-ahead instructions or customer context"
+                                    className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                />
+                            </label>
+                        </div>
+                        <div className="rounded-md border border-[#e2e8f0] bg-white p-3">
+                            <label className="space-y-1">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Parts Selector</span>
+                                <input
+                                    value={partsLookupQuery}
+                                    onChange={(event) => setPartsLookupQuery(event.target.value)}
+                                    placeholder="Search SKU, part name, or location"
+                                    className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                />
+                            </label>
+                            <div className="mt-2 max-h-44 overflow-auto rounded border border-[#e5e7eb]">
+                                {filteredPartsForWizard.length === 0 ? (
+                                    <p className="px-3 py-2 text-xs text-[#64748b]">No parts found for this search.</p>
+                                ) : (
+                                    filteredPartsForWizard.slice(0, 30).map((part) => {
+                                        const isSelected = requiredSkus.includes(part.sku);
+                                        return (
+                                            <label key={part.id} className="flex cursor-pointer items-center justify-between border-b border-[#e5e7eb] px-3 py-2 text-xs last:border-b-0 hover:bg-[#f8fafc]">
+                                                <span className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={(event) => {
+                                                            if (event.target.checked) {
+                                                                setRequiredSkus((current) => (current.includes(part.sku) ? current : [...current, part.sku]));
+                                                            } else {
+                                                                setRequiredSkus((current) => current.filter((sku) => sku !== part.sku));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span className="font-semibold text-[#0f172a]">{part.sku}</span>
+                                                    <span className="text-[#475569]">{part.itemName}</span>
+                                                </span>
+                                                <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
+                            <p className="mt-2 text-[11px] text-[#475569]">Selected parts: {requiredSkus.length > 0 ? requiredSkus.join(', ') : 'None selected'}</p>
+                        </div>
                     </div>
                 ) : null}
 
                 {wizardStep === 3 ? (
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Technician</span>
+                            <select
+                                value={assignedTechnicianId}
+                                onChange={(event) => setAssignedTechnicianId(event.target.value)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            >
+                                <option value="">Select technician</option>
+                                {selectableTechnicians.map((entry) => (
+                                    <option key={entry.id} value={entry.id}>
+                                        {entry.fullName} (${entry.hourlyRate}/hr) · {entry.availabilityStatus}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
+                            <input
+                                type="number"
+                                min={1}
+                                value={estimatedMinutes}
+                                onChange={(event) => setEstimatedMinutes(event.target.value)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
+                            <input
+                                value={`$${quoteLaborEstimate.toFixed(2)}`}
+                                className="w-full rounded-md border border-[#d1d5db] bg-[#f8fafc] px-3 py-2 text-xs"
+                                readOnly
+                            />
+                        </label>
                         <label className="space-y-1">
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
                             <input
@@ -380,43 +504,36 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                 required
                             />
                         </label>
+                    </div>
+                ) : null}
+
+                {wizardStep === 4 ? (
+                    <div className="space-y-3 rounded-md border border-[#e2e8f0] bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#334155]">Job Cost Report</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <p className="text-xs text-[#475569]">Customer: <span className="font-semibold text-[#0f172a]">{customerName || '-'}</span></p>
+                            <p className="text-xs text-[#475569]">Site: <span className="font-semibold text-[#0f172a]">{site || '-'}</span></p>
+                            <p className="text-xs text-[#475569]">Technician: <span className="font-semibold text-[#0f172a]">{selectedTechnician?.fullName ?? 'Unassigned'}</span></p>
+                            <p className="text-xs text-[#475569]">Labor Rate: <span className="font-semibold text-[#0f172a]">{selectedTechnician ? `$${selectedTechnician.hourlyRate.toFixed(2)}/hr` : '-'}</span></p>
+                            <p className="text-xs text-[#475569]">Estimated Time: <span className="font-semibold text-[#0f172a]">{estimatedMinutes} minutes</span></p>
+                            <p className="text-xs text-[#475569]">Parts Needed: <span className="font-semibold text-[#0f172a]">{requiredSkus.length > 0 ? requiredSkus.join(', ') : 'None selected'}</span></p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                            <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
+                                <p className="text-[#475569]">Part Estimate</p>
+                                <p className="text-sm font-semibold text-[#0f172a]">${Number(quotePartEstimate || '0').toFixed(2)}</p>
+                            </div>
+                            <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
+                                <p className="text-[#475569]">Labor Estimate</p>
+                                <p className="text-sm font-semibold text-[#0f172a]">${quoteLaborEstimate.toFixed(2)}</p>
+                            </div>
+                            <div className="rounded border border-[#d1fae5] bg-[#f0fdf4] p-2 text-xs">
+                                <p className="text-[#166534]">Total Estimate</p>
+                                <p className="text-sm font-semibold text-[#166534]">${quoteEstimatedTotal.toFixed(2)}</p>
+                            </div>
+                        </div>
                         <label className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
-                            <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={quoteLaborEstimate}
-                                onChange={(event) => setQuoteLaborEstimate(event.target.value)}
-                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                required
-                            />
-                        </label>
-                        <label className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
-                            <input
-                                type="number"
-                                min={0}
-                                value={quoteEstimatedMinutes}
-                                onChange={(event) => setQuoteEstimatedMinutes(event.target.value)}
-                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                required
-                            />
-                        </label>
-                        <label className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
-                            <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={quoteEstimatedTotal}
-                                onChange={(event) => setQuoteEstimatedTotal(event.target.value)}
-                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                required
-                            />
-                        </label>
-                        <label className="space-y-1 sm:col-span-2 lg:col-span-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimate Notes</span>
                             <input
                                 value={quoteNotes}
                                 onChange={(event) => setQuoteNotes(event.target.value)}
@@ -446,12 +563,12 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                         >
                             Reset
                         </button>
-                        {wizardStep < 3 ? (
+                        {wizardStep < 4 ? (
                             <button
                                 type="button"
                                 disabled={isPending || !canAdvanceFromStep(wizardStep)}
                                 className="rounded border border-[#0f766e] bg-[#ecfeff] px-3 py-2 text-xs font-semibold text-[#0f766e] disabled:opacity-70"
-                                onClick={() => setWizardStep((current) => (current < 3 ? ((current + 1) as AddJobWizardStep) : current))}
+                                onClick={() => setWizardStep((current) => (current < 4 ? ((current + 1) as AddJobWizardStep) : current))}
                             >
                                 Next
                             </button>
@@ -664,7 +781,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                 </label>
                             </div>
 
-                            <p className="mt-3 text-[11px] text-[#475569]">Required SKUs: {job.requiredSkus.length > 0 ? job.requiredSkus.join(', ') : 'None'}</p>
+                            <p className="mt-3 text-[11px] text-[#475569]">Required Parts: {job.requiredSkus.length > 0 ? job.requiredSkus.join(', ') : 'None'}</p>
 
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <button
@@ -839,7 +956,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                 <th className="px-3 py-2 font-semibold">Customer / Site</th>
                                 <th className="px-3 py-2 font-semibold">Status</th>
                                 <th className="px-3 py-2 font-semibold">Priority</th>
-                                <th className="px-3 py-2 font-semibold">SKUs</th>
+                                <th className="px-3 py-2 font-semibold">Parts</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#e5e7eb] bg-white text-[#334155]">
@@ -1118,7 +1235,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                     </label>
                                 </div>
 
-                                <p className="text-[11px] text-[#475569]">Required SKUs: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None'}</p>
+                                <p className="text-[11px] text-[#475569]">Required Parts: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None'}</p>
 
                                 <div className="flex flex-wrap gap-2">
                                     <button

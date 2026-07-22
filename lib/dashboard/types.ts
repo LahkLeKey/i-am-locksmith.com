@@ -23,6 +23,8 @@ export type JobQueueItem = {
   etaMinutes: number | null;
   requiredSkus: string[];
   followUpNote?: string | null;
+  assignedTechnician?: {id: string; fullName: string; laborRate: number;} |
+      null;
   quote?: {
     partEstimate: number; laborEstimate: number; estimatedMinutes: number;
     estimatedTotal: number;

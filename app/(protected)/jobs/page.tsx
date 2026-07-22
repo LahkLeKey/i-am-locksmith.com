@@ -1,6 +1,7 @@
 import { requireRouteContext } from '@/lib/rbac/guard';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
 import { listJobRecords } from '@/lib/jobs/repository';
+import { listTechnicians } from '@/lib/technicians/repository';
 
 import { JobsCrudPanel } from '@/app/components/jobs-crud-panel';
 
@@ -12,6 +13,7 @@ export default async function JobsPage() {
 
   const jobs = await listJobRecords(context.orgId);
   const inventoryParts = await listInventoryParts(context.orgId);
+  const technicians = await listTechnicians(context.orgId);
   const inventoryLookupParts = inventoryParts.map((part) => ({
     id: part.id,
     sku: part.sku,
@@ -28,7 +30,17 @@ export default async function JobsPage() {
           Manage quote intake, dispatch, closeout financials, and inventory actions in one operational queue.
         </p>
       </article>
-      <JobsCrudPanel initialJobs={jobs} inventoryLookupParts={inventoryLookupParts} />
+      <JobsCrudPanel
+        initialJobs={jobs}
+        inventoryLookupParts={inventoryLookupParts}
+        technicians={technicians.map((item) => ({
+          id: item.id,
+          fullName: item.fullName,
+          hourlyRate: item.hourlyRate,
+          availabilityStatus: item.availabilityStatus,
+          isActive: item.isActive,
+        }))}
+      />
     </section>
   );
 }

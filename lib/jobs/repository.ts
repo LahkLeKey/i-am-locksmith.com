@@ -6,6 +6,9 @@ export type JobRecordInput = {
   scheduledFor: string | null;
   requiredSkus: string[];
   followUpNote: string | null;
+  assignedTechnicianId: string | null;
+  assignedTechnicianName: string | null;
+  laborRate: number | null;
   quote: {
     partEstimate: number; laborEstimate: number; estimatedMinutes: number;
     estimatedTotal: number;
@@ -22,6 +25,9 @@ export type JobRecordUpdate = {
   scheduledFor?: string | null;
   followUpNote?: string | null;
   requiredSkus?: string[];
+  assignedTechnicianId?: string | null;
+  assignedTechnicianName?: string | null;
+  laborRate?: number | null;
   quote?: {
     partEstimate?: number;
     laborEstimate?: number;
@@ -46,6 +52,9 @@ type JobRecordRow = {
   etaMinutes: number | null;
   requiredSkus: unknown;
   followUpNote: string | null;
+  assignedTechnicianId: string | null;
+  assignedTechnicianName: string | null;
+  laborRate: unknown;
   partEstimate: unknown;
   laborEstimate: unknown;
   estimatedMinutes: number;
@@ -76,6 +85,9 @@ type JobRecordClient = {
         etaMinutes: number | null;
         requiredSkus: unknown;
         followUpNote: string | null;
+        assignedTechnicianId: string | null;
+        assignedTechnicianName: string | null;
+        laborRate: number | null;
         partEstimate: number;
         laborEstimate: number;
         estimatedMinutes: number;
@@ -131,6 +143,13 @@ function toJobQueueItem(row: JobRecordRow): JobQueueItem {
     etaMinutes: row.etaMinutes,
     requiredSkus: toRequiredSkus(row.requiredSkus),
     followUpNote: row.followUpNote,
+    assignedTechnician: row.assignedTechnicianId && row.assignedTechnicianName ?
+        {
+          id: row.assignedTechnicianId,
+          fullName: row.assignedTechnicianName,
+          laborRate: toFiniteMoney(row.laborRate),
+        } :
+        null,
     quote: {
       partEstimate: toFiniteMoney(row.partEstimate),
       laborEstimate: toFiniteMoney(row.laborEstimate),
@@ -197,6 +216,9 @@ export async function createJobRecord(
       etaMinutes: null,
       requiredSkus: input.requiredSkus,
       followUpNote: input.followUpNote,
+      assignedTechnicianId: input.assignedTechnicianId,
+      assignedTechnicianName: input.assignedTechnicianName,
+      laborRate: input.laborRate,
       partEstimate: input.quote.partEstimate,
       laborEstimate: input.quote.laborEstimate,
       estimatedMinutes: input.quote.estimatedMinutes,
@@ -235,6 +257,13 @@ export async function updateJobRecord(
       ...(input.followUpNote !== undefined ?
               {followUpNote: input.followUpNote} :
               {}),
+      ...(input.assignedTechnicianId !== undefined ?
+              {assignedTechnicianId: input.assignedTechnicianId} :
+              {}),
+      ...(input.assignedTechnicianName !== undefined ?
+              {assignedTechnicianName: input.assignedTechnicianName} :
+              {}),
+      ...(input.laborRate !== undefined ? {laborRate: input.laborRate} : {}),
       ...(input.requiredSkus !== undefined ?
               {requiredSkus: input.requiredSkus} :
               {}),

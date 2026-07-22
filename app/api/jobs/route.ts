@@ -2,6 +2,7 @@ import type {JobQueuePriority, JobQueueStatus} from '@/lib/dashboard/types';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
 import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
+import {getTechnicianById} from '@/lib/technicians/repository';
 import {NextResponse} from 'next/server';
 
 type CreateJobRequest = {
@@ -11,6 +12,7 @@ type CreateJobRequest = {
   requiredSkus?: string[];
   scheduledFor?: string | null;
   followUpNote?: string | null;
+  assignedTechnicianId?: string | null;
   quote?: {
     partEstimate?: number;
     laborEstimate?: number;
@@ -37,6 +39,7 @@ type UpdateJobRequest = {
   etaMinutes?: number | null;
   scheduledFor?: string | null;
   followUpNote?: string | null;
+  assignedTechnicianId?: string | null;
   quote?: {
     partEstimate?: number;
     laborEstimate?: number;
@@ -210,6 +213,21 @@ export async function POST(request: Request) {
     return NextResponse.json({error: quoteValidationError}, {status: 400});
   }
 
+  const assignedTechnicianId = body.assignedTechnicianId?.trim() || null;
+  if (!assignedTechnicianId) {
+    return NextResponse.json(
+        {error: 'assignedTechnicianId is required'}, {status: 400});
+  }
+
+  const technician = await getTechnicianById(authResult.orgId, assignedTechnicianId);
+  if (!technician || !technician.isActive) {
+    return NextResponse.json({error: 'Assigned technician not found'}, {status: 404});
+  }
+
+  const estimatedMinutes = Math.trunc(body.quote!.estimatedMinutes!);
+  const computedLaborEstimate = Number(((estimatedMinutes / 60) * technician.hourlyRate).toFixed(2));
+  const computedEstimatedTotal = Number((body.quote!.partEstimate! + computedLaborEstimate).toFixed(2));
+
   const nextJob = await createJobRecord(authResult.orgId, {
     customerName,
     site,
@@ -217,11 +235,14 @@ export async function POST(request: Request) {
     scheduledFor: body.scheduledFor ?? null,
     requiredSkus: normalizeSkus(body.requiredSkus),
     followUpNote: body.followUpNote?.trim() || null,
+    assignedTechnicianId,
+    assignedTechnicianName: technician.fullName,
+    laborRate: technician.hourlyRate,
     quote: {
       partEstimate: body.quote!.partEstimate!,
-      laborEstimate: body.quote!.laborEstimate!,
-      estimatedMinutes: Math.trunc(body.quote!.estimatedMinutes!),
-      estimatedTotal: body.quote!.estimatedTotal!,
+      laborEstimate: computedLaborEstimate,
+      estimatedMinutes,
+      estimatedTotal: computedEstimatedTotal,
       notes: body.quote?.notes?.trim() || null,
     },
   });
@@ -449,6 +470,36 @@ export async function PATCH(request: Request) {
     }
   }
 
+  let assignedTechnicianName: string | null | undefined;
+  let laborRate: number | null | undefined;
+  let computedLaborEstimate: number | undefined;
+  let computedEstimatedTotal: number | undefined;
+
+  if (body.assignedTechnicianId !== undefined) {
+    const nextTechnicianId = body.assignedTechnicianId?.trim() || null;
+
+    if (nextTechnicianId) {
+      const technician = await getTechnicianById(authResult.orgId, nextTechnicianId);
+      if (!technician || !technician.isActive) {
+        return NextResponse.json({error: 'Assigned technician not found'}, {status: 404});
+      }
+
+      assignedTechnicianName = technician.fullName;
+      laborRate = technician.hourlyRate;
+
+      if (body.quote?.estimatedMinutes !== undefined) {
+        const minutes = Math.trunc(body.quote.estimatedMinutes);
+        computedLaborEstimate = Number(((minutes / 60) * technician.hourlyRate).toFixed(2));
+        if (body.quote.partEstimate !== undefined) {
+          computedEstimatedTotal = Number((body.quote.partEstimate + computedLaborEstimate).toFixed(2));
+        }
+      }
+    } else {
+      assignedTechnicianName = null;
+      laborRate = null;
+    }
+  }
+
   const updated = await updateJobRecord(authResult.orgId, body.id, {
     customerName: body.customerName?.trim(),
     site: body.site?.trim(),
@@ -459,13 +510,18 @@ export async function PATCH(request: Request) {
     followUpNote: body.followUpNote === undefined ?
         undefined :
         body.followUpNote?.trim() || null,
+    assignedTechnicianId: body.assignedTechnicianId === undefined ?
+        undefined :
+        body.assignedTechnicianId?.trim() || null,
+    assignedTechnicianName,
+    laborRate,
     quote: body.quote ? {
       partEstimate: body.quote.partEstimate,
-      laborEstimate: body.quote.laborEstimate,
+      laborEstimate: computedLaborEstimate ?? body.quote.laborEstimate,
       estimatedMinutes: body.quote.estimatedMinutes === undefined ?
           undefined :
           Math.trunc(body.quote.estimatedMinutes),
-      estimatedTotal: body.quote.estimatedTotal,
+      estimatedTotal: computedEstimatedTotal ?? body.quote.estimatedTotal,
       notes: body.quote.notes === undefined ? undefined :
                                               body.quote.notes?.trim() || null,
     } :
