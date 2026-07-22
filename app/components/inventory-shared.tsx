@@ -15,8 +15,8 @@ type ServiceLineBadgeRowProps = {
 
 export function InventoryActionCard({ title, description, children }: InventoryActionCardProps) {
     return (
-        <div className="space-y-2 rounded border border-[#e2e8f0] bg-white p-3">
-            <div>
+        <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
+            <div className="space-y-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">{title}</p>
                 {description ? <p className="mt-1 text-xs text-[#64748b]">{description}</p> : null}
             </div>
