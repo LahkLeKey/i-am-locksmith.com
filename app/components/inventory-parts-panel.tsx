@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
+import { INVENTORY_SERVICE_LINE_OPTIONS, ServiceLineBadgeRow } from '@/app/components/inventory-shared';
 
-const SERVICE_LINE_OPTIONS = ['automotive', 'mobile', 'shop'] as const;
 const SEVERITY_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
 
 function splitServiceLines(value: string): string[] {
@@ -158,11 +158,7 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                 </label>
                 <div className="flex gap-2 xl:col-span-4">
                     <div className="flex flex-wrap gap-2">
-                        {SERVICE_LINE_OPTIONS.map((option) => (
-                            <span key={option} className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#475569]">
-                                {option}
-                            </span>
-                        ))}
+                        <ServiceLineBadgeRow lines={INVENTORY_SERVICE_LINE_OPTIONS} />
                     </div>
                     <button type="submit" disabled={isPending} className="ml-auto rounded-md bg-[#0f766e] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70">
                         Add Part
@@ -193,13 +189,7 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                                     <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${Number(part.estimatedUnitCost).toFixed(2)}</p>
                                 </td>
                                 <td className="px-3 py-3">
-                                    <div className="flex flex-wrap gap-2">
-                                        {part.serviceLines.map((line) => (
-                                            <span key={`${part.id}-${line}`} className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#475569]">
-                                                {line}
-                                            </span>
-                                        ))}
-                                    </div>
+                                    <ServiceLineBadgeRow lines={part.serviceLines} className="flex flex-wrap gap-2" />
                                     <p className="mt-2 text-[11px] text-[#475569]">{part.compatibilityNote}</p>
                                 </td>
                                 <td className="px-3 py-3">

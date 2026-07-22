@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
+import { InventoryActionCard, INVENTORY_SERVICE_LINE_OPTIONS, ServiceLineBadgeRow } from '@/app/components/inventory-shared';
 
 import 'react-quill-new/dist/quill.snow.css';
 
@@ -13,7 +14,6 @@ import type { JobQueueItem, JobQueuePriority, JobQueueStatus } from '@/lib/dashb
 
 const STATUSES: JobQueueStatus[] = ['queued', 'scheduled', 'in_progress', 'blocked'];
 const PRIORITIES: JobQueuePriority[] = ['low', 'normal', 'high', 'urgent'];
-const SERVICE_LINE_OPTIONS = ['automotive', 'mobile', 'shop'] as const;
 
 type InventoryLookupPart = {
     id: string;
@@ -76,6 +76,14 @@ type RichTextMarkdownFieldProps = {
 };
 
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
+
+const ACTIVE_WIZARD_STEPS: Array<{ step: ActiveJobWizardStep; label: string }> = [
+    { step: 1, label: 'Core' },
+    { step: 2, label: 'Quote' },
+    { step: 3, label: 'Time Clock' },
+    { step: 4, label: 'Inventory' },
+    { step: 5, label: 'Closeout' },
+];
 
 function toNumber(value: string): number {
     return Number(value);
@@ -979,22 +987,6 @@ export function JobsCrudPanel({
                                                 <p className="text-xs text-[#475569]">Full job details, quote economics, and closeout controls.</p>
                                             </div>
                                             <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg border border-[#dbe3f0] bg-white px-2 py-1">
-                                                <button
-                                                    type="button"
-                                                    disabled={isPending}
-                                                    className="rounded border border-[#bae6fd] bg-[#eff6ff] px-2 py-1 text-[11px] font-medium text-[#1d4ed8]"
-                                                    onClick={() => setActiveJobWizardStep(4)}
-                                                >
-                                                    Inventory
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    disabled={isPending}
-                                                    className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-[11px] font-medium text-[#166534]"
-                                                    onClick={() => setActiveJobWizardStep(5)}
-                                                >
-                                                    Closeout
-                                                </button>
                                                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDirty ? 'bg-[#fef3c7] text-[#b45309]' : 'bg-[#dcfce7] text-[#166534]'}`}>
                                                     {isDirty ? 'Unsaved changes' : 'Saved'}
                                                 </span>
@@ -1010,41 +1002,25 @@ export function JobsCrudPanel({
                                         </div>
 
                                         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                                            <button
-                                                type="button"
-                                                className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 1 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
-                                                onClick={() => setActiveJobWizardStep(1)}
-                                            >
-                                                1. Core
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 2 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
-                                                onClick={() => setActiveJobWizardStep(2)}
-                                            >
-                                                2. Quote
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 3 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
-                                                onClick={() => setActiveJobWizardStep(3)}
-                                            >
-                                                3. Time Clock
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 4 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
-                                                onClick={() => setActiveJobWizardStep(4)}
-                                            >
-                                                4. Inventory
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 5 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
-                                                onClick={() => setActiveJobWizardStep(5)}
-                                            >
-                                                5. Closeout
-                                            </button>
+                                            {ACTIVE_WIZARD_STEPS.map((wizardStep) => {
+                                                const isActive = wizardStep.step === activeJobWizardStep;
+                                                return (
+                                                    <button
+                                                        key={wizardStep.step}
+                                                        type="button"
+                                                        aria-current={isActive ? 'step' : undefined}
+                                                        className={`flex items-center gap-2 rounded border px-2 py-2 text-left ${isActive ? 'border-[#0f766e] bg-[#ecfeff]' : 'border-[#cbd5e1] bg-[#f8fafc]'}`}
+                                                        onClick={() => setActiveJobWizardStep(wizardStep.step)}
+                                                    >
+                                                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${isActive ? 'bg-[#0f766e] text-white' : 'bg-white text-[#475569]'}`}>
+                                                            {wizardStep.step}
+                                                        </span>
+                                                        <span className={`text-[11px] font-semibold uppercase tracking-wide ${isActive ? 'text-[#0f766e]' : 'text-[#475569]'}`}>
+                                                            {wizardStep.label}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
 
                                         {activeJobWizardStep === 1 ? (
@@ -1476,10 +1452,14 @@ export function JobsCrudPanel({
 
                                         {activeJobWizardStep === 4 ? (
                                             <div className="space-y-3 border-y border-[#dbe3f0] py-5">
-                                                <p className="text-[11px] text-[#475569]">Required Parts: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None'}</p>
-                                                <div className="grid gap-2 rounded border border-[#e2e8f0] bg-white p-3 md:grid-cols-2">
-                                                    <div className="space-y-2">
-                                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Reserve Existing Inventory</p>
+                                                <div className="rounded border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-xs text-[#475569]">
+                                                    Required Parts: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None selected yet'}
+                                                </div>
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    <InventoryActionCard
+                                                        title="Reserve Existing Inventory"
+                                                        description="Search warehouse parts and reserve quantities directly for this job."
+                                                    >
                                                         <label className="space-y-1">
                                                             <span className="text-[11px] text-[#475569]">Lookup Warehoused Parts</span>
                                                             <input
@@ -1579,10 +1559,12 @@ export function JobsCrudPanel({
                                                                 Reserve
                                                             </button>
                                                         </div>
-                                                    </div>
+                                                    </InventoryActionCard>
 
-                                                    <div className="space-y-2">
-                                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Create Inventory Part</p>
+                                                    <InventoryActionCard
+                                                        title="Create Inventory Part"
+                                                        description="Add a missing catalog item and attach it to this job in one step."
+                                                    >
                                                         <div className="grid gap-2 sm:grid-cols-2">
                                                             <label className="space-y-1">
                                                                 <span className="text-[11px] text-[#475569]">SKU</span>
@@ -1679,11 +1661,7 @@ export function JobsCrudPanel({
                                                             />
                                                         </div>
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            {SERVICE_LINE_OPTIONS.map((line) => (
-                                                                <span key={`${selectedJob.id}-${line}`} className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#475569]">
-                                                                    {line}
-                                                                </span>
-                                                            ))}
+                                                            <ServiceLineBadgeRow lines={INVENTORY_SERVICE_LINE_OPTIONS} className="flex flex-wrap items-center gap-2" />
                                                             <button
                                                                 type="button"
                                                                 disabled={isPending}
@@ -1734,7 +1712,7 @@ export function JobsCrudPanel({
                                                                 Create Part
                                                             </button>
                                                         </div>
-                                                    </div>
+                                                    </InventoryActionCard>
                                                 </div>
                                             </div>
                                         ) : null}
