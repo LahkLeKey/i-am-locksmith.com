@@ -1,19 +1,20 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 vi.mock('@/lib/rbac/server', () => ({
-  authorizePermission: vi.fn(),
-  getAuthorizationContext: vi.fn(),
-}));
+                               authorizePermission: vi.fn(),
+                               getAuthorizationContext: vi.fn(),
+                             }));
 
 vi.mock('@/lib/workspaces/workflow-actions', () => ({
-  applyWorkflowAction: vi.fn(),
-}));
+                                               applyWorkflowAction: vi.fn(),
+                                             }));
 
-vi.mock('@/lib/dashboard/snapshotMutations', () => ({
-  getOrCreateOrgSnapshot: vi.fn(),
-  getDashboardDataForSnapshot: vi.fn(),
-  persistDashboardData: vi.fn(),
-}));
+vi.mock(
+    '@/lib/dashboard/snapshotMutations', () => ({
+                                           getOrCreateOrgSnapshot: vi.fn(),
+                                           getDashboardDataForSnapshot: vi.fn(),
+                                           persistDashboardData: vi.fn(),
+                                         }));
 
 import {getDashboardDataForSnapshot, getOrCreateOrgSnapshot, persistDashboardData} from '@/lib/dashboard/snapshotMutations';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
@@ -24,7 +25,8 @@ import {POST} from './route';
 const mockedAuthorizePermission = vi.mocked(authorizePermission);
 const mockedGetAuthorizationContext = vi.mocked(getAuthorizationContext);
 const mockedGetOrCreateOrgSnapshot = vi.mocked(getOrCreateOrgSnapshot);
-const mockedGetDashboardDataForSnapshot = vi.mocked(getDashboardDataForSnapshot);
+const mockedGetDashboardDataForSnapshot =
+    vi.mocked(getDashboardDataForSnapshot);
 const mockedPersistDashboardData = vi.mocked(persistDashboardData);
 const mockedApplyWorkflowAction = vi.mocked(applyWorkflowAction);
 
@@ -145,7 +147,7 @@ describe('workflow actions route', () => {
     const request = new Request('http://localhost/api/workflow-actions', {
       method: 'POST',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify({actionType: 'jobs.capture_quote_intake'}),
+      body: JSON.stringify({actionType: 'jobs.record_customer_follow_up'}),
     });
 
     const response = await POST(request);

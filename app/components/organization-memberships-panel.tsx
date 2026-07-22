@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { useOrganization, useOrganizationList } from "@clerk/nextjs";
 
 const ORG_ROLE_MODULE_PREVIEW: Record<string, string[]> = {
-    admin: ["Dashboard", "Jobs", "Inventory", "Customers", "Invoices", "Reports", "Settings"],
+    admin: ["Dashboard", "Jobs", "Inventory", "Invoices", "Reports", "Settings"],
     member: ["Requires scoped role mapping"],
-    dispatcher: ["Dashboard", "Jobs", "Customers", "Invoices", "Reports"],
-    technician: ["Dashboard", "Jobs", "Customers", "Inventory"],
+    dispatcher: ["Dashboard", "Jobs", "Invoices", "Reports"],
+    technician: ["Dashboard", "Jobs", "Inventory"],
     inventory_manager: ["Dashboard", "Inventory", "Reports"],
     accountant: ["Dashboard", "Invoices", "Reports", "Settings"],
-    viewer_auditor: ["Dashboard", "Customers", "Jobs", "Invoices", "Inventory", "Reports", "Settings"],
+    viewer_auditor: ["Dashboard", "Jobs", "Invoices", "Inventory", "Reports", "Settings"],
 };
 
 function formatClerkRole(role: string | null | undefined): string {

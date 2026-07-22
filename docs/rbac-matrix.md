@@ -23,7 +23,6 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 ## Permission domains
 
 - dashboard.read
-- customers.read|create|update
 - jobs.read|create|assign|update|complete
 - invoices.read|create|send|void
 - inventory.read|adjust|transfer|receive|reserve
@@ -36,9 +35,6 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 ### owner_admin
 
 - dashboard.read
-- customers.read
-- customers.create
-- customers.update
 - jobs.read
 - jobs.create
 - jobs.assign
@@ -63,9 +59,6 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 ### dispatcher
 
 - dashboard.read
-- customers.read
-- customers.create
-- customers.update
 - jobs.read
 - jobs.create
 - jobs.assign
@@ -79,7 +72,6 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 ### technician
 
 - dashboard.read
-- customers.read
 - jobs.read
 - jobs.update
 - jobs.complete
@@ -109,7 +101,6 @@ This document is the baseline role-permission contract for MVP deliverable #1 (a
 ### viewer_auditor
 
 - dashboard.read
-- customers.read
 - jobs.read
 - invoices.read
 - inventory.read
@@ -124,7 +115,6 @@ Current map lives in lib/rbac/policy.ts via ROUTE_PERMISSION_MAP.
 - /dashboard => dashboard.read
 - /jobs => jobs.read
 - /inventory => inventory.read
-- /customers => customers.read
 - /invoices => invoices.read
 - /reports => reports.read
 - /settings => settings.read

@@ -18,7 +18,7 @@ Single-context layout at the repo root. See `docs/agents/domain.md`.
 
 - Keep the operator workflow straightforward for small businesses with limited staff.
 - Treat the Jobs Operations page as the command center for pending work.
-- Keep customer and quote workflow context on Jobs Operations unless the user explicitly requests a different IA.
+- Keep quote and lightweight customer follow-up context on Jobs Operations unless the user explicitly requests a different IA.
 - Keep inventory reserve/create actions tied to jobs on the Jobs Operations page.
 - Treat the Inventory page as warehousing control only: parts catalog, stock counts, reorder logic, suppliers, and locations.
 - As jobs are completed, ensure outcomes are visible through invoices and reporting/projection views rather than adding workflow clutter back to Jobs Operations.

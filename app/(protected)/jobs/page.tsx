@@ -26,9 +26,14 @@ export default async function JobsPage() {
       <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
         <h1 className="text-2xl font-semibold">Jobs Operations</h1>
         <p className="mt-1 text-sm text-[#4b5563]">
-          Manage quote intake, dispatch jobs, and inventory actions in one operational queue.
+          Manage customer follow-up, quote intake, dispatch jobs, and inventory actions in one operational queue.
         </p>
       </article>
+      <WorkspaceActionPanel
+        actionType="jobs.record_customer_follow_up"
+        label="Record Customer Follow-up"
+        summary="Keep customer communication updates in the jobs command center without a separate CRM tab."
+      />
       <WorkspaceActionPanel
         actionType="jobs.capture_quote_intake"
         label="Log Quote Intake"

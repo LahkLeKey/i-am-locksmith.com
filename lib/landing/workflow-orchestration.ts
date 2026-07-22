@@ -36,14 +36,6 @@ const WORKFLOW_DEFINITIONS: Array<{
         requiredPermission: 'jobs.read',
       },
       {
-        id: 'customers',
-        title: 'Customer Desk',
-        description:
-            'Track customer context and service history without leaving operations flow.',
-        href: '/customers',
-        requiredPermission: 'customers.read',
-      },
-      {
         id: 'invoices',
         title: 'Revenue Follow-through',
         description:

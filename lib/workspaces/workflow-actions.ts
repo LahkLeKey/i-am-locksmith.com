@@ -1,6 +1,6 @@
 import type {DashboardData, JobQueueItem, ReplenishmentAlert} from '../dashboard/types';
 
-export type WorkflowActionType =|'customers.record_follow_up'|
+export type WorkflowActionType =|'jobs.record_customer_follow_up'|
   'jobs.dispatch_next'|'jobs.capture_quote_intake'|'invoices.send_one'|
     'reports.refresh_snapshot'|'settings.apply_replenishment_guardrail';
 
@@ -42,7 +42,8 @@ export function applyWorkflowAction(
         generatedAt: nowIso,
         revenueToday: dashboardData.revenueToday + 750,
       },
-      message: 'Quote intake logged in jobs operations and projected revenue updated.',
+      message:
+          'Quote intake logged in jobs operations and projected revenue updated.',
     };
   }
 
@@ -76,13 +77,13 @@ export function applyWorkflowAction(
     };
   }
 
-  if (actionType === 'customers.record_follow_up') {
+  if (actionType === 'jobs.record_customer_follow_up') {
     return {
       data: {
         ...dashboardData,
         generatedAt: nowIso,
       },
-      message: 'Customer follow-up recorded.',
+      message: 'Customer follow-up recorded on jobs operations.',
     };
   }
 

@@ -9,7 +9,7 @@ type WorkflowActionRequest = {
 };
 
 const ACTION_PERMISSION_MAP: Record<WorkflowActionType, Permission> = {
-  'customers.record_follow_up': 'customers.update',
+  'jobs.record_customer_follow_up': 'jobs.update',
   'jobs.dispatch_next': 'jobs.assign',
   'jobs.capture_quote_intake': 'jobs.update',
   'invoices.send_one': 'invoices.send',

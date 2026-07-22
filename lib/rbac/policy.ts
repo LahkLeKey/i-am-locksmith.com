@@ -12,15 +12,13 @@ export const ROLES = [
 export type Role = (typeof ROLES)[number];
 
 export const ALL_PERMISSIONS = [
-  'dashboard.read',    'customers.read',     'customers.create',
-  'customers.update',  'jobs.read',          'jobs.create',
-  'jobs.assign',       'jobs.update',        'jobs.complete',
-  'invoices.read',     'invoices.create',
-  'invoices.send',     'invoices.void',      'inventory.read',
-  'inventory.adjust',  'inventory.transfer', 'inventory.receive',
-  'inventory.reserve', 'reports.read',       'settings.read',
-  'settings.update',   'users.read',         'users.invite',
-  'users.role.update',
+  'dashboard.read',    'jobs.read',         'jobs.create',
+  'jobs.assign',       'jobs.update',       'jobs.complete',
+  'invoices.read',     'invoices.create',   'invoices.send',
+  'invoices.void',     'inventory.read',    'inventory.adjust',
+  'inventory.transfer', 'inventory.receive', 'inventory.reserve',
+  'reports.read',      'settings.read',     'settings.update',
+  'users.read',        'users.invite',      'users.role.update',
 ] as const;
 
 export type Permission = (typeof ALL_PERMISSIONS)[number];
@@ -28,9 +26,6 @@ export type Permission = (typeof ALL_PERMISSIONS)[number];
 const OWNER_ADMIN_PERMISSIONS: Permission[] = [...ALL_PERMISSIONS];
 const DISPATCHER_PERMISSIONS: Permission[] = [
   'dashboard.read',
-  'customers.read',
-  'customers.create',
-  'customers.update',
   'jobs.read',
   'jobs.create',
   'jobs.assign',
@@ -43,7 +38,6 @@ const DISPATCHER_PERMISSIONS: Permission[] = [
 ];
 const TECHNICIAN_PERMISSIONS: Permission[] = [
   'dashboard.read',
-  'customers.read',
   'jobs.read',
   'jobs.update',
   'jobs.complete',
@@ -70,7 +64,6 @@ const ACCOUNTANT_PERMISSIONS: Permission[] = [
 ];
 const VIEWER_AUDITOR_PERMISSIONS: Permission[] = [
   'dashboard.read',
-  'customers.read',
   'jobs.read',
   'invoices.read',
   'inventory.read',
@@ -92,7 +85,6 @@ export const ROUTE_PERMISSION_MAP = {
   '/dashboard': 'dashboard.read',
   '/jobs': 'jobs.read',
   '/inventory': 'inventory.read',
-  '/customers': 'customers.read',
   '/invoices': 'invoices.read',
   '/reports': 'reports.read',
   '/settings': 'settings.read',

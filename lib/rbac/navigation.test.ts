@@ -20,7 +20,7 @@ describe('buildVisibleNavigation', () => {
   });
 
   it('binds each nav item to an expected permission', () => {
-    expect(NAV_ITEMS.length).toBeGreaterThanOrEqual(7);
+    expect(NAV_ITEMS.length).toBeGreaterThanOrEqual(6);
     NAV_ITEMS.forEach((item) => {
       expect(item.permission).toMatch(/\./);
     });

@@ -86,11 +86,11 @@ describe('rbac guard', () => {
       clerkOrgRole: 'org:member',
       orgRole: null,
       userRole: 'dispatcher',
-      effectivePermissions: new Set(['customers.read']),
+      effectivePermissions: new Set(['jobs.read']),
     };
     mockedGetAuthorizationContext.mockResolvedValue(context);
 
-    const result = await requireRouteContext('/customers');
+    const result = await requireRouteContext('/jobs');
 
     expect(result).toEqual(context);
     expect(mockedNotFound).not.toHaveBeenCalled();
@@ -107,7 +107,7 @@ describe('rbac guard', () => {
     };
     mockedGetAuthorizationContext.mockResolvedValue(context);
 
-    await requireRouteContext('/customers');
+    await requireRouteContext('/jobs');
 
     expect(mockedNotFound).toHaveBeenCalledTimes(1);
   });

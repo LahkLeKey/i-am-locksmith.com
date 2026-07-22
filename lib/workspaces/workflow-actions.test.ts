@@ -77,7 +77,7 @@ describe('applyWorkflowAction', () => {
   });
 
   it.each<WorkflowActionType>([
-    'customers.record_follow_up',
+    'jobs.record_customer_follow_up',
     'reports.refresh_snapshot',
     'settings.apply_replenishment_guardrail',
   ])('returns updated generatedAt for %s', (actionType) => {

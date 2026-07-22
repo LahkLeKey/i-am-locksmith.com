@@ -48,7 +48,6 @@ describe('permission helpers', () => {
   it('contains protected shell routes required for navigation', () => {
     expect(ROUTE_PERMISSION_MAP['/jobs']).toBe('jobs.read');
     expect(ROUTE_PERMISSION_MAP['/inventory']).toBe('inventory.read');
-    expect(ROUTE_PERMISSION_MAP['/customers']).toBe('customers.read');
     expect(ROUTE_PERMISSION_MAP['/invoices']).toBe('invoices.read');
     expect(ROUTE_PERMISSION_MAP['/reports']).toBe('reports.read');
     expect(ROUTE_PERMISSION_MAP['/settings']).toBe('settings.read');

@@ -58,7 +58,6 @@ const SIGNAL_DASHBOARD_DATA: DashboardData = {
 describe('workspace mvp snapshots', () => {
   it('ships all remaining protected placeholder workspaces', () => {
     expect(MVP_WORKSPACE_KEYS).toEqual([
-      'customers',
       'jobs',
       'invoices',
       'reports',

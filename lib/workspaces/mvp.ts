@@ -4,7 +4,6 @@ import type {DashboardData} from '../dashboard/types';
 import type {WorkflowActionType} from './workflow-actions';
 
 export const MVP_WORKSPACE_KEYS = [
-  'customers',
   'jobs',
   'invoices',
   'reports',
@@ -31,52 +30,10 @@ export type WorkspaceMvpSnapshot = {
 };
 
 const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
-  customers: {
-    title: 'Customer Workspace',
-    subtitle:
-        'Track customer records, service history, and outreach tasks tied to active field work.',
-    primaryAction: {
-      label: 'Record customer follow-up',
-      actionType: 'customers.record_follow_up',
-      summary:
-          'Logs outreach completion and refreshes customer pipeline context.',
-    },
-    kpis: [
-      {label: 'Active customers', value: '182', trend: '+7 this week'},
-      {label: 'Service agreements', value: '64', trend: '91% renewed on time'},
-      {
-        label: 'At-risk accounts',
-        value: '11',
-        trend: '4 require callback today'
-      },
-    ],
-    queue: [
-      {
-        title: 'Follow up expiring service contract',
-        detail: 'Northgate Retail - expires in 4 days',
-        status: 'urgent',
-      },
-      {
-        title: 'Confirm site access instructions',
-        detail: 'Pioneer Apartments - lockbox code changed',
-        status: 'attention',
-      },
-      {
-        title: 'Complete onboarding profile',
-        detail: 'Brightline Office Park - add after-hours contacts',
-        status: 'scheduled',
-      },
-    ],
-    checklist: [
-      'Verify customer emergency contacts before dispatching after-hours jobs.',
-      'Tag accounts with managed inventory to improve replenishment forecasting.',
-      'Capture contract start/end dates to drive automated retention prompts.',
-    ],
-  },
   jobs: {
     title: 'Jobs Workspace',
     subtitle:
-        'Move work from quote intake to dispatched and completed with inventory context.',
+        'Move work from customer follow-up and quote intake to dispatched and completed with inventory context.',
     primaryAction: {
       label: 'Dispatch next queued job',
       actionType: 'jobs.dispatch_next',
@@ -109,6 +66,7 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
       },
     ],
     checklist: [
+      'Record customer follow-up outcomes on jobs before assigning technicians.',
       'Capture quote intake details before dispatch scheduling.',
       'Attach inventory reservations before assigning technicians.',
       'Track eta changes to reduce customer no-answer rates.',
@@ -326,8 +284,6 @@ function withDashboardSignals(
           .filter(
               (job) => job.priority === 'urgent' || job.status === 'blocked')
           .length;
-  const activeCustomers =
-      new Set(dashboardData.jobsQueue.map((job) => job.customerName)).size;
   const criticalAlertCount =
       dashboardData.replenishmentAlerts
           .filter((alert) => alert.severity === 'critical')
@@ -341,30 +297,10 @@ function withDashboardSignals(
     queue: buildSignalQueue(dashboardData, baseSnapshot.queue),
   };
 
-  if (workspaceKey === 'customers') {
-    return {
-      ...shared,
-      kpis: [
-        {
-          label: 'Customers in active queue',
-          value: String(activeCustomers),
-          trend: `${dashboardData.jobsQueue.length} active jobs linked`,
-        },
-        {
-          label: 'Accounts with stock risk',
-          value: String(dashboardData.lowStockSkus),
-          trend: `${criticalAlertCount} critical replenishment signals`,
-        },
-        {
-          label: 'Revenue at risk today',
-          value: formatUsd(dashboardData.revenueToday),
-          trend: 'Prioritize callbacks for blocked field work',
-        },
-      ],
-    };
-  }
-
   if (workspaceKey === 'jobs') {
+    const activeCustomers =
+        new Set(dashboardData.jobsQueue.map((job) => job.customerName)).size;
+
     return {
       ...shared,
       kpis: [
@@ -374,14 +310,16 @@ function withDashboardSignals(
           trend: `${urgentJobCount} urgent or blocked`,
         },
         {
-          label: 'Blocked jobs',
-          value: String(blockedJobCount),
-          trend: `${dashboardData.vansBelowMin} vans below min levels`,
+          label: 'Active customers in queue',
+          value: String(activeCustomers),
+          trend: 'Use follow-up notes to reduce no-answer dispatch delays',
         },
         {
           label: 'Quote + job revenue pipeline',
           value: formatUsd(dashboardData.revenueToday),
-          trend: `${dashboardData.lowStockSkus} low-stock SKUs can delay quote-to-job conversion`,
+          trend: `${
+              dashboardData
+                  .lowStockSkus} low-stock SKUs can delay quote-to-job conversion`,
         },
       ],
     };
