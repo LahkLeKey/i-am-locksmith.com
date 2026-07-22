@@ -181,9 +181,9 @@ export async function PATCH(request: Request) {
   const technician = await updateTechnician(authResult.orgId, body.id, {
     ...(body.fullName !== undefined ? {fullName: body.fullName.trim()} : {}),
     ...(body.hourlyRate !== undefined ? {hourlyRate: body.hourlyRate} : {}),
-        ...(body.lockpickingSkills !== undefined ?
-          {lockpickingSkills: normalizeSkills(body.lockpickingSkills)} :
-          {}),
+    ...(body.lockpickingSkills !== undefined ?
+            {lockpickingSkills: normalizeSkills(body.lockpickingSkills)} :
+            {}),
     ...(body.availabilityStatus !== undefined ?
             {availabilityStatus: body.availabilityStatus} :
             {}),

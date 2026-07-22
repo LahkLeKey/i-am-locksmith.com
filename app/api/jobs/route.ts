@@ -219,14 +219,18 @@ export async function POST(request: Request) {
         {error: 'assignedTechnicianId is required'}, {status: 400});
   }
 
-  const technician = await getTechnicianById(authResult.orgId, assignedTechnicianId);
+  const technician =
+      await getTechnicianById(authResult.orgId, assignedTechnicianId);
   if (!technician || !technician.isActive) {
-    return NextResponse.json({error: 'Assigned technician not found'}, {status: 404});
+    return NextResponse.json(
+        {error: 'Assigned technician not found'}, {status: 404});
   }
 
   const estimatedMinutes = Math.trunc(body.quote!.estimatedMinutes!);
-  const computedLaborEstimate = Number(((estimatedMinutes / 60) * technician.hourlyRate).toFixed(2));
-  const computedEstimatedTotal = Number((body.quote!.partEstimate! + computedLaborEstimate).toFixed(2));
+  const computedLaborEstimate =
+      Number(((estimatedMinutes / 60) * technician.hourlyRate).toFixed(2));
+  const computedEstimatedTotal =
+      Number((body.quote!.partEstimate! + computedLaborEstimate).toFixed(2));
 
   const nextJob = await createJobRecord(authResult.orgId, {
     customerName,
@@ -470,18 +474,20 @@ export async function PATCH(request: Request) {
     }
   }
 
-  let assignedTechnicianName: string | null | undefined;
-  let laborRate: number | null | undefined;
-  let computedLaborEstimate: number | undefined;
-  let computedEstimatedTotal: number | undefined;
+  let assignedTechnicianName: string|null|undefined;
+  let laborRate: number|null|undefined;
+  let computedLaborEstimate: number|undefined;
+  let computedEstimatedTotal: number|undefined;
 
   if (body.assignedTechnicianId !== undefined) {
     const nextTechnicianId = body.assignedTechnicianId?.trim() || null;
 
     if (nextTechnicianId) {
-      const technician = await getTechnicianById(authResult.orgId, nextTechnicianId);
+      const technician =
+          await getTechnicianById(authResult.orgId, nextTechnicianId);
       if (!technician || !technician.isActive) {
-        return NextResponse.json({error: 'Assigned technician not found'}, {status: 404});
+        return NextResponse.json(
+            {error: 'Assigned technician not found'}, {status: 404});
       }
 
       assignedTechnicianName = technician.fullName;
@@ -489,9 +495,11 @@ export async function PATCH(request: Request) {
 
       if (body.quote?.estimatedMinutes !== undefined) {
         const minutes = Math.trunc(body.quote.estimatedMinutes);
-        computedLaborEstimate = Number(((minutes / 60) * technician.hourlyRate).toFixed(2));
+        computedLaborEstimate =
+            Number(((minutes / 60) * technician.hourlyRate).toFixed(2));
         if (body.quote.partEstimate !== undefined) {
-          computedEstimatedTotal = Number((body.quote.partEstimate + computedLaborEstimate).toFixed(2));
+          computedEstimatedTotal = Number(
+              (body.quote.partEstimate + computedLaborEstimate).toFixed(2));
         }
       }
     } else {

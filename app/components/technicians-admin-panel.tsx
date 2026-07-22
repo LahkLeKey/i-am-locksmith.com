@@ -55,9 +55,9 @@ export function TechniciansAdminPanel({ initialTechnicians }: { initialTechnicia
                     fullName: form.fullName,
                     hourlyRate: Number(form.hourlyRate),
                     lockpickingSkills: form.lockpickingSkills
-                            .split(',')
-                            .map((entry) => entry.trim())
-                            .filter(Boolean),
+                        .split(',')
+                        .map((entry) => entry.trim())
+                        .filter(Boolean),
                     availabilityStatus: form.availabilityStatus,
                     availabilityNote: form.availabilityNote,
                     isActive: form.isActive,
@@ -165,7 +165,7 @@ export function TechniciansAdminPanel({ initialTechnicians }: { initialTechnicia
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Lockpicking Skills</span>
                     <input
                         value={form.lockpickingSkills}
-                        onChange={(event) => setForm((current) => ({...current, lockpickingSkills: event.target.value}))}
+                        onChange={(event) => setForm((current) => ({ ...current, lockpickingSkills: event.target.value }))}
                         className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
                     />
                 </label>
@@ -195,7 +195,7 @@ export function TechniciansAdminPanel({ initialTechnicians }: { initialTechnicia
                         <tr>
                             <th className="px-3 py-2 font-semibold">Technician</th>
                             <th className="px-3 py-2 font-semibold">Rate</th>
-                              <th className="px-3 py-2 font-semibold">Skills</th>
+                            <th className="px-3 py-2 font-semibold">Skills</th>
                             <th className="px-3 py-2 font-semibold">Availability</th>
                             <th className="px-3 py-2 font-semibold">Active</th>
                             <th className="px-3 py-2 font-semibold">Note</th>
@@ -243,11 +243,11 @@ export function TechniciansAdminPanel({ initialTechnicians }: { initialTechnicia
                                                     entry.id === item.id ? {
                                                         ...entry,
                                                         lockpickingSkills: event.target.value
-                                                                .split(',')
-                                                                .map((skill) => skill.trim())
-                                                                .filter(Boolean),
+                                                            .split(',')
+                                                            .map((skill) => skill.trim())
+                                                            .filter(Boolean),
                                                     } :
-                                                                                                    entry,
+                                                        entry,
                                                 ),
                                             )
                                         }

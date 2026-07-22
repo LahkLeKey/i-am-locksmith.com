@@ -11,8 +11,7 @@ export type TechnicianRecord = {
 };
 
 export type TechnicianCreateInput = {
-  fullName: string; hourlyRate: number;
-  lockpickingSkills: string[];
+  fullName: string; hourlyRate: number; lockpickingSkills: string[];
   availabilityStatus: TechnicianAvailability;
   availabilityNote: string | null;
   isActive: boolean;
@@ -146,7 +145,7 @@ export async function updateTechnician(
     data: {
       ...(input.fullName !== undefined ? {fullName: input.fullName} : {}),
       ...(input.hourlyRate !== undefined ? {hourlyRate: input.hourlyRate} : {}),
-            ...(input.lockpickingSkills !== undefined ?
+      ...(input.lockpickingSkills !== undefined ?
               {lockpickingSkills: input.lockpickingSkills} :
               {}),
       ...(input.availabilityStatus !== undefined ?
