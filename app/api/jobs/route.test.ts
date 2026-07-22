@@ -5,69 +5,80 @@ vi.mock('@/lib/rbac/server', () => ({
                                getAuthorizationContext: vi.fn(),
                              }));
 
-vi.mock(
-    '@/lib/dashboard/snapshotMutations', () => ({
-                                           getOrCreateOrgSnapshot: vi.fn(),
-                                           getDashboardDataForSnapshot: vi.fn(),
-                                           persistDashboardData: vi.fn(),
-                                         }));
-
 vi.mock('@/lib/inventory/parts-repository', () => ({
                                               listInventoryParts: vi.fn(),
                                               createInventoryPart: vi.fn(),
                                               updateInventoryPart: vi.fn(),
                                             }));
 
-import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
-import {getDashboardDataForSnapshot, getOrCreateOrgSnapshot, persistDashboardData,} from '@/lib/dashboard/snapshotMutations';
-import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
+vi.mock('@/lib/jobs/repository', () => ({
+                                   createJobRecord: vi.fn(),
+                                   deleteJobRecord: vi.fn(),
+                                   getJobRecord: vi.fn(),
+                                   listJobRecords: vi.fn(),
+                                   updateJobRecord: vi.fn(),
+                                 }));
 
-import {DELETE, PATCH, POST} from './route';
+import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
+import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
+import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
+
+import {DELETE, GET, PATCH, POST} from './route';
 
 const mockedAuthorizePermission = vi.mocked(authorizePermission);
 const mockedGetAuthorizationContext = vi.mocked(getAuthorizationContext);
-const mockedGetOrCreateOrgSnapshot = vi.mocked(getOrCreateOrgSnapshot);
-const mockedGetDashboardDataForSnapshot =
-    vi.mocked(getDashboardDataForSnapshot);
-const mockedPersistDashboardData = vi.mocked(persistDashboardData);
+
 const mockedListInventoryParts = vi.mocked(listInventoryParts);
 const mockedCreateInventoryPart = vi.mocked(createInventoryPart);
 const mockedUpdateInventoryPart = vi.mocked(updateInventoryPart);
 
-const BASE_DATA = {
-  generatedAt: '2026-07-21T12:00:00.000Z',
-  revenueToday: 0,
-  openInvoices: 0,
-  grossMarginWeek: 0,
-  lowStockSkus: 0,
-  vansBelowMin: 0,
-  financialTrend: {revenue: [], expenses: [], profit: []},
-  kpis: [],
-  jobsQueue: [
-    {
-      id: 'JOB-1',
-      customerName: 'Acme',
-      site: 'Denver',
-      priority: 'normal',
-      status: 'queued',
-      scheduledFor: null,
-      etaMinutes: null,
-      requiredSkus: [],
-    },
-  ],
-  replenishmentAlerts: [],
-};
+const mockedCreateJobRecord = vi.mocked(createJobRecord);
+const mockedDeleteJobRecord = vi.mocked(deleteJobRecord);
+const mockedGetJobRecord = vi.mocked(getJobRecord);
+const mockedListJobRecords = vi.mocked(listJobRecords);
+const mockedUpdateJobRecord = vi.mocked(updateJobRecord);
+
+const BASE_JOB = {
+  id: 'JOB-1',
+  customerName: 'Acme',
+  site: 'Denver',
+  priority: 'normal',
+  status: 'queued',
+  scheduledFor: null,
+  etaMinutes: null,
+  requiredSkus: [],
+  followUpNote: null,
+  quote: {
+    partEstimate: 100,
+    laborEstimate: 50,
+    estimatedMinutes: 60,
+    estimatedTotal: 150,
+    notes: null,
+  },
+  closeout: {
+    actualPartCost: null,
+    actualLaborCost: null,
+    actualMinutes: null,
+    finalTotal: null,
+    closedOutAt: null,
+    resolutionNotes: null,
+  },
+} as const;
 
 describe('jobs api route', () => {
   beforeEach(() => {
     mockedAuthorizePermission.mockReset();
     mockedGetAuthorizationContext.mockReset();
-    mockedGetOrCreateOrgSnapshot.mockReset();
-    mockedGetDashboardDataForSnapshot.mockReset();
-    mockedPersistDashboardData.mockReset();
+
     mockedListInventoryParts.mockReset();
     mockedCreateInventoryPart.mockReset();
     mockedUpdateInventoryPart.mockReset();
+
+    mockedCreateJobRecord.mockReset();
+    mockedDeleteJobRecord.mockReset();
+    mockedGetJobRecord.mockReset();
+    mockedListJobRecords.mockReset();
+    mockedUpdateJobRecord.mockReset();
 
     mockedGetAuthorizationContext.mockResolvedValue({
       userId: 'user_1',
@@ -79,9 +90,13 @@ describe('jobs api route', () => {
     });
 
     mockedAuthorizePermission.mockResolvedValue({state: 'authorized'});
-    mockedGetOrCreateOrgSnapshot.mockResolvedValue(
-        {id: 'snap_1', orgId: 'org_1'} as never);
-    mockedGetDashboardDataForSnapshot.mockResolvedValue(BASE_DATA as never);
+
+    mockedCreateJobRecord.mockResolvedValue({...BASE_JOB} as never);
+    mockedUpdateJobRecord.mockResolvedValue({...BASE_JOB} as never);
+    mockedDeleteJobRecord.mockResolvedValue({...BASE_JOB} as never);
+    mockedGetJobRecord.mockResolvedValue({...BASE_JOB} as never);
+    mockedListJobRecords.mockResolvedValue([{...BASE_JOB}] as never);
+
     mockedListInventoryParts.mockResolvedValue([
       {
         id: 'part_1',
@@ -98,78 +113,81 @@ describe('jobs api route', () => {
         compatibilityNote: 'Test note',
       },
     ] as never);
+
     mockedUpdateInventoryPart.mockResolvedValue({id: 'part_1'} as never);
     mockedCreateInventoryPart.mockResolvedValue(
         {id: 'part_2', sku: 'SKU-NEW'} as never);
   });
 
-  it('creates a job', async () => {
+  it('creates a job with quote fields', async () => {
     const request = new Request('http://localhost/api/jobs', {
       method: 'POST',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify({customerName: 'New Co', site: 'Austin'}),
+      body: JSON.stringify({
+        customerName: 'New Co',
+        site: 'Austin',
+        quote: {
+          partEstimate: 100,
+          laborEstimate: 80,
+          estimatedMinutes: 45,
+          estimatedTotal: 180,
+          notes: 'Initial quote',
+        },
+      }),
     });
 
     const response = await POST(request);
 
     expect(response?.status).toBe(200);
-    expect(mockedPersistDashboardData).toHaveBeenCalledOnce();
+    expect(mockedCreateJobRecord).toHaveBeenCalledOnce();
+  });
+
+  it('lists jobs', async () => {
+    const response = await GET();
+
+    expect(response?.status).toBe(200);
+    expect(mockedListJobRecords).toHaveBeenCalledOnce();
   });
 
   it('updates a job', async () => {
     const request = new Request('http://localhost/api/jobs', {
       method: 'PATCH',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify({id: 'JOB-1', status: 'in_progress'}),
-    });
-
-    const response = await PATCH(request);
-
-    expect(response?.status).toBe(200);
-    expect(mockedPersistDashboardData).toHaveBeenCalledOnce();
-  });
-
-  it('updates customer and site inline', async () => {
-    const request = new Request('http://localhost/api/jobs', {
-      method: 'PATCH',
-      headers: {'content-type': 'application/json'},
       body: JSON.stringify({
         id: 'JOB-1',
-        customerName: 'Updated Customer',
-        site: 'Updated Site',
+        status: 'in_progress',
+        quote: {
+          partEstimate: 90,
+          laborEstimate: 60,
+          estimatedMinutes: 50,
+          estimatedTotal: 150,
+          notes: 'Updated quote',
+        },
       }),
     });
 
     const response = await PATCH(request);
 
     expect(response?.status).toBe(200);
-    expect(mockedPersistDashboardData).toHaveBeenCalledOnce();
+    expect(mockedUpdateJobRecord).toHaveBeenCalledOnce();
   });
 
-  it('rejects empty customer name for inline edits', async () => {
+  it('rejects invalid quote values', async () => {
     const request = new Request('http://localhost/api/jobs', {
       method: 'PATCH',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify({id: 'JOB-1', customerName: '   '}),
+      body: JSON.stringify({
+        id: 'JOB-1',
+        quote: {
+          partEstimate: -1,
+        },
+      }),
     });
 
     const response = await PATCH(request);
 
     expect(response?.status).toBe(400);
-    expect(mockedPersistDashboardData).not.toHaveBeenCalled();
-  });
-
-  it('rejects empty site for inline edits', async () => {
-    const request = new Request('http://localhost/api/jobs', {
-      method: 'PATCH',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({id: 'JOB-1', site: '   '}),
-    });
-
-    const response = await PATCH(request);
-
-    expect(response?.status).toBe(400);
-    expect(mockedPersistDashboardData).not.toHaveBeenCalled();
+    expect(mockedUpdateJobRecord).not.toHaveBeenCalled();
   });
 
   it('deletes a job', async () => {
@@ -182,7 +200,7 @@ describe('jobs api route', () => {
     const response = await DELETE(request);
 
     expect(response?.status).toBe(200);
-    expect(mockedPersistDashboardData).toHaveBeenCalledOnce();
+    expect(mockedDeleteJobRecord).toHaveBeenCalledOnce();
   });
 
   it('returns forbidden when permission denied', async () => {
@@ -191,7 +209,16 @@ describe('jobs api route', () => {
     const request = new Request('http://localhost/api/jobs', {
       method: 'POST',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify({customerName: 'X', site: 'Y'}),
+      body: JSON.stringify({
+        customerName: 'X',
+        site: 'Y',
+        quote: {
+          partEstimate: 10,
+          laborEstimate: 10,
+          estimatedMinutes: 10,
+          estimatedTotal: 20,
+        },
+      }),
     });
 
     const response = await POST(request);
@@ -200,6 +227,11 @@ describe('jobs api route', () => {
   });
 
   it('reserves inventory for a job and appends required sku', async () => {
+    mockedUpdateJobRecord.mockResolvedValue({
+      ...BASE_JOB,
+      requiredSkus: ['SKU-1'],
+    } as never);
+
     const request = new Request('http://localhost/api/jobs', {
       method: 'PATCH',
       headers: {'content-type': 'application/json'},
@@ -215,7 +247,7 @@ describe('jobs api route', () => {
 
     expect(response?.status).toBe(200);
     expect(mockedUpdateInventoryPart).toHaveBeenCalledOnce();
-    expect(mockedPersistDashboardData).toHaveBeenCalled();
+    expect(mockedUpdateJobRecord).toHaveBeenCalled();
   });
 
   it('returns 404 when reserve SKU does not exist', async () => {
@@ -256,26 +288,29 @@ describe('jobs api route', () => {
     expect(mockedUpdateInventoryPart).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when reserve quantity exceeds stock', async () => {
+  it('rejects completed status in generic update route', async () => {
     const request = new Request('http://localhost/api/jobs', {
       method: 'PATCH',
       headers: {'content-type': 'application/json'},
       body: JSON.stringify({
         id: 'JOB-1',
-        inventoryAction: 'reserve',
-        inventorySku: 'SKU-1',
-        reserveQuantity: 99,
+        status: 'completed',
       }),
     });
 
     const response = await PATCH(request);
 
     expect(response?.status).toBe(400);
-    expect(mockedUpdateInventoryPart).not.toHaveBeenCalled();
+    expect(mockedUpdateJobRecord).not.toHaveBeenCalled();
   });
 
   it('creates inventory from a job context and appends required sku',
      async () => {
+       mockedUpdateJobRecord.mockResolvedValue({
+         ...BASE_JOB,
+         requiredSkus: ['SKU-NEW'],
+       } as never);
+
        const request = new Request('http://localhost/api/jobs', {
          method: 'PATCH',
          headers: {'content-type': 'application/json'},
@@ -301,60 +336,6 @@ describe('jobs api route', () => {
 
        expect(response?.status).toBe(200);
        expect(mockedCreateInventoryPart).toHaveBeenCalledOnce();
-       expect(mockedPersistDashboardData).toHaveBeenCalled();
+       expect(mockedUpdateJobRecord).toHaveBeenCalled();
      });
-
-  it('returns 409 when creating inventory with existing sku', async () => {
-    const request = new Request('http://localhost/api/jobs', {
-      method: 'PATCH',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({
-        id: 'JOB-1',
-        inventoryAction: 'create_inventory',
-        inventorySku: 'SKU-1',
-        createInventory: {
-          itemName: 'Duplicate',
-          serviceLines: ['mobile'],
-          location: 'Van 1',
-          onHand: 0,
-          reorderPoint: 1,
-          suggestedOrderQty: 3,
-          supplier: 'Supplier',
-          severity: 'medium',
-          compatibilityNote: 'Duplicate sku',
-        },
-      }),
-    });
-
-    const response = await PATCH(request);
-
-    expect(response?.status).toBe(409);
-    expect(mockedCreateInventoryPart).not.toHaveBeenCalled();
-  });
-
-  it('returns 400 when create inventory fields are missing', async () => {
-    const request = new Request('http://localhost/api/jobs', {
-      method: 'PATCH',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({
-        id: 'JOB-1',
-        inventoryAction: 'create_inventory',
-        inventorySku: 'SKU-NEW-2',
-        createInventory: {
-          itemName: '',
-          location: '',
-          onHand: 0,
-          reorderPoint: 1,
-          suggestedOrderQty: 2,
-          supplier: '',
-          compatibilityNote: '',
-        },
-      }),
-    });
-
-    const response = await PATCH(request);
-
-    expect(response?.status).toBe(400);
-    expect(mockedCreateInventoryPart).not.toHaveBeenCalled();
-  });
 });

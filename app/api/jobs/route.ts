@@ -1,6 +1,6 @@
-import {getDashboardDataForSnapshot, getOrCreateOrgSnapshot, persistDashboardData} from '@/lib/dashboard/snapshotMutations';
-import type {JobQueueItem, JobQueuePriority, JobQueueStatus} from '@/lib/dashboard/types';
+import type {JobQueuePriority, JobQueueStatus} from '@/lib/dashboard/types';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
+import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {NextResponse} from 'next/server';
 
@@ -10,6 +10,21 @@ type CreateJobRequest = {
   priority?: JobQueuePriority;
   requiredSkus?: string[];
   scheduledFor?: string | null;
+  quote?: {
+    partEstimate?: number;
+    laborEstimate?: number;
+    estimatedMinutes?: number;
+    estimatedTotal?: number;
+    notes?: string;
+  };
+};
+
+type QuotePayload = {
+  partEstimate?: number;
+  laborEstimate?: number;
+  estimatedMinutes?: number;
+  estimatedTotal?: number;
+  notes?: string | null;
 };
 
 type UpdateJobRequest = {
@@ -20,6 +35,14 @@ type UpdateJobRequest = {
   priority?: JobQueuePriority;
   etaMinutes?: number | null;
   scheduledFor?: string | null;
+  followUpNote?: string | null;
+  quote?: {
+    partEstimate?: number;
+    laborEstimate?: number;
+    estimatedMinutes?: number;
+    estimatedTotal?: number;
+    notes?: string | null;
+  };
   inventoryAction?: 'reserve' | 'create_inventory';
   inventorySku?: string;
   reserveQuantity?: number;
@@ -43,11 +66,7 @@ type DeleteJobRequest = {
 const ALLOWED_PRIORITIES: JobQueuePriority[] =
     ['low', 'normal', 'high', 'urgent'];
 const ALLOWED_STATUSES: JobQueueStatus[] =
-    ['queued', 'scheduled', 'in_progress', 'blocked'];
-
-function buildJobId(): string {
-  return `JOB-${Date.now().toString().slice(-6)}`;
-}
+    ['queued', 'scheduled', 'in_progress', 'blocked', 'completed'];
 
 function isJobPriority(value: unknown): value is JobQueuePriority {
   return typeof value === 'string' &&
@@ -68,7 +87,41 @@ function normalizeSkus(value: unknown): string[] {
       .filter((entry) => entry.length > 0);
 }
 
-async function authorize(permission: 'jobs.create'|'jobs.update') {
+function validateQuoteDraft(
+    quote: QuotePayload|undefined, options: {requireAll: boolean}): string|
+    null {
+  const values: Array<{key: string; value: number | undefined;}> = [
+    {key: 'partEstimate', value: quote?.partEstimate},
+    {key: 'laborEstimate', value: quote?.laborEstimate},
+    {key: 'estimatedMinutes', value: quote?.estimatedMinutes},
+    {key: 'estimatedTotal', value: quote?.estimatedTotal},
+  ];
+
+  if (options.requireAll) {
+    const allPresent = values.every(({value}) => Number.isFinite(value));
+    if (!allPresent) {
+      return 'quote partEstimate, laborEstimate, estimatedMinutes, and estimatedTotal are required numbers';
+    }
+  }
+
+  for (const {key, value} of values) {
+    if (value === undefined) {
+      continue;
+    }
+
+    if (!Number.isFinite(value)) {
+      return `quote ${key} must be a number`;
+    }
+
+    if (value < 0) {
+      return `quote ${key} must be non-negative`;
+    }
+  }
+
+  return null;
+}
+
+async function authorize(permission: 'jobs.read'|'jobs.create'|'jobs.update') {
   const context = await getAuthorizationContext();
 
   if (!context) {
@@ -150,30 +203,40 @@ export async function POST(request: Request) {
     return NextResponse.json({error: 'Invalid priority'}, {status: 400});
   }
 
-  const snapshot = await getOrCreateOrgSnapshot(authResult.orgId);
-  const data = await getDashboardDataForSnapshot(snapshot);
+  const quoteValidationError =
+      validateQuoteDraft(body.quote, {requireAll: true});
+  if (quoteValidationError) {
+    return NextResponse.json({error: quoteValidationError}, {status: 400});
+  }
 
-  const nextJob: JobQueueItem = {
-    id: buildJobId(),
+  const nextJob = await createJobRecord(authResult.orgId, {
     customerName,
     site,
     priority: body.priority ?? 'normal',
-    status: 'queued',
     scheduledFor: body.scheduledFor ?? null,
-    etaMinutes: null,
     requiredSkus: normalizeSkus(body.requiredSkus),
-  };
-
-  const next = {
-    ...data,
-    generatedAt: new Date().toISOString(),
-    jobsQueue: [nextJob, ...data.jobsQueue],
-  };
-
-  await persistDashboardData(snapshot.id, next);
+    quote: {
+      partEstimate: body.quote!.partEstimate!,
+      laborEstimate: body.quote!.laborEstimate!,
+      estimatedMinutes: Math.trunc(body.quote!.estimatedMinutes!),
+      estimatedTotal: body.quote!.estimatedTotal!,
+      notes: body.quote?.notes?.trim() || null,
+    },
+  });
 
   return NextResponse.json(
       {ok: true, message: `Created ${nextJob.id}`, job: nextJob});
+}
+
+export async function GET() {
+  const authResult = await authorize('jobs.read');
+
+  if ('error' in authResult) {
+    return authResult.error;
+  }
+
+  const jobs = await listJobRecords(authResult.orgId);
+  return NextResponse.json({ok: true, jobs});
 }
 
 export async function PATCH(request: Request) {
@@ -210,11 +273,9 @@ export async function PATCH(request: Request) {
           {error: 'reserveQuantity must be greater than 0'}, {status: 400});
     }
 
-    const snapshot = await getOrCreateOrgSnapshot(authResult.orgId);
-    const data = await getDashboardDataForSnapshot(snapshot);
-    const jobIndex = data.jobsQueue.findIndex((job) => job.id === body.id);
+    const current = await getJobRecord(authResult.orgId, body.id);
 
-    if (jobIndex < 0) {
+    if (!current) {
       return NextResponse.json({error: 'Job not found'}, {status: 404});
     }
 
@@ -235,23 +296,21 @@ export async function PATCH(request: Request) {
 
     await updateInventoryPart(part.id, {onHand: part.onHand - reserveQuantity});
 
-    const current = data.jobsQueue[jobIndex];
     const nextRequiredSkus = current.requiredSkus.includes(part.sku) ?
         current.requiredSkus :
         [...current.requiredSkus, part.sku];
-    const nextJobs = [...data.jobsQueue];
-    nextJobs[jobIndex] = {...current, requiredSkus: nextRequiredSkus};
 
-    await persistDashboardData(snapshot.id, {
-      ...data,
-      generatedAt: new Date().toISOString(),
-      jobsQueue: nextJobs,
-    });
+    const updated = await updateJobRecord(
+        authResult.orgId, body.id, {requiredSkus: nextRequiredSkus});
+
+    if (!updated) {
+      return NextResponse.json({error: 'Job not found'}, {status: 404});
+    }
 
     return NextResponse.json({
       ok: true,
       message: `Reserved ${reserveQuantity} of ${part.sku} for ${current.id}`,
-      job: nextJobs[jobIndex],
+      job: updated,
     });
   }
 
@@ -272,7 +331,8 @@ export async function PATCH(request: Request) {
             error:
                 'inventorySku, itemName, location, supplier, and compatibilityNote are required'
           },
-          {status: 400});
+          {status: 400},
+      );
     }
 
     if (!Number.isFinite(draft.onHand) || draft.onHand! < 0 ||
@@ -284,7 +344,8 @@ export async function PATCH(request: Request) {
             error:
                 'onHand, reorderPoint, and suggestedOrderQty must be non-negative numbers'
           },
-          {status: 400});
+          {status: 400},
+      );
     }
 
     const parts = await listInventoryParts(authResult.orgId);
@@ -298,7 +359,7 @@ export async function PATCH(request: Request) {
 
     const serviceLines = Array.isArray(draft.serviceLines) ?
         draft.serviceLines
-            .map((entry) => typeof entry === 'string' ? entry.trim() : '')
+            .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
             .filter((entry) => entry.length > 0) :
         ['mobile', 'shop'];
 
@@ -311,35 +372,31 @@ export async function PATCH(request: Request) {
       reorderPoint: draft.reorderPoint!,
       suggestedOrderQty: draft.suggestedOrderQty!,
       supplier: draft.supplier.trim(),
-      severity: (draft.severity?.trim() || 'medium'),
+      severity: draft.severity?.trim() || 'medium',
       compatibilityNote: draft.compatibilityNote.trim(),
     });
 
-    const snapshot = await getOrCreateOrgSnapshot(authResult.orgId);
-    const data = await getDashboardDataForSnapshot(snapshot);
-    const jobIndex = data.jobsQueue.findIndex((job) => job.id === body.id);
+    const current = await getJobRecord(authResult.orgId, body.id);
 
-    if (jobIndex < 0) {
+    if (!current) {
       return NextResponse.json({error: 'Job not found'}, {status: 404});
     }
 
-    const current = data.jobsQueue[jobIndex];
     const nextRequiredSkus = current.requiredSkus.includes(createdPart.sku) ?
         current.requiredSkus :
         [...current.requiredSkus, createdPart.sku];
-    const nextJobs = [...data.jobsQueue];
-    nextJobs[jobIndex] = {...current, requiredSkus: nextRequiredSkus};
 
-    await persistDashboardData(snapshot.id, {
-      ...data,
-      generatedAt: new Date().toISOString(),
-      jobsQueue: nextJobs,
-    });
+    const updated = await updateJobRecord(
+        authResult.orgId, body.id, {requiredSkus: nextRequiredSkus});
+
+    if (!updated) {
+      return NextResponse.json({error: 'Job not found'}, {status: 404});
+    }
 
     return NextResponse.json({
       ok: true,
       message: `Created inventory part ${createdPart.sku} for ${current.id}`,
-      job: nextJobs[jobIndex],
+      job: updated,
       part: createdPart,
     });
   }
@@ -352,6 +409,16 @@ export async function PATCH(request: Request) {
 
   if (body.status && !isJobStatus(body.status)) {
     return NextResponse.json({error: 'Invalid status'}, {status: 400});
+  }
+
+  if (body.status === 'completed') {
+    return NextResponse.json(
+        {
+          error:
+              'Use /api/jobs/closeout to complete a job with actual costs and final totals'
+        },
+        {status: 400},
+    );
   }
 
   if (body.priority && !isJobPriority(body.priority)) {
@@ -372,38 +439,40 @@ export async function PATCH(request: Request) {
     return NextResponse.json({error: 'Invalid etaMinutes'}, {status: 400});
   }
 
-  const snapshot = await getOrCreateOrgSnapshot(authResult.orgId);
-  const data = await getDashboardDataForSnapshot(snapshot);
-
-  const index = data.jobsQueue.findIndex((job) => job.id === body.id);
-
-  if (index < 0) {
-    return NextResponse.json({error: 'Job not found'}, {status: 404});
+  if (body.quote) {
+    const quoteValidationError =
+        validateQuoteDraft(body.quote, {requireAll: false});
+    if (quoteValidationError) {
+      return NextResponse.json({error: quoteValidationError}, {status: 400});
+    }
   }
 
-  const current = data.jobsQueue[index];
-  const updated: JobQueueItem = {
-    ...current,
-    customerName: body.customerName?.trim() ?? current.customerName,
-    site: body.site?.trim() ?? current.site,
-    status: body.status ?? current.status,
-    priority: body.priority ?? current.priority,
-    etaMinutes: body.etaMinutes === undefined ? current.etaMinutes :
-                                                body.etaMinutes,
-    scheduledFor: body.scheduledFor === undefined ? current.scheduledFor :
-                                                    body.scheduledFor,
-  };
+  const updated = await updateJobRecord(authResult.orgId, body.id, {
+    customerName: body.customerName?.trim(),
+    site: body.site?.trim(),
+    status: body.status,
+    priority: body.priority,
+    etaMinutes: body.etaMinutes,
+    scheduledFor: body.scheduledFor,
+    followUpNote: body.followUpNote === undefined ?
+        undefined :
+        body.followUpNote?.trim() || null,
+    quote: body.quote ? {
+      partEstimate: body.quote.partEstimate,
+      laborEstimate: body.quote.laborEstimate,
+      estimatedMinutes: body.quote.estimatedMinutes === undefined ?
+          undefined :
+          Math.trunc(body.quote.estimatedMinutes),
+      estimatedTotal: body.quote.estimatedTotal,
+      notes: body.quote.notes === undefined ? undefined :
+                                              body.quote.notes?.trim() || null,
+    } :
+                        undefined,
+  });
 
-  const nextJobs = [...data.jobsQueue];
-  nextJobs[index] = updated;
-
-  const next = {
-    ...data,
-    generatedAt: new Date().toISOString(),
-    jobsQueue: nextJobs,
-  };
-
-  await persistDashboardData(snapshot.id, next);
+  if (!updated) {
+    return NextResponse.json({error: 'Job not found'}, {status: 404});
+  }
 
   return NextResponse.json(
       {ok: true, message: `Updated ${updated.id}`, job: updated});
@@ -428,22 +497,11 @@ export async function DELETE(request: Request) {
     return NextResponse.json({error: 'id is required'}, {status: 400});
   }
 
-  const snapshot = await getOrCreateOrgSnapshot(authResult.orgId);
-  const data = await getDashboardDataForSnapshot(snapshot);
+  const deleted = await deleteJobRecord(authResult.orgId, body.id);
 
-  const nextJobs = data.jobsQueue.filter((job) => job.id !== body.id);
-
-  if (nextJobs.length === data.jobsQueue.length) {
+  if (!deleted) {
     return NextResponse.json({error: 'Job not found'}, {status: 404});
   }
 
-  const next = {
-    ...data,
-    generatedAt: new Date().toISOString(),
-    jobsQueue: nextJobs,
-  };
-
-  await persistDashboardData(snapshot.id, next);
-
-  return NextResponse.json({ok: true, message: `Deleted ${body.id}`});
+  return NextResponse.json({ok: true, message: `Deleted ${deleted.id}`});
 }

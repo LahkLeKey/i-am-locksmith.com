@@ -11,7 +11,8 @@ export type KpiCard = {
   trend: TrendPoint[];
 };
 
-export type JobQueueStatus =|'queued'|'scheduled'|'in_progress'|'blocked';
+export type JobQueueStatus =
+    'queued'|'scheduled'|'in_progress'|'blocked'|'completed';
 
 export type JobQueuePriority = 'low'|'normal'|'high'|'urgent';
 
@@ -21,6 +22,19 @@ export type JobQueueItem = {
   scheduledFor: string | null;
   etaMinutes: number | null;
   requiredSkus: string[];
+  followUpNote?: string | null;
+  quote?: {
+    partEstimate: number; laborEstimate: number; estimatedMinutes: number;
+    estimatedTotal: number;
+    notes: string | null;
+  };
+  closeout?: {
+    actualPartCost: number | null; actualLaborCost: number | null;
+    actualMinutes: number | null;
+    finalTotal: number | null;
+    closedOutAt: string | null;
+    resolutionNotes: string | null;
+  };
 };
 
 export type ReplenishmentSeverity = 'low'|'medium'|'high'|'critical';

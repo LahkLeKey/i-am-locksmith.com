@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
     provider = "postgresql"
-    url      = env("DATABASE_URL")
 }
 
 model DashboardSnapshot {
@@ -45,4 +44,34 @@ model InventoryPart {
 
     @@index([orgId, sku])
     @@index([orgId, location])
+}
+
+model JobRecord {
+    id               String    @id @default(cuid())
+    jobNumber        String
+    orgId            String
+    customerName     String
+    site             String
+    priority         String
+    status           String
+    scheduledFor     DateTime?
+    etaMinutes       Int?
+    requiredSkus     Json
+    followUpNote     String?
+    partEstimate     Decimal   @db.Decimal(10, 2)
+    laborEstimate    Decimal   @db.Decimal(10, 2)
+    estimatedMinutes Int
+    estimatedTotal   Decimal   @db.Decimal(10, 2)
+    quoteNotes       String?
+    actualPartCost   Decimal?  @db.Decimal(10, 2)
+    actualLaborCost  Decimal?  @db.Decimal(10, 2)
+    actualMinutes    Int?
+    finalTotal       Decimal?  @db.Decimal(10, 2)
+    closedOutAt      DateTime?
+    closeoutNotes    String?
+    createdAt        DateTime  @default(now())
+    updatedAt        DateTime  @updatedAt
+
+    @@unique([orgId, jobNumber])
+    @@index([orgId, status, updatedAt])
 }

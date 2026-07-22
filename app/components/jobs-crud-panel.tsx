@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import type { JobQueueItem, JobQueuePriority, JobQueueStatus } from '@/lib/dashboard/types';
 
-const STATUSES: JobQueueStatus[] = ['queued', 'scheduled', 'in_progress', 'blocked'];
+const STATUSES: JobQueueStatus[] = ['queued', 'scheduled', 'in_progress', 'blocked', 'completed'];
 const PRIORITIES: JobQueuePriority[] = ['low', 'normal', 'high', 'urgent'];
 const SERVICE_LINE_OPTIONS = ['automotive', 'mobile', 'shop'] as const;
 
@@ -17,14 +17,82 @@ type InventoryLookupPart = {
     onHand: number;
 };
 
+type JobDraft = {
+    customerName: string;
+    site: string;
+    priority: JobQueuePriority;
+    status: JobQueueStatus;
+    scheduledFor: string;
+    etaMinutes: string;
+    followUpNote: string;
+    quotePartEstimate: string;
+    quoteLaborEstimate: string;
+    quoteEstimatedMinutes: string;
+    quoteEstimatedTotal: string;
+    quoteNotes: string;
+};
+
+type CloseoutDraft = {
+    actualPartCost: string;
+    actualLaborCost: string;
+    actualMinutes: string;
+    finalTotal: string;
+    resolutionNotes: string;
+};
+
+function toNumber(value: string): number {
+    return Number(value);
+}
+
+function toLocalDateTime(value: string | null): string {
+    if (!value) {
+        return '';
+    }
+
+    const parsed = Date.parse(value);
+    if (!Number.isFinite(parsed)) {
+        return '';
+    }
+
+    return new Date(parsed).toISOString().slice(0, 16);
+}
+
+function quoteAsStrings(job: JobQueueItem) {
+    return {
+        quotePartEstimate: String(job.quote?.partEstimate ?? 0),
+        quoteLaborEstimate: String(job.quote?.laborEstimate ?? 0),
+        quoteEstimatedMinutes: String(job.quote?.estimatedMinutes ?? 0),
+        quoteEstimatedTotal: String(job.quote?.estimatedTotal ?? 0),
+        quoteNotes: job.quote?.notes ?? '',
+    };
+}
+
+function closeoutAsDraft(job: JobQueueItem): CloseoutDraft {
+    return {
+        actualPartCost: job.closeout?.actualPartCost === null || job.closeout?.actualPartCost === undefined ? '' : String(job.closeout.actualPartCost),
+        actualLaborCost: job.closeout?.actualLaborCost === null || job.closeout?.actualLaborCost === undefined ? '' : String(job.closeout.actualLaborCost),
+        actualMinutes: job.closeout?.actualMinutes === null || job.closeout?.actualMinutes === undefined ? '' : String(job.closeout.actualMinutes),
+        finalTotal: job.closeout?.finalTotal === null || job.closeout?.finalTotal === undefined ? '' : String(job.closeout.finalTotal),
+        resolutionNotes: job.closeout?.resolutionNotes ?? '',
+    };
+}
+
 export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJobs: JobQueueItem[]; inventoryLookupParts: InventoryLookupPart[] }) {
     const router = useRouter();
+
     const [customerName, setCustomerName] = useState('');
     const [site, setSite] = useState('');
     const [priority, setPriority] = useState<JobQueuePriority>('normal');
+    const [quotePartEstimate, setQuotePartEstimate] = useState('0');
+    const [quoteLaborEstimate, setQuoteLaborEstimate] = useState('0');
+    const [quoteEstimatedMinutes, setQuoteEstimatedMinutes] = useState('0');
+    const [quoteEstimatedTotal, setQuoteEstimatedTotal] = useState('0');
+    const [quoteNotes, setQuoteNotes] = useState('');
+
     const [isPending, setIsPending] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
     const [reserveSku, setReserveSku] = useState<Record<string, string>>({});
     const [reserveQty, setReserveQty] = useState<Record<string, number>>({});
     const [createSku, setCreateSku] = useState<Record<string, string>>({});
@@ -37,11 +105,13 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
     const [createReorderPoint, setCreateReorderPoint] = useState<Record<string, number>>({});
     const [createSuggestedOrderQty, setCreateSuggestedOrderQty] = useState<Record<string, number>>({});
     const [createSeverity, setCreateSeverity] = useState<Record<string, string>>({});
+
     const [activeDialogJobId, setActiveDialogJobId] = useState<string | null>(null);
     const [pendingDeleteJobId, setPendingDeleteJobId] = useState<string | null>(null);
     const [selectedJobId, setSelectedJobId] = useState<string | null>(initialJobs[0]?.id ?? null);
     const [lookupQuery, setLookupQuery] = useState<Record<string, string>>({});
-    const [drafts, setDrafts] = useState<Record<string, { customerName: string; site: string; priority: JobQueuePriority; status: JobQueueStatus; scheduledFor: string; etaMinutes: string }>>({});
+    const [drafts, setDrafts] = useState<Record<string, JobDraft>>({});
+    const [closeoutDrafts, setCloseoutDrafts] = useState<Record<string, CloseoutDraft>>({});
 
     const jobs = useMemo(() => [...initialJobs].sort((left, right) => right.id.localeCompare(left.id)), [initialJobs]);
     const sortedInventoryLookupParts = useMemo(
@@ -67,28 +137,19 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
         }
     }, [jobs, selectedJobId]);
 
-    function toLocalDateTime(value: string | null): string {
-        if (!value) {
-            return '';
-        }
-
-        const parsed = Date.parse(value);
-        if (!Number.isFinite(parsed)) {
-            return '';
-        }
-
-        return new Date(parsed).toISOString().slice(0, 16);
-    }
-
-    function getDraft(job: JobQueueItem) {
-        return drafts[job.id] ?? {
-            customerName: job.customerName,
-            site: job.site,
-            priority: job.priority,
-            status: job.status,
-            scheduledFor: toLocalDateTime(job.scheduledFor),
-            etaMinutes: job.etaMinutes === null ? '' : String(job.etaMinutes),
-        };
+    function getDraft(job: JobQueueItem): JobDraft {
+        return (
+            drafts[job.id] ?? {
+                customerName: job.customerName,
+                site: job.site,
+                priority: job.priority,
+                status: job.status,
+                scheduledFor: toLocalDateTime(job.scheduledFor),
+                etaMinutes: job.etaMinutes === null ? '' : String(job.etaMinutes),
+                followUpNote: job.followUpNote ?? '',
+                ...quoteAsStrings(job),
+            }
+        );
     }
 
     function isDraftDirty(job: JobQueueItem): boolean {
@@ -100,17 +161,36 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
             draft.priority !== job.priority ||
             draft.status !== job.status ||
             draft.scheduledFor !== toLocalDateTime(job.scheduledFor) ||
-            draft.etaMinutes !== (job.etaMinutes === null ? '' : String(job.etaMinutes))
+            draft.etaMinutes !== (job.etaMinutes === null ? '' : String(job.etaMinutes)) ||
+            draft.followUpNote !== (job.followUpNote ?? '') ||
+            draft.quotePartEstimate !== String(job.quote?.partEstimate ?? 0) ||
+            draft.quoteLaborEstimate !== String(job.quote?.laborEstimate ?? 0) ||
+            draft.quoteEstimatedMinutes !== String(job.quote?.estimatedMinutes ?? 0) ||
+            draft.quoteEstimatedTotal !== String(job.quote?.estimatedTotal ?? 0) ||
+            draft.quoteNotes !== (job.quote?.notes ?? '')
         );
     }
 
-    async function runMutation(request: RequestInit) {
+    function getCloseoutDraft(job: JobQueueItem): CloseoutDraft {
+        return closeoutDrafts[job.id] ?? closeoutAsDraft(job);
+    }
+
+    function canCloseOut(draft: CloseoutDraft): boolean {
+        return (
+            draft.actualPartCost !== '' &&
+            draft.actualLaborCost !== '' &&
+            draft.actualMinutes !== '' &&
+            draft.finalTotal !== ''
+        );
+    }
+
+    async function runMutation(request: RequestInit, endpoint = '/api/jobs') {
         setFeedback(null);
         setError(null);
         setIsPending(true);
 
         try {
-            const response = await fetch('/api/jobs', request);
+            const response = await fetch(endpoint, request);
             const payload = await response.json();
 
             if (!response.ok) {
@@ -131,11 +211,11 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
         <section className="space-y-4 rounded-md border border-[#e5e7eb] bg-white p-4">
             <div>
                 <h2 className="text-sm font-semibold">Jobs Management</h2>
-                <p className="mt-1 text-xs text-[#475569]">Manage persisted jobs with inline table edits and inventory actions for reporting.</p>
+                <p className="mt-1 text-xs text-[#475569]">Capture quote intake at job creation, edit workflow fields inline, and close jobs with actual financial outcomes.</p>
             </div>
 
             <form
-                className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto]"
+                className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
                 onSubmit={async (event) => {
                     event.preventDefault();
 
@@ -146,46 +226,125 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                             customerName,
                             site,
                             priority,
+                            quote: {
+                                partEstimate: toNumber(quotePartEstimate),
+                                laborEstimate: toNumber(quoteLaborEstimate),
+                                estimatedMinutes: toNumber(quoteEstimatedMinutes),
+                                estimatedTotal: toNumber(quoteEstimatedTotal),
+                                notes: quoteNotes,
+                            },
                         }),
                     });
 
                     setCustomerName('');
                     setSite('');
                     setPriority('normal');
+                    setQuotePartEstimate('0');
+                    setQuoteLaborEstimate('0');
+                    setQuoteEstimatedMinutes('0');
+                    setQuoteEstimatedTotal('0');
+                    setQuoteNotes('');
                 }}
             >
-                <input
-                    value={customerName}
-                    onChange={(event) => setCustomerName(event.target.value)}
-                    placeholder="Customer name"
-                    className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                    required
-                />
-                <input
-                    value={site}
-                    onChange={(event) => setSite(event.target.value)}
-                    placeholder="Site"
-                    className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                    required
-                />
-                <select
-                    value={priority}
-                    onChange={(event) => setPriority(event.target.value as JobQueuePriority)}
-                    className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                >
-                    {PRIORITIES.map((entry) => (
-                        <option key={entry} value={entry}>
-                            {entry}
-                        </option>
-                    ))}
-                </select>
-                <button
-                    type="submit"
-                    disabled={isPending}
-                    className="rounded-md bg-[#0f766e] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70 sm:col-span-2 lg:col-span-1"
-                >
-                    Add Job
-                </button>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer</span>
+                    <input
+                        value={customerName}
+                        onChange={(event) => setCustomerName(event.target.value)}
+                        placeholder="Customer name"
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                        required
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Site</span>
+                    <input
+                        value={site}
+                        onChange={(event) => setSite(event.target.value)}
+                        placeholder="Service address"
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                        required
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Priority</span>
+                    <select
+                        value={priority}
+                        onChange={(event) => setPriority(event.target.value as JobQueuePriority)}
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                    >
+                        {PRIORITIES.map((entry) => (
+                            <option key={entry} value={entry}>
+                                {entry}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
+                    <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={quotePartEstimate}
+                        onChange={(event) => setQuotePartEstimate(event.target.value)}
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                        required
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
+                    <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={quoteLaborEstimate}
+                        onChange={(event) => setQuoteLaborEstimate(event.target.value)}
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                        required
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
+                    <input
+                        type="number"
+                        min={0}
+                        value={quoteEstimatedMinutes}
+                        onChange={(event) => setQuoteEstimatedMinutes(event.target.value)}
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                        required
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
+                    <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={quoteEstimatedTotal}
+                        onChange={(event) => setQuoteEstimatedTotal(event.target.value)}
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                        required
+                    />
+                </label>
+                <label className="space-y-1 sm:col-span-2 lg:col-span-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
+                    <input
+                        value={quoteNotes}
+                        onChange={(event) => setQuoteNotes(event.target.value)}
+                        placeholder="Scope, exclusions, or customer notes"
+                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                    />
+                </label>
+                <div className="sm:col-span-2 lg:col-span-1 lg:self-end">
+                    <button
+                        type="submit"
+                        disabled={isPending}
+                        className="w-full rounded-md bg-[#0f766e] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70"
+                    >
+                        Add Job With Quote
+                    </button>
+                </div>
             </form>
 
             {feedback ? <p className="text-xs text-[#166534]">{feedback}</p> : null}
@@ -195,16 +354,13 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                 {jobs.map((job) => {
                     const draft = getDraft(job);
                     const isDirty = isDraftDirty(job);
+                    const closeoutDraft = getCloseoutDraft(job);
 
                     return (
                         <article key={job.id} className="rounded-md border border-[#e5e7eb] bg-white p-3">
                             <div className="flex items-center justify-between gap-2">
                                 <p className="font-semibold text-[#0f172a]">{job.id}</p>
-                                {isDirty ? (
-                                    <span className="rounded-full bg-[#fef3c7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b45309]">Unsaved</span>
-                                ) : (
-                                    <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#166534]">Saved</span>
-                                )}
+                                <span className="rounded-full bg-[#eef2ff] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#3730a3]">{job.status}</span>
                             </div>
 
                             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -279,16 +435,18 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                     </select>
                                 </label>
                                 <label className="space-y-1">
-                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Schedule</span>
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
                                     <input
-                                        type="datetime-local"
-                                        value={draft.scheduledFor}
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        value={draft.quotePartEstimate}
                                         onChange={(event) =>
                                             setDrafts((current) => ({
                                                 ...current,
                                                 [job.id]: {
                                                     ...draft,
-                                                    scheduledFor: event.target.value,
+                                                    quotePartEstimate: event.target.value,
                                                 },
                                             }))
                                         }
@@ -296,17 +454,87 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                     />
                                 </label>
                                 <label className="space-y-1">
-                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">ETA Minutes</span>
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
                                     <input
                                         type="number"
                                         min={0}
-                                        value={draft.etaMinutes}
+                                        step="0.01"
+                                        value={draft.quoteLaborEstimate}
                                         onChange={(event) =>
                                             setDrafts((current) => ({
                                                 ...current,
                                                 [job.id]: {
                                                     ...draft,
-                                                    etaMinutes: event.target.value,
+                                                    quoteLaborEstimate: event.target.value,
+                                                },
+                                            }))
+                                        }
+                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                    />
+                                </label>
+                                <label className="space-y-1">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        value={draft.quoteEstimatedMinutes}
+                                        onChange={(event) =>
+                                            setDrafts((current) => ({
+                                                ...current,
+                                                [job.id]: {
+                                                    ...draft,
+                                                    quoteEstimatedMinutes: event.target.value,
+                                                },
+                                            }))
+                                        }
+                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                    />
+                                </label>
+                                <label className="space-y-1">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        value={draft.quoteEstimatedTotal}
+                                        onChange={(event) =>
+                                            setDrafts((current) => ({
+                                                ...current,
+                                                [job.id]: {
+                                                    ...draft,
+                                                    quoteEstimatedTotal: event.target.value,
+                                                },
+                                            }))
+                                        }
+                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                    />
+                                </label>
+                                <label className="space-y-1 sm:col-span-2">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
+                                    <input
+                                        value={draft.quoteNotes}
+                                        onChange={(event) =>
+                                            setDrafts((current) => ({
+                                                ...current,
+                                                [job.id]: {
+                                                    ...draft,
+                                                    quoteNotes: event.target.value,
+                                                },
+                                            }))
+                                        }
+                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                    />
+                                </label>
+                                <label className="space-y-1 sm:col-span-2">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Follow-up Note</span>
+                                    <input
+                                        value={draft.followUpNote}
+                                        onChange={(event) =>
+                                            setDrafts((current) => ({
+                                                ...current,
+                                                [job.id]: {
+                                                    ...draft,
+                                                    followUpNote: event.target.value,
                                                 },
                                             }))
                                         }
@@ -315,9 +543,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                 </label>
                             </div>
 
-                            <p className="mt-3 text-[11px] text-[#475569]">
-                                Required SKUs: {job.requiredSkus.length > 0 ? job.requiredSkus.join(', ') : 'None'}
-                            </p>
+                            <p className="mt-3 text-[11px] text-[#475569]">Required SKUs: {job.requiredSkus.length > 0 ? job.requiredSkus.join(', ') : 'None'}</p>
 
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <button
@@ -336,6 +562,14 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                                 status: draft.status,
                                                 scheduledFor: draft.scheduledFor ? new Date(draft.scheduledFor).toISOString() : null,
                                                 etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
+                                                followUpNote: draft.followUpNote,
+                                                quote: {
+                                                    partEstimate: Number(draft.quotePartEstimate),
+                                                    laborEstimate: Number(draft.quoteLaborEstimate),
+                                                    estimatedMinutes: Number(draft.quoteEstimatedMinutes),
+                                                    estimatedTotal: Number(draft.quoteEstimatedTotal),
+                                                    notes: draft.quoteNotes,
+                                                },
                                             }),
                                         });
                                     }}
@@ -358,6 +592,117 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                 >
                                     Delete
                                 </button>
+                            </div>
+
+                            <div className="mt-4 rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[#334155]">Job Closeout</h4>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                    <label className="space-y-1">
+                                        <span className="text-[11px] text-[#475569]">Actual Part Cost</span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={closeoutDraft.actualPartCost}
+                                            onChange={(event) =>
+                                                setCloseoutDrafts((current) => ({
+                                                    ...current,
+                                                    [job.id]: { ...closeoutDraft, actualPartCost: event.target.value },
+                                                }))
+                                            }
+                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="text-[11px] text-[#475569]">Actual Labor Cost</span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={closeoutDraft.actualLaborCost}
+                                            onChange={(event) =>
+                                                setCloseoutDrafts((current) => ({
+                                                    ...current,
+                                                    [job.id]: { ...closeoutDraft, actualLaborCost: event.target.value },
+                                                }))
+                                            }
+                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="text-[11px] text-[#475569]">Actual Minutes</span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={closeoutDraft.actualMinutes}
+                                            onChange={(event) =>
+                                                setCloseoutDrafts((current) => ({
+                                                    ...current,
+                                                    [job.id]: { ...closeoutDraft, actualMinutes: event.target.value },
+                                                }))
+                                            }
+                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="text-[11px] text-[#475569]">Final Total</span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={closeoutDraft.finalTotal}
+                                            onChange={(event) =>
+                                                setCloseoutDrafts((current) => ({
+                                                    ...current,
+                                                    [job.id]: { ...closeoutDraft, finalTotal: event.target.value },
+                                                }))
+                                            }
+                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
+                                    <label className="space-y-1 sm:col-span-2">
+                                        <span className="text-[11px] text-[#475569]">Resolution Notes</span>
+                                        <input
+                                            value={closeoutDraft.resolutionNotes}
+                                            onChange={(event) =>
+                                                setCloseoutDrafts((current) => ({
+                                                    ...current,
+                                                    [job.id]: { ...closeoutDraft, resolutionNotes: event.target.value },
+                                                }))
+                                            }
+                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <p className="text-[11px] text-[#475569]">
+                                        {job.closeout?.closedOutAt ? `Closed out at ${new Date(job.closeout.closedOutAt).toLocaleString()}` : 'Not closed out yet'}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        disabled={isPending || !canCloseOut(closeoutDraft)}
+                                        className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
+                                        onClick={async () => {
+                                            await runMutation(
+                                                {
+                                                    method: 'POST',
+                                                    headers: { 'content-type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        id: job.id,
+                                                        actualPartCost: Number(closeoutDraft.actualPartCost),
+                                                        actualLaborCost: Number(closeoutDraft.actualLaborCost),
+                                                        actualMinutes: Number(closeoutDraft.actualMinutes),
+                                                        finalTotal: Number(closeoutDraft.finalTotal),
+                                                        resolutionNotes: closeoutDraft.resolutionNotes,
+                                                    }),
+                                                },
+                                                '/api/jobs/closeout',
+                                            );
+                                        }}
+                                    >
+                                        Close Out Job
+                                    </button>
+                                </div>
                             </div>
                         </article>
                     );
@@ -417,13 +762,14 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
 
                         const draft = getDraft(selectedJob);
                         const isDirty = isDraftDirty(selectedJob);
+                        const closeoutDraft = getCloseoutDraft(selectedJob);
 
                         return (
                             <div className="space-y-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div>
                                         <h3 className="text-sm font-semibold text-[#0f172a]">{selectedJob.id}</h3>
-                                        <p className="text-xs text-[#475569]">Detailed editing and inventory actions for this job.</p>
+                                        <p className="text-xs text-[#475569]">Full job details, quote economics, and closeout controls.</p>
                                     </div>
                                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDirty ? 'bg-[#fef3c7] text-[#b45309]' : 'bg-[#dcfce7] text-[#166534]'}`}>
                                         {isDirty ? 'Unsaved changes' : 'Saved'}
@@ -540,11 +886,118 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                             />
                                         </label>
                                     </div>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={draft.quotePartEstimate}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: {
+                                                            ...draft,
+                                                            quotePartEstimate: event.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={draft.quoteLaborEstimate}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: {
+                                                            ...draft,
+                                                            quoteLaborEstimate: event.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={draft.quoteEstimatedMinutes}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: {
+                                                            ...draft,
+                                                            quoteEstimatedMinutes: event.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={draft.quoteEstimatedTotal}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: {
+                                                            ...draft,
+                                                            quoteEstimatedTotal: event.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                    </div>
+                                    <label className="space-y-1">
+                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
+                                        <input
+                                            value={draft.quoteNotes}
+                                            onChange={(event) =>
+                                                setDrafts((current) => ({
+                                                    ...current,
+                                                    [selectedJob.id]: {
+                                                        ...draft,
+                                                        quoteNotes: event.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Follow-up Note</span>
+                                        <input
+                                            value={draft.followUpNote}
+                                            onChange={(event) =>
+                                                setDrafts((current) => ({
+                                                    ...current,
+                                                    [selectedJob.id]: {
+                                                        ...draft,
+                                                        followUpNote: event.target.value,
+                                                    },
+                                                }))
+                                            }
+                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
                                 </div>
 
-                                <p className="text-[11px] text-[#475569]">
-                                    Required SKUs: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None'}
-                                </p>
+                                <p className="text-[11px] text-[#475569]">Required SKUs: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None'}</p>
 
                                 <div className="flex flex-wrap gap-2">
                                     <button
@@ -563,6 +1016,14 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                                     status: draft.status,
                                                     scheduledFor: draft.scheduledFor ? new Date(draft.scheduledFor).toISOString() : null,
                                                     etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
+                                                    followUpNote: draft.followUpNote,
+                                                    quote: {
+                                                        partEstimate: Number(draft.quotePartEstimate),
+                                                        laborEstimate: Number(draft.quoteLaborEstimate),
+                                                        estimatedMinutes: Number(draft.quoteEstimatedMinutes),
+                                                        estimatedTotal: Number(draft.quoteEstimatedTotal),
+                                                        notes: draft.quoteNotes,
+                                                    },
                                                 }),
                                             });
                                         }}
@@ -585,6 +1046,117 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                     >
                                         Delete
                                     </button>
+                                </div>
+
+                                <div className="rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[#334155]">Job Closeout</h4>
+                                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] text-[#475569]">Actual Part Cost</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={closeoutDraft.actualPartCost}
+                                                onChange={(event) =>
+                                                    setCloseoutDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: { ...closeoutDraft, actualPartCost: event.target.value },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] text-[#475569]">Actual Labor Cost</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={closeoutDraft.actualLaborCost}
+                                                onChange={(event) =>
+                                                    setCloseoutDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: { ...closeoutDraft, actualLaborCost: event.target.value },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] text-[#475569]">Actual Minutes</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={closeoutDraft.actualMinutes}
+                                                onChange={(event) =>
+                                                    setCloseoutDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: { ...closeoutDraft, actualMinutes: event.target.value },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] text-[#475569]">Final Total</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={closeoutDraft.finalTotal}
+                                                onChange={(event) =>
+                                                    setCloseoutDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: { ...closeoutDraft, finalTotal: event.target.value },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1 sm:col-span-2">
+                                            <span className="text-[11px] text-[#475569]">Resolution Notes</span>
+                                            <input
+                                                value={closeoutDraft.resolutionNotes}
+                                                onChange={(event) =>
+                                                    setCloseoutDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: { ...closeoutDraft, resolutionNotes: event.target.value },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <p className="text-[11px] text-[#475569]">
+                                            {selectedJob.closeout?.closedOutAt ? `Closed out at ${new Date(selectedJob.closeout.closedOutAt).toLocaleString()}` : 'Not closed out yet'}
+                                        </p>
+                                        <button
+                                            type="button"
+                                            disabled={isPending || !canCloseOut(closeoutDraft)}
+                                            className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
+                                            onClick={async () => {
+                                                await runMutation(
+                                                    {
+                                                        method: 'POST',
+                                                        headers: { 'content-type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            id: selectedJob.id,
+                                                            actualPartCost: Number(closeoutDraft.actualPartCost),
+                                                            actualLaborCost: Number(closeoutDraft.actualLaborCost),
+                                                            actualMinutes: Number(closeoutDraft.actualMinutes),
+                                                            finalTotal: Number(closeoutDraft.finalTotal),
+                                                            resolutionNotes: closeoutDraft.resolutionNotes,
+                                                        }),
+                                                    },
+                                                    '/api/jobs/closeout',
+                                                );
+                                            }}
+                                        >
+                                            Close Out Job
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -613,9 +1185,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                     <span className="text-[11px] text-[#475569]">Lookup Warehoused Parts</span>
                                     <input
                                         value={lookupQuery[activeDialogJobId] ?? ''}
-                                        onChange={(event) =>
-                                            setLookupQuery((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                        }
+                                        onChange={(event) => setLookupQuery((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                         placeholder="Search SKU, item, or location"
                                         className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                     />
@@ -659,21 +1229,20 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                 <div className="flex flex-wrap gap-2">
                                     <input
                                         value={reserveSku[activeDialogJobId] ?? ''}
-                                        onChange={(event) =>
-                                            setReserveSku((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                        }
+                                        onChange={(event) => setReserveSku((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                         placeholder="SKU to reserve"
                                         className="min-w-40 rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                     />
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        value={reserveQty[activeDialogJobId] ?? 1}
-                                        onChange={(event) =>
-                                            setReserveQty((current) => ({ ...current, [activeDialogJobId]: Number(event.target.value) }))
-                                        }
-                                        className="w-24 rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                    />
+                                    <label className="space-y-1">
+                                        <span className="text-[11px] text-[#475569]">Reserve Quantity</span>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={reserveQty[activeDialogJobId] ?? 1}
+                                            onChange={(event) => setReserveQty((current) => ({ ...current, [activeDialogJobId]: Number(event.target.value) }))}
+                                            className="w-24 rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                        />
+                                    </label>
                                     <button
                                         type="button"
                                         disabled={isPending}
@@ -703,9 +1272,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                         <span className="text-[11px] text-[#475569]">SKU</span>
                                         <input
                                             value={createSku[activeDialogJobId] ?? ''}
-                                            onChange={(event) =>
-                                                setCreateSku((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                            }
+                                            onChange={(event) => setCreateSku((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                             placeholder="New SKU"
                                             className="rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                         />
@@ -714,9 +1281,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                         <span className="text-[11px] text-[#475569]">Item Name</span>
                                         <input
                                             value={createItemName[activeDialogJobId] ?? ''}
-                                            onChange={(event) =>
-                                                setCreateItemName((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                            }
+                                            onChange={(event) => setCreateItemName((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                             placeholder="Item name"
                                             className="rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                         />
@@ -725,9 +1290,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                         <span className="text-[11px] text-[#475569]">Location</span>
                                         <input
                                             value={createLocation[activeDialogJobId] ?? ''}
-                                            onChange={(event) =>
-                                                setCreateLocation((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                            }
+                                            onChange={(event) => setCreateLocation((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                             placeholder="Location"
                                             className="rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                         />
@@ -736,9 +1299,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                         <span className="text-[11px] text-[#475569]">Supplier</span>
                                         <input
                                             value={createSupplier[activeDialogJobId] ?? ''}
-                                            onChange={(event) =>
-                                                setCreateSupplier((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                            }
+                                            onChange={(event) => setCreateSupplier((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                             placeholder="Supplier"
                                             className="rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                         />
@@ -749,9 +1310,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                             type="number"
                                             min={0}
                                             value={createOnHand[activeDialogJobId] ?? 0}
-                                            onChange={(event) =>
-                                                setCreateOnHand((current) => ({ ...current, [activeDialogJobId]: Number(event.target.value) }))
-                                            }
+                                            onChange={(event) => setCreateOnHand((current) => ({ ...current, [activeDialogJobId]: Number(event.target.value) }))}
                                             className="rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                         />
                                     </label>
@@ -761,9 +1320,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                             type="number"
                                             min={0}
                                             value={createReorderPoint[activeDialogJobId] ?? 1}
-                                            onChange={(event) =>
-                                                setCreateReorderPoint((current) => ({ ...current, [activeDialogJobId]: Number(event.target.value) }))
-                                            }
+                                            onChange={(event) => setCreateReorderPoint((current) => ({ ...current, [activeDialogJobId]: Number(event.target.value) }))}
                                             className="rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                         />
                                     </label>
@@ -783,9 +1340,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                         <span className="text-[11px] text-[#475569]">Severity</span>
                                         <select
                                             value={createSeverity[activeDialogJobId] ?? 'medium'}
-                                            onChange={(event) =>
-                                                setCreateSeverity((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                            }
+                                            onChange={(event) => setCreateSeverity((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                             className="rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                         >
                                             <option value="low">low</option>
@@ -796,17 +1351,13 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                                     </label>
                                     <input
                                         value={createServiceLines[activeDialogJobId] ?? 'mobile,shop'}
-                                        onChange={(event) =>
-                                            setCreateServiceLines((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                        }
+                                        onChange={(event) => setCreateServiceLines((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                         placeholder="Service lines"
                                         className="sm:col-span-2 rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                     />
                                     <input
                                         value={createNote[activeDialogJobId] ?? ''}
-                                        onChange={(event) =>
-                                            setCreateNote((current) => ({ ...current, [activeDialogJobId]: event.target.value }))
-                                        }
+                                        onChange={(event) => setCreateNote((current) => ({ ...current, [activeDialogJobId]: event.target.value }))}
                                         placeholder="Compatibility note"
                                         className="sm:col-span-2 rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                     />
@@ -860,9 +1411,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                 <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
                     <article className="w-full max-w-md rounded-md bg-white p-4">
                         <h3 className="text-sm font-semibold text-[#0f172a]">Delete Job?</h3>
-                        <p className="mt-2 text-xs text-[#475569]">
-                            This will remove {pendingDeleteJobId} from the job queue. This action cannot be undone.
-                        </p>
+                        <p className="mt-2 text-xs text-[#475569]">This will remove {pendingDeleteJobId} from the job queue. This action cannot be undone.</p>
                         <div className="mt-4 flex justify-end gap-2">
                             <button
                                 type="button"
