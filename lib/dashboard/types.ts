@@ -37,6 +37,12 @@ export type JobQueueItem = {
     closedOutAt: string | null;
     resolutionNotes: string | null;
   };
+  timeClock?: {
+    clockedInAt: string | null; clockedOutAt: string | null;
+    breakMinutes: number;
+    elapsedMinutes: number;
+    notes: string | null;
+  };
 };
 
 export type ReplenishmentSeverity = 'low'|'medium'|'high'|'critical';

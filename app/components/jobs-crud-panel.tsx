@@ -50,6 +50,12 @@ type CloseoutDraft = {
 };
 
 type AddJobWizardStep = 1 | 2 | 3 | 4;
+type ActiveJobWizardStep = 1 | 2 | 3 | 4 | 5;
+
+type TimeClockDraft = {
+    breakMinutes: string;
+    notes: string;
+};
 
 function toNumber(value: string): number {
     return Number(value);
@@ -78,13 +84,42 @@ function quoteAsStrings(job: JobQueueItem) {
     };
 }
 
+function buildAutoCloseoutDraft(job: JobQueueItem): CloseoutDraft {
+    const quote = job.quote;
+    const trackedMinutes = job.timeClock?.elapsedMinutes ?? 0;
+    const laborRate = job.assignedTechnician?.laborRate ?? 0;
+    const actualMinutes = job.closeout?.actualMinutes ?? trackedMinutes;
+    const actualPartCost = job.closeout?.actualPartCost ?? quote?.partEstimate ?? 0;
+    const actualLaborCost = job.closeout?.actualLaborCost ?? Number(((actualMinutes / 60) * laborRate).toFixed(2));
+    const finalTotal = job.closeout?.finalTotal ?? Number((actualPartCost + actualLaborCost).toFixed(2));
+
+    return {
+        actualPartCost: String(actualPartCost),
+        actualLaborCost: String(actualLaborCost),
+        actualMinutes: String(actualMinutes),
+        finalTotal: String(finalTotal),
+        resolutionNotes: job.closeout?.resolutionNotes ?? '',
+    };
+}
+
 function closeoutAsDraft(job: JobQueueItem): CloseoutDraft {
+    if (!job.closeout || (job.closeout.actualPartCost === null && job.closeout.actualLaborCost === null && job.closeout.actualMinutes === null && job.closeout.finalTotal === null)) {
+        return buildAutoCloseoutDraft(job);
+    }
+
     return {
         actualPartCost: job.closeout?.actualPartCost === null || job.closeout?.actualPartCost === undefined ? '' : String(job.closeout.actualPartCost),
         actualLaborCost: job.closeout?.actualLaborCost === null || job.closeout?.actualLaborCost === undefined ? '' : String(job.closeout.actualLaborCost),
         actualMinutes: job.closeout?.actualMinutes === null || job.closeout?.actualMinutes === undefined ? '' : String(job.closeout.actualMinutes),
         finalTotal: job.closeout?.finalTotal === null || job.closeout?.finalTotal === undefined ? '' : String(job.closeout.finalTotal),
         resolutionNotes: job.closeout?.resolutionNotes ?? '',
+    };
+}
+
+function timeClockAsDraft(job: JobQueueItem): TimeClockDraft {
+    return {
+        breakMinutes: String(job.timeClock?.breakMinutes ?? 0),
+        notes: job.timeClock?.notes ?? '',
     };
 }
 
@@ -134,6 +169,8 @@ export function JobsCrudPanel({
     const [lookupQuery, setLookupQuery] = useState<Record<string, string>>({});
     const [drafts, setDrafts] = useState<Record<string, JobDraft>>({});
     const [closeoutDrafts, setCloseoutDrafts] = useState<Record<string, CloseoutDraft>>({});
+    const [timeClockDrafts, setTimeClockDrafts] = useState<Record<string, TimeClockDraft>>({});
+    const [activeJobWizardStep, setActiveJobWizardStep] = useState<ActiveJobWizardStep>(1);
 
     const jobs = useMemo(() => [...initialJobs].sort((left, right) => right.id.localeCompare(left.id)), [initialJobs]);
     const sortedInventoryLookupParts = useMemo(
@@ -242,6 +279,10 @@ export function JobsCrudPanel({
         return closeoutDrafts[job.id] ?? closeoutAsDraft(job);
     }
 
+    function getTimeClockDraft(job: JobQueueItem): TimeClockDraft {
+        return timeClockDrafts[job.id] ?? timeClockAsDraft(job);
+    }
+
     function canCloseOut(draft: CloseoutDraft): boolean {
         return (
             draft.actualPartCost !== '' &&
@@ -262,13 +303,15 @@ export function JobsCrudPanel({
 
             if (!response.ok) {
                 setError(payload?.error ?? 'Request failed.');
-                return;
+                return false;
             }
 
             setFeedback(payload?.message ?? 'Saved.');
             router.refresh();
+            return true;
         } catch {
             setError('Request failed. Please retry.');
+            return false;
         } finally {
             setIsPending(false);
         }
@@ -313,31 +356,13 @@ export function JobsCrudPanel({
 
             <form
                 className="space-y-3 rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3"
-                onSubmit={async (event) => {
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                    }
+                }}
+                onSubmit={(event) => {
                     event.preventDefault();
-
-                    await runMutation({
-                        method: 'POST',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({
-                            customerName,
-                            site,
-                            priority,
-                            scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
-                            requiredSkus,
-                            followUpNote,
-                            assignedTechnicianId: selectedTechnician?.id ?? null,
-                            quote: {
-                                partEstimate: quotePartEstimate,
-                                laborEstimate: 0,
-                                estimatedMinutes: toNumber(estimatedMinutes),
-                                estimatedTotal: 0,
-                                notes: quoteNotes,
-                            },
-                        }),
-                    });
-
-                    resetWizard();
                 }}
             >
                 <div className="flex items-center justify-between gap-2">
@@ -580,9 +605,35 @@ export function JobsCrudPanel({
                             </button>
                         ) : (
                             <button
-                                type="submit"
+                                type="button"
                                 disabled={isPending}
                                 className="rounded-md bg-[#0f766e] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70"
+                                onClick={async () => {
+                                    const ok = await runMutation({
+                                        method: 'POST',
+                                        headers: { 'content-type': 'application/json' },
+                                        body: JSON.stringify({
+                                            customerName,
+                                            site,
+                                            priority,
+                                            scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
+                                            requiredSkus,
+                                            followUpNote,
+                                            assignedTechnicianId: selectedTechnician?.id ?? null,
+                                            quote: {
+                                                partEstimate: quotePartEstimate,
+                                                laborEstimate: 0,
+                                                estimatedMinutes: toNumber(estimatedMinutes),
+                                                estimatedTotal: 0,
+                                                notes: quoteNotes,
+                                            },
+                                        }),
+                                    });
+
+                                    if (ok) {
+                                        resetWizard();
+                                    }
+                                }}
                             >
                                 Create Job
                             </button>
@@ -1007,6 +1058,7 @@ export function JobsCrudPanel({
                         const draft = getDraft(selectedJob);
                         const isDirty = isDraftDirty(selectedJob);
                         const closeoutDraft = getCloseoutDraft(selectedJob);
+                        const timeClockDraft = getTimeClockDraft(selectedJob);
 
                         return (
                             <div className="space-y-3">
@@ -1015,392 +1067,602 @@ export function JobsCrudPanel({
                                         <h3 className="text-sm font-semibold text-[#0f172a]">{selectedJob.id}</h3>
                                         <p className="text-xs text-[#475569]">Full job details, quote economics, and closeout controls.</p>
                                     </div>
-                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDirty ? 'bg-[#fef3c7] text-[#b45309]' : 'bg-[#dcfce7] text-[#166534]'}`}>
-                                        {isDirty ? 'Unsaved changes' : 'Saved'}
-                                    </span>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer</span>
-                                        <input
-                                            value={draft.customerName}
-                                            onChange={(event) =>
-                                                setDrafts((current) => ({
-                                                    ...current,
-                                                    [selectedJob.id]: { ...draft, customerName: event.target.value },
-                                                }))
-                                            }
-                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                        />
-                                    </label>
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Site</span>
-                                        <input
-                                            value={draft.site}
-                                            onChange={(event) =>
-                                                setDrafts((current) => ({
-                                                    ...current,
-                                                    [selectedJob.id]: { ...draft, site: event.target.value },
-                                                }))
-                                            }
-                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                        />
-                                    </label>
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Priority</span>
-                                            <select
-                                                value={draft.priority}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            priority: event.target.value as JobQueuePriority,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            >
-                                                {PRIORITIES.map((entry) => (
-                                                    <option key={entry} value={entry}>
-                                                        {entry}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Status</span>
-                                            <select
-                                                value={draft.status}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            status: event.target.value as JobQueueStatus,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            >
-                                                {STATUSES.map((entry) => (
-                                                    <option key={entry} value={entry}>
-                                                        {entry}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
-                                    </div>
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Schedule</span>
-                                            <input
-                                                type="datetime-local"
-                                                value={draft.scheduledFor}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            scheduledFor: event.target.value,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">ETA Minutes</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                value={draft.etaMinutes}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            etaMinutes: event.target.value,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                    </div>
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={draft.quotePartEstimate}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            quotePartEstimate: event.target.value,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={draft.quoteLaborEstimate}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            quoteLaborEstimate: event.target.value,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                value={draft.quoteEstimatedMinutes}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            quoteEstimatedMinutes: event.target.value,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={draft.quoteEstimatedTotal}
-                                                onChange={(event) =>
-                                                    setDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: {
-                                                            ...draft,
-                                                            quoteEstimatedTotal: event.target.value,
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                    </div>
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
-                                        <input
-                                            value={draft.quoteNotes}
-                                            onChange={(event) =>
-                                                setDrafts((current) => ({
-                                                    ...current,
-                                                    [selectedJob.id]: {
-                                                        ...draft,
-                                                        quoteNotes: event.target.value,
-                                                    },
-                                                }))
-                                            }
-                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                        />
-                                    </label>
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Follow-up Note</span>
-                                        <input
-                                            value={draft.followUpNote}
-                                            onChange={(event) =>
-                                                setDrafts((current) => ({
-                                                    ...current,
-                                                    [selectedJob.id]: {
-                                                        ...draft,
-                                                        followUpNote: event.target.value,
-                                                    },
-                                                }))
-                                            }
-                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                        />
-                                    </label>
-                                </div>
-
-                                <p className="text-[11px] text-[#475569]">Required Parts: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None'}</p>
-
-                                <div className="flex flex-wrap gap-2">
-                                    <button
-                                        type="button"
-                                        disabled={isPending || !isDirty}
-                                        className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
-                                        onClick={async () => {
-                                            await runMutation({
-                                                method: 'PATCH',
-                                                headers: { 'content-type': 'application/json' },
-                                                body: JSON.stringify({
-                                                    id: selectedJob.id,
-                                                    customerName: draft.customerName,
-                                                    site: draft.site,
-                                                    priority: draft.priority,
-                                                    status: draft.status,
-                                                    scheduledFor: draft.scheduledFor ? new Date(draft.scheduledFor).toISOString() : null,
-                                                    etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
-                                                    followUpNote: draft.followUpNote,
-                                                    quote: {
-                                                        partEstimate: Number(draft.quotePartEstimate),
-                                                        laborEstimate: Number(draft.quoteLaborEstimate),
-                                                        estimatedMinutes: Number(draft.quoteEstimatedMinutes),
-                                                        estimatedTotal: Number(draft.quoteEstimatedTotal),
-                                                        notes: draft.quoteNotes,
-                                                    },
-                                                }),
-                                            });
-                                        }}
-                                    >
-                                        Save
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={isPending}
-                                        className="rounded border border-[#bae6fd] bg-[#eff6ff] px-2 py-1 text-xs text-[#1d4ed8]"
-                                        onClick={() => setActiveDialogJobId(selectedJob.id)}
-                                    >
-                                        Inventory
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPendingDeleteJobId(selectedJob.id)}
-                                        className="rounded border border-[#fecaca] bg-[#fef2f2] px-2 py-1 text-xs text-[#991b1b]"
-                                        disabled={isPending}
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-
-                                <div className="rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3">
-                                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[#334155]">Job Closeout</h4>
-                                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] text-[#475569]">Actual Part Cost</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={closeoutDraft.actualPartCost}
-                                                onChange={(event) =>
-                                                    setCloseoutDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: { ...closeoutDraft, actualPartCost: event.target.value },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] text-[#475569]">Actual Labor Cost</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={closeoutDraft.actualLaborCost}
-                                                onChange={(event) =>
-                                                    setCloseoutDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: { ...closeoutDraft, actualLaborCost: event.target.value },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] text-[#475569]">Actual Minutes</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                value={closeoutDraft.actualMinutes}
-                                                onChange={(event) =>
-                                                    setCloseoutDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: { ...closeoutDraft, actualMinutes: event.target.value },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-[11px] text-[#475569]">Final Total</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={closeoutDraft.finalTotal}
-                                                onChange={(event) =>
-                                                    setCloseoutDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: { ...closeoutDraft, finalTotal: event.target.value },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                        <label className="space-y-1 sm:col-span-2">
-                                            <span className="text-[11px] text-[#475569]">Resolution Notes</span>
-                                            <input
-                                                value={closeoutDraft.resolutionNotes}
-                                                onChange={(event) =>
-                                                    setCloseoutDrafts((current) => ({
-                                                        ...current,
-                                                        [selectedJob.id]: { ...closeoutDraft, resolutionNotes: event.target.value },
-                                                    }))
-                                                }
-                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                            />
-                                        </label>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <p className="text-[11px] text-[#475569]">
-                                            {selectedJob.closeout?.closedOutAt ? `Closed out at ${new Date(selectedJob.closeout.closedOutAt).toLocaleString()}` : 'Not closed out yet'}
-                                        </p>
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <button
                                             type="button"
-                                            disabled={isPending || !canCloseOut(closeoutDraft)}
-                                            className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
-                                            onClick={async () => {
-                                                await runMutation(
-                                                    {
-                                                        method: 'POST',
+                                            disabled={isPending}
+                                            className="rounded border border-[#bae6fd] bg-[#eff6ff] px-2 py-1 text-[11px] text-[#1d4ed8]"
+                                            onClick={() => {
+                                                setActiveJobWizardStep(4);
+                                                setActiveDialogJobId(selectedJob.id);
+                                            }}
+                                        >
+                                            Inventory
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={isPending}
+                                            className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-[11px] text-[#166534]"
+                                            onClick={() => setActiveJobWizardStep(5)}
+                                        >
+                                            Closeout
+                                        </button>
+                                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDirty ? 'bg-[#fef3c7] text-[#b45309]' : 'bg-[#dcfce7] text-[#166534]'}`}>
+                                            {isDirty ? 'Unsaved changes' : 'Saved'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                                    <button
+                                        type="button"
+                                        className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 1 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
+                                        onClick={() => setActiveJobWizardStep(1)}
+                                    >
+                                        1. Core
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 2 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
+                                        onClick={() => setActiveJobWizardStep(2)}
+                                    >
+                                        2. Quote
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 3 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
+                                        onClick={() => setActiveJobWizardStep(3)}
+                                    >
+                                        3. Time Clock
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 4 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
+                                        onClick={() => setActiveJobWizardStep(4)}
+                                    >
+                                        4. Inventory
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`rounded border px-2 py-1 text-[11px] ${activeJobWizardStep === 5 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}
+                                        onClick={() => setActiveJobWizardStep(5)}
+                                    >
+                                        5. Closeout
+                                    </button>
+                                </div>
+
+                                {activeJobWizardStep === 1 ? (
+                                    <div className="grid gap-2">
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer</span>
+                                            <input
+                                                value={draft.customerName}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: { ...draft, customerName: event.target.value },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Site</span>
+                                            <input
+                                                value={draft.site}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: { ...draft, site: event.target.value },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Priority</span>
+                                                <select
+                                                    value={draft.priority}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                priority: event.target.value as JobQueuePriority,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                >
+                                                    {PRIORITIES.map((entry) => (
+                                                        <option key={entry} value={entry}>
+                                                            {entry}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Status</span>
+                                                <select
+                                                    value={draft.status}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                status: event.target.value as JobQueueStatus,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                >
+                                                    {STATUSES.map((entry) => (
+                                                        <option key={entry} value={entry}>
+                                                            {entry}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Schedule</span>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={draft.scheduledFor}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                scheduledFor: event.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">ETA Minutes</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={draft.etaMinutes}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                etaMinutes: event.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                        </div>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Follow-up Note</span>
+                                            <input
+                                                value={draft.followUpNote}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: {
+                                                            ...draft,
+                                                            followUpNote: event.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                    </div>
+                                ) : null}
+
+                                {activeJobWizardStep === 2 ? (
+                                    <div className="space-y-2 rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={draft.quotePartEstimate}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                quotePartEstimate: event.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={draft.quoteLaborEstimate}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                quoteLaborEstimate: event.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={draft.quoteEstimatedMinutes}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                quoteEstimatedMinutes: event.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={draft.quoteEstimatedTotal}
+                                                    onChange={(event) =>
+                                                        setDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...draft,
+                                                                quoteEstimatedTotal: event.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                        </div>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
+                                            <input
+                                                value={draft.quoteNotes}
+                                                onChange={(event) =>
+                                                    setDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: {
+                                                            ...draft,
+                                                            quoteNotes: event.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                    </div>
+                                ) : null}
+
+                                {activeJobWizardStep === 3 ? (
+                                    <div className="space-y-2 rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            <p className="text-xs text-[#475569]">Clock In: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.clockedInAt ? new Date(selectedJob.timeClock.clockedInAt).toLocaleString() : 'Not started'}</span></p>
+                                            <p className="text-xs text-[#475569]">Clock Out: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.clockedOutAt ? new Date(selectedJob.timeClock.clockedOutAt).toLocaleString() : 'In progress'}</span></p>
+                                            <p className="text-xs text-[#475569]">Tracked Minutes: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.elapsedMinutes ?? 0}</span></p>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] text-[#475569]">Break Minutes</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={timeClockDraft.breakMinutes}
+                                                    onChange={(event) =>
+                                                        setTimeClockDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: {
+                                                                ...timeClockDraft,
+                                                                breakMinutes: event.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                        </div>
+                                        <label className="space-y-1">
+                                            <span className="text-[11px] text-[#475569]">Time Clock Notes</span>
+                                            <input
+                                                value={timeClockDraft.notes}
+                                                onChange={(event) =>
+                                                    setTimeClockDrafts((current) => ({
+                                                        ...current,
+                                                        [selectedJob.id]: {
+                                                            ...timeClockDraft,
+                                                            notes: event.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                            />
+                                        </label>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={isPending}
+                                                className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
+                                                onClick={async () => {
+                                                    await runMutation({
+                                                        method: 'PATCH',
                                                         headers: { 'content-type': 'application/json' },
                                                         body: JSON.stringify({
                                                             id: selectedJob.id,
-                                                            actualPartCost: Number(closeoutDraft.actualPartCost),
-                                                            actualLaborCost: Number(closeoutDraft.actualLaborCost),
-                                                            actualMinutes: Number(closeoutDraft.actualMinutes),
-                                                            finalTotal: Number(closeoutDraft.finalTotal),
-                                                            resolutionNotes: closeoutDraft.resolutionNotes,
+                                                            timeClockAction: 'clock_in',
                                                         }),
-                                                    },
-                                                    '/api/jobs/closeout',
-                                                );
-                                            }}
+                                                    });
+                                                }}
+                                            >
+                                                Clock In
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={isPending}
+                                                className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
+                                                onClick={async () => {
+                                                    await runMutation({
+                                                        method: 'PATCH',
+                                                        headers: { 'content-type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            id: selectedJob.id,
+                                                            timeClockAction: 'clock_out',
+                                                        }),
+                                                    });
+                                                }}
+                                            >
+                                                Clock Out
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={isPending}
+                                                className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
+                                                onClick={async () => {
+                                                    await runMutation({
+                                                        method: 'PATCH',
+                                                        headers: { 'content-type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            id: selectedJob.id,
+                                                            timeClockAction: 'set_break',
+                                                            breakMinutes: Number(timeClockDraft.breakMinutes),
+                                                        }),
+                                                    });
+                                                }}
+                                            >
+                                                Save Break
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={isPending}
+                                                className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
+                                                onClick={async () => {
+                                                    await runMutation({
+                                                        method: 'PATCH',
+                                                        headers: { 'content-type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            id: selectedJob.id,
+                                                            timeClockAction: 'set_notes',
+                                                            timeClockNotes: timeClockDraft.notes,
+                                                        }),
+                                                    });
+                                                }}
+                                            >
+                                                Save Notes
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                {activeJobWizardStep === 4 ? (
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] text-[#475569]">Required Parts: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None'}</p>
+                                        <button
+                                            type="button"
+                                            disabled={isPending}
+                                            className="rounded border border-[#bae6fd] bg-[#eff6ff] px-2 py-1 text-xs text-[#1d4ed8]"
+                                            onClick={() => setActiveDialogJobId(selectedJob.id)}
                                         >
-                                            Close Out Job
+                                            Open Inventory Actions
                                         </button>
                                     </div>
+                                ) : null}
+
+                                {activeJobWizardStep === 1 || activeJobWizardStep === 2 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={isPending || !isDirty}
+                                            className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
+                                            onClick={async () => {
+                                                await runMutation({
+                                                    method: 'PATCH',
+                                                    headers: { 'content-type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        id: selectedJob.id,
+                                                        customerName: draft.customerName,
+                                                        site: draft.site,
+                                                        priority: draft.priority,
+                                                        status: draft.status,
+                                                        scheduledFor: draft.scheduledFor ? new Date(draft.scheduledFor).toISOString() : null,
+                                                        etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
+                                                        followUpNote: draft.followUpNote,
+                                                        quote: {
+                                                            partEstimate: Number(draft.quotePartEstimate),
+                                                            laborEstimate: Number(draft.quoteLaborEstimate),
+                                                            estimatedMinutes: Number(draft.quoteEstimatedMinutes),
+                                                            estimatedTotal: Number(draft.quoteEstimatedTotal),
+                                                            notes: draft.quoteNotes,
+                                                        },
+                                                    }),
+                                                });
+                                            }}
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingDeleteJobId(selectedJob.id)}
+                                            className="rounded border border-[#fecaca] bg-[#fef2f2] px-2 py-1 text-xs text-[#991b1b]"
+                                            disabled={isPending}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                ) : null}
+
+                                {activeJobWizardStep === 5 ? (
+                                    <div className="rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[#334155]">Job Closeout</h4>
+                                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] text-[#475569]">Actual Part Cost</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={closeoutDraft.actualPartCost}
+                                                    onChange={(event) =>
+                                                        setCloseoutDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: { ...closeoutDraft, actualPartCost: event.target.value },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] text-[#475569]">Actual Labor Cost</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={closeoutDraft.actualLaborCost}
+                                                    onChange={(event) =>
+                                                        setCloseoutDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: { ...closeoutDraft, actualLaborCost: event.target.value },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] text-[#475569]">Actual Minutes</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={closeoutDraft.actualMinutes}
+                                                    onChange={(event) =>
+                                                        setCloseoutDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: { ...closeoutDraft, actualMinutes: event.target.value },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] text-[#475569]">Final Total</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={closeoutDraft.finalTotal}
+                                                    onChange={(event) =>
+                                                        setCloseoutDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: { ...closeoutDraft, finalTotal: event.target.value },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                            <label className="space-y-1 sm:col-span-2">
+                                                <span className="text-[11px] text-[#475569]">Resolution Notes</span>
+                                                <input
+                                                    value={closeoutDraft.resolutionNotes}
+                                                    onChange={(event) =>
+                                                        setCloseoutDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: { ...closeoutDraft, resolutionNotes: event.target.value },
+                                                        }))
+                                                    }
+                                                    className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                />
+                                            </label>
+                                        </div>
+                                        <div className="mt-2 flex items-center justify-between">
+                                            <p className="text-[11px] text-[#475569]">
+                                                {selectedJob.closeout?.closedOutAt ? `Closed out at ${new Date(selectedJob.closeout.closedOutAt).toLocaleString()}` : 'Not closed out yet'}
+                                            </p>
+                                            <button
+                                                type="button"
+                                                disabled={isPending || !canCloseOut(closeoutDraft)}
+                                                className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
+                                                onClick={async () => {
+                                                    await runMutation(
+                                                        {
+                                                            method: 'POST',
+                                                            headers: { 'content-type': 'application/json' },
+                                                            body: JSON.stringify({
+                                                                id: selectedJob.id,
+                                                                actualPartCost: Number(closeoutDraft.actualPartCost),
+                                                                actualLaborCost: Number(closeoutDraft.actualLaborCost),
+                                                                actualMinutes: Number(closeoutDraft.actualMinutes),
+                                                                finalTotal: Number(closeoutDraft.finalTotal),
+                                                                resolutionNotes: closeoutDraft.resolutionNotes,
+                                                            }),
+                                                        },
+                                                        '/api/jobs/closeout',
+                                                    );
+                                                }}
+                                            >
+                                                Close Out Job
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                <div className="flex items-center justify-between gap-2 border-t border-[#e5e7eb] pt-2">
+                                    <button
+                                        type="button"
+                                        className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
+                                        disabled={activeJobWizardStep === 1}
+                                        onClick={() => setActiveJobWizardStep((step) => (step > 1 ? ((step - 1) as ActiveJobWizardStep) : step))}
+                                    >
+                                        Back
+                                    </button>
+                                    <p className="text-[11px] text-[#64748b]">Step {activeJobWizardStep} of 5</p>
+                                    <button
+                                        type="button"
+                                        className="rounded border border-[#0f766e] bg-[#ecfeff] px-2 py-1 text-xs font-semibold text-[#0f766e] disabled:opacity-50"
+                                        disabled={activeJobWizardStep === 5}
+                                        onClick={() => setActiveJobWizardStep((step) => (step < 5 ? ((step + 1) as ActiveJobWizardStep) : step))}
+                                    >
+                                        Next
+                                    </button>
                                 </div>
                             </div>
                         );

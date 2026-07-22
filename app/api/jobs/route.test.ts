@@ -379,4 +379,70 @@ describe('jobs api route', () => {
        expect(mockedCreateInventoryPart).toHaveBeenCalledOnce();
        expect(mockedUpdateJobRecord).toHaveBeenCalled();
      });
+
+  it('clocks in a job via time clock action', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: 'JOB-1',
+        timeClockAction: 'clock_in',
+      }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1',
+            'JOB-1',
+            expect.objectContaining({
+              timeClock: expect.objectContaining({
+                clockedInAt: expect.any(String),
+                clockedOutAt: null,
+              }),
+            }),
+        );
+  });
+
+  it('sets break minutes via time clock action', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: 'JOB-1',
+        timeClockAction: 'set_break',
+        breakMinutes: 20,
+      }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1',
+            'JOB-1',
+            expect.objectContaining({
+              timeClock: {breakMinutes: 20},
+            }),
+        );
+  });
+
+  it('rejects invalid break minutes via time clock action', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: 'JOB-1',
+        timeClockAction: 'set_break',
+        breakMinutes: -2,
+      }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(400);
+  });
 });

@@ -68,6 +68,10 @@ model JobRecord {
     estimatedMinutes       Int
     estimatedTotal         Decimal   @db.Decimal(10, 2)
     quoteNotes             String?
+    clockedInAt            DateTime?
+    clockedOutAt           DateTime?
+    breakMinutes           Int       @default(0)
+    timeClockNotes         String?
     actualPartCost         Decimal?  @db.Decimal(10, 2)
     actualLaborCost        Decimal?  @db.Decimal(10, 2)
     actualMinutes          Int?

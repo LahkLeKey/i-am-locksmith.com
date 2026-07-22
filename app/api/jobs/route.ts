@@ -47,6 +47,9 @@ type UpdateJobRequest = {
     estimatedTotal?: number;
     notes?: string | null;
   };
+  timeClockAction?: 'clock_in' | 'clock_out' | 'set_break' | 'set_notes';
+  breakMinutes?: number;
+  timeClockNotes?: string | null;
   inventoryAction?: 'reserve' | 'create_inventory';
   inventorySku?: string;
   reserveQuantity?: number;
@@ -443,6 +446,90 @@ export async function PATCH(request: Request) {
       job: updated,
       part: createdPart,
     });
+  }
+
+  if (body.timeClockAction) {
+    const authResult = await authorize('jobs.update');
+
+    if ('error' in authResult) {
+      return authResult.error;
+    }
+
+    const current = await getJobRecord(authResult.orgId, body.id);
+    if (!current) {
+      return NextResponse.json({error: 'Job not found'}, {status: 404});
+    }
+
+    if (body.timeClockAction === 'clock_in') {
+      const updated = await updateJobRecord(authResult.orgId, body.id, {
+        status: current.status === 'queued' ? 'in_progress' : undefined,
+        timeClock: {
+          clockedInAt: new Date().toISOString(),
+          clockedOutAt: null,
+        },
+      });
+
+      if (!updated) {
+        return NextResponse.json({error: 'Job not found'}, {status: 404});
+      }
+
+      return NextResponse.json(
+          {ok: true, message: `Clocked in ${updated.id}`, job: updated});
+    }
+
+    if (body.timeClockAction === 'clock_out') {
+      const updated = await updateJobRecord(authResult.orgId, body.id, {
+        timeClock: {
+          clockedOutAt: new Date().toISOString(),
+        },
+      });
+
+      if (!updated) {
+        return NextResponse.json({error: 'Job not found'}, {status: 404});
+      }
+
+      return NextResponse.json(
+          {ok: true, message: `Clocked out ${updated.id}`, job: updated});
+    }
+
+    if (body.timeClockAction === 'set_break') {
+      if (!Number.isFinite(body.breakMinutes) || body.breakMinutes! < 0) {
+        return NextResponse.json(
+            {error: 'breakMinutes must be a non-negative number'},
+            {status: 400});
+      }
+
+      const updated = await updateJobRecord(authResult.orgId, body.id, {
+        timeClock: {
+          breakMinutes: Math.trunc(body.breakMinutes!),
+        },
+      });
+
+      if (!updated) {
+        return NextResponse.json({error: 'Job not found'}, {status: 404});
+      }
+
+      return NextResponse.json(
+          {ok: true, message: `Updated break for ${updated.id}`, job: updated});
+    }
+
+    if (body.timeClockAction === 'set_notes') {
+      const updated = await updateJobRecord(authResult.orgId, body.id, {
+        timeClock: {
+          notes: body.timeClockNotes?.trim() || null,
+        },
+      });
+
+      if (!updated) {
+        return NextResponse.json({error: 'Job not found'}, {status: 404});
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: `Updated time notes for ${updated.id}`,
+        job: updated
+      });
+    }
   }
 
   const authResult = await authorize('jobs.update');

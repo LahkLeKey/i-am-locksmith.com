@@ -35,6 +35,12 @@ export type JobRecordUpdate = {
     estimatedTotal?: number;
     notes?: string | null;
   };
+  timeClock?: {
+    clockedInAt?: string | null;
+    clockedOutAt?: string | null;
+    breakMinutes?: number;
+    notes?: string | null;
+  };
 };
 
 export type JobCloseoutInput = {
@@ -60,6 +66,10 @@ type JobRecordRow = {
   estimatedMinutes: number;
   estimatedTotal: unknown;
   quoteNotes: string | null;
+  clockedInAt: Date | null;
+  clockedOutAt: Date | null;
+  breakMinutes: number;
+  timeClockNotes: string | null;
   actualPartCost: unknown;
   actualLaborCost: unknown;
   actualMinutes: number | null;
@@ -93,6 +103,10 @@ type JobRecordClient = {
         estimatedMinutes: number;
         estimatedTotal: number;
         quoteNotes: string | null;
+        clockedInAt: Date | null;
+        clockedOutAt: Date | null;
+        breakMinutes: number;
+        timeClockNotes: string | null;
       };
     }) => Promise<JobRecordRow>;
     update: (args: {where: {id: string}; data: Record<string, unknown>;}) =>
@@ -170,6 +184,22 @@ function toJobQueueItem(row: JobRecordRow): JobQueueItem {
       closedOutAt: row.closedOutAt ? row.closedOutAt.toISOString() : null,
       resolutionNotes: row.closeoutNotes,
     },
+    timeClock: {
+      clockedInAt: row.clockedInAt ? row.clockedInAt.toISOString() : null,
+      clockedOutAt: row.clockedOutAt ? row.clockedOutAt.toISOString() : null,
+      breakMinutes: row.breakMinutes,
+      elapsedMinutes: (() => {
+        if (!row.clockedInAt) {
+          return 0;
+        }
+
+        const end = row.clockedOutAt ? row.clockedOutAt : new Date();
+        const elapsed = Math.max(
+            0, Math.floor((end.getTime() - row.clockedInAt.getTime()) / 60000));
+        return Math.max(0, elapsed - row.breakMinutes);
+      })(),
+      notes: row.timeClockNotes,
+    },
   };
 }
 
@@ -224,6 +254,10 @@ export async function createJobRecord(
       estimatedMinutes: input.quote.estimatedMinutes,
       estimatedTotal: input.quote.estimatedTotal,
       quoteNotes: input.quote.notes,
+      clockedInAt: null,
+      clockedOutAt: null,
+      breakMinutes: 0,
+      timeClockNotes: null,
     },
   });
 
@@ -281,6 +315,24 @@ export async function updateJobRecord(
               {}),
       ...(input.quote?.notes !== undefined ? {quoteNotes: input.quote.notes} :
                                              {}),
+      ...(input.timeClock?.clockedInAt !== undefined ? {
+        clockedInAt: input.timeClock.clockedInAt ?
+            new Date(input.timeClock.clockedInAt) :
+            null
+      } :
+                                                       {}),
+      ...(input.timeClock?.clockedOutAt !== undefined ? {
+        clockedOutAt: input.timeClock.clockedOutAt ?
+            new Date(input.timeClock.clockedOutAt) :
+            null
+      } :
+                                                        {}),
+      ...(input.timeClock?.breakMinutes !== undefined ?
+              {breakMinutes: input.timeClock.breakMinutes} :
+              {}),
+      ...(input.timeClock?.notes !== undefined ?
+              {timeClockNotes: input.timeClock.notes} :
+              {}),
     },
   });
 
