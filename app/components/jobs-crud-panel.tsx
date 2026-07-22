@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
-import { InventoryActionCard, INVENTORY_SERVICE_LINE_OPTIONS, ServiceLineBadgeRow } from '@/app/components/inventory-shared';
+import { InventoryActionCard } from '@/app/components/inventory-shared';
 
 import 'react-quill-new/dist/quill.snow.css';
 
@@ -308,7 +308,8 @@ export function JobsCrudPanel({
     const [createLocation, setCreateLocation] = useState<Record<string, string>>({});
     const [createSupplier, setCreateSupplier] = useState<Record<string, string>>({});
     const [createNote, setCreateNote] = useState<Record<string, string>>({});
-    const [createServiceLines, setCreateServiceLines] = useState<Record<string, string>>({});
+    const [createServiceLines, setCreateServiceLines] = useState<Record<string, string[]>>({});
+    const [createServiceLineInput, setCreateServiceLineInput] = useState<Record<string, string>>({});
     const [createOnHand, setCreateOnHand] = useState<Record<string, number>>({});
     const [createReorderPoint, setCreateReorderPoint] = useState<Record<string, number>>({});
     const [createSuggestedOrderQty, setCreateSuggestedOrderQty] = useState<Record<string, number>>({});
@@ -1568,6 +1569,38 @@ export function JobsCrudPanel({
                                                         title="Create Inventory Part"
                                                         description="Add a missing catalog item and attach it to this job in one step."
                                                     >
+                                                        {(() => {
+                                                            const currentServiceLines =
+                                                                createServiceLines[selectedJob.id] ?? ['mobile', 'shop'];
+
+                                                            const addServiceLineTag = () => {
+                                                                const nextTag = (createServiceLineInput[selectedJob.id] ?? '').trim().toLowerCase();
+                                                                if (!nextTag || currentServiceLines.includes(nextTag)) {
+                                                                    return;
+                                                                }
+
+                                                                setCreateServiceLines((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: [...currentServiceLines, nextTag],
+                                                                }));
+                                                                setCreateServiceLineInput((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: '',
+                                                                }));
+                                                            };
+
+                                                            const removeServiceLineTag = (tag: string) => {
+                                                                setCreateServiceLines((current) => {
+                                                                    const next = (current[selectedJob.id] ?? ['mobile', 'shop'])
+                                                                        .filter((entry) => entry !== tag);
+                                                                    return {
+                                                                        ...current,
+                                                                        [selectedJob.id]: next,
+                                                                    };
+                                                                });
+                                                            };
+
+                                                            return (
                                                         <div className="grid gap-2.5 sm:grid-cols-2">
                                                             <label className="space-y-1.5">
                                                                 <span className="text-[11px] text-[#475569]">SKU</span>
@@ -1650,21 +1683,68 @@ export function JobsCrudPanel({
                                                                     <option value="critical">critical</option>
                                                                 </select>
                                                             </label>
-                                                            <input
-                                                                value={createServiceLines[selectedJob.id] ?? 'mobile,shop'}
-                                                                onChange={(event) => setCreateServiceLines((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                placeholder="Service lines"
-                                                                className="sm:col-span-2 rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                            />
-                                                            <input
-                                                                value={createNote[selectedJob.id] ?? ''}
-                                                                onChange={(event) => setCreateNote((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                placeholder="Compatibility note"
-                                                                className="sm:col-span-2 rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                            />
+                                                            <label className="space-y-1.5 sm:col-span-2">
+                                                                <span className="text-[11px] text-[#475569]">Service Lines</span>
+                                                                <div className="space-y-2 rounded border border-[#d1d5db] bg-white p-2">
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {currentServiceLines.length === 0 ? (
+                                                                            <span className="text-xs text-[#64748b]">No service lines selected.</span>
+                                                                        ) : (
+                                                                            currentServiceLines.map((line) => (
+                                                                                <span key={`${selectedJob.id}-${line}`} className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#334155]">
+                                                                                    {line}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        aria-label={`Remove ${line}`}
+                                                                                        className="rounded-full border border-[#cbd5e1] px-1 text-[9px] leading-none text-[#475569]"
+                                                                                        onClick={() => removeServiceLineTag(line)}
+                                                                                    >
+                                                                                        X
+                                                                                    </button>
+                                                                                </span>
+                                                                            ))
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                                                                        <input
+                                                                            value={createServiceLineInput[selectedJob.id] ?? ''}
+                                                                            onChange={(event) =>
+                                                                                setCreateServiceLineInput((current) => ({
+                                                                                    ...current,
+                                                                                    [selectedJob.id]: event.target.value,
+                                                                                }))
+                                                                            }
+                                                                            placeholder="Add service line tag"
+                                                                            className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            className="rounded border border-[#cbd5e1] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
+                                                                            onClick={addServiceLineTag}
+                                                                        >
+                                                                            Add Tag
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </label>
+                                                            <div className="sm:col-span-2">
+                                                                <RichTextMarkdownField
+                                                                    label="Compatibility Note"
+                                                                    value={createNote[selectedJob.id] ?? ''}
+                                                                    onChange={(value) =>
+                                                                        setCreateNote((current) => ({
+                                                                            ...current,
+                                                                            [selectedJob.id]: value,
+                                                                        }))
+                                                                    }
+                                                                    placeholder="Compatibility details, fitment caveats, and technician guidance"
+                                                                    minRows={3}
+                                                                />
+                                                            </div>
                                                         </div>
+                                                            );
+                                                        })()}
                                                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                                                            <ServiceLineBadgeRow lines={INVENTORY_SERVICE_LINE_OPTIONS} className="flex flex-wrap items-center gap-2" />
                                                             <button
                                                                 type="button"
                                                                 disabled={isPending}
@@ -1679,10 +1759,10 @@ export function JobsCrudPanel({
                                                                             inventorySku: createSku[selectedJob.id] ?? '',
                                                                             createInventory: {
                                                                                 itemName: createItemName[selectedJob.id] ?? '',
-                                                                                serviceLines: (createServiceLines[selectedJob.id] ?? 'mobile,shop')
-                                                                                    .split(',')
-                                                                                    .map((entry) => entry.trim())
-                                                                                    .filter(Boolean),
+                                                                                serviceLines:
+                                                                                    createServiceLines[selectedJob.id] && createServiceLines[selectedJob.id].length > 0 ?
+                                                                                        createServiceLines[selectedJob.id] :
+                                                                                        ['mobile', 'shop'],
                                                                                 location: createLocation[selectedJob.id] ?? '',
                                                                                 onHand: createOnHand[selectedJob.id] ?? 0,
                                                                                 reorderPoint: createReorderPoint[selectedJob.id] ?? 1,
