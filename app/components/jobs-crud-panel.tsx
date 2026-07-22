@@ -559,19 +559,20 @@ export function JobsCrudPanel({
                             event.preventDefault();
                         }}
                     >
-                        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col space-y-5">
+                        <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col space-y-5">
+                            <button
+                                type="button"
+                                aria-label="Close add job wizard"
+                                className="absolute right-0 top-0 rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-sm font-semibold text-[#334155]"
+                                onClick={resetWizard}
+                            >
+                                X
+                            </button>
                             <div className="flex items-center justify-between gap-3 border-b border-[#dbe3f0] pb-4">
                                 <div>
                                     <p className="text-xs font-semibold uppercase tracking-wide text-[#334155]">Add Job Wizard</p>
                                     <p className="mt-1 text-[11px] text-[#64748b]">Step {wizardStep} of 4</p>
                                 </div>
-                                <button
-                                    type="button"
-                                    className="rounded border border-[#cbd5e1] bg-white px-3 py-2 text-xs"
-                                    onClick={resetWizard}
-                                >
-                                    Close
-                                </button>
                             </div>
 
                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -962,7 +963,15 @@ export function JobsCrudPanel({
             {isActiveWorkflowOpen && selectedDesktopJob ? (
                 <div className="fixed inset-0 z-40 bg-[#f7f8fb]">
                     <section className="flex min-h-screen flex-col overflow-y-auto px-4 py-6 sm:px-6">
-                        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5">
+                        <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5">
+                            <button
+                                type="button"
+                                aria-label="Close active job workflow"
+                                className="absolute right-0 top-0 rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-sm font-semibold text-[#334155]"
+                                onClick={() => setIsActiveWorkflowOpen(false)}
+                            >
+                                X
+                            </button>
                             {(() => {
                                 const selectedJob = selectedDesktopJob;
                                 const draft = getDraft(selectedJob);
@@ -978,13 +987,6 @@ export function JobsCrudPanel({
                                                 <p className="text-xs text-[#475569]">Full job details, quote economics, and closeout controls.</p>
                                             </div>
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-[11px]"
-                                                    onClick={() => setIsActiveWorkflowOpen(false)}
-                                                >
-                                                    Close
-                                                </button>
                                                 <button
                                                     type="button"
                                                     disabled={isPending}
@@ -1958,7 +1960,15 @@ export function JobsCrudPanel({
             ) : null}
             {pendingDeleteJobId ? (
                 <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-                    <article className="w-full max-w-md rounded-md bg-white p-4">
+                    <article className="relative w-full max-w-md rounded-md bg-white p-4">
+                        <button
+                            type="button"
+                            aria-label="Close delete confirmation"
+                            className="absolute right-3 top-3 rounded-full border border-[#d1d5db] px-2 py-0.5 text-xs font-semibold text-[#475569]"
+                            onClick={() => setPendingDeleteJobId(null)}
+                        >
+                            X
+                        </button>
                         <h3 className="text-sm font-semibold text-[#0f172a]">Delete Job?</h3>
                         <p className="mt-2 text-xs text-[#475569]">This will remove {pendingDeleteJobId} from the job queue. This action cannot be undone.</p>
                         <div className="mt-4 flex justify-end gap-2">
