@@ -354,8 +354,8 @@ export async function PATCH(request: Request) {
     const computedPartEstimate =
         computePartEstimateFromSkus(nextRequiredSkus, parts);
     const laborEstimate = current.quote?.laborEstimate ?? 0;
-    const computedEstimatedTotal = Number(
-      (computedPartEstimate + laborEstimate).toFixed(2));
+    const computedEstimatedTotal =
+        Number((computedPartEstimate + laborEstimate).toFixed(2));
 
     const updated = await updateJobRecord(
         authResult.orgId,
@@ -461,8 +461,8 @@ export async function PATCH(request: Request) {
       },
     ]);
     const laborEstimate = current.quote?.laborEstimate ?? 0;
-    const computedEstimatedTotal = Number(
-        (computedPartEstimate + laborEstimate).toFixed(2));
+    const computedEstimatedTotal =
+        Number((computedPartEstimate + laborEstimate).toFixed(2));
 
     const updated = await updateJobRecord(
         authResult.orgId,
@@ -660,8 +660,8 @@ export async function PATCH(request: Request) {
 
       computedLaborEstimate =
           computeLaborEstimate(normalizedMinutes, technician.hourlyRate);
-      computedEstimatedTotal = Number(
-          (partEstimateSource + computedLaborEstimate).toFixed(2));
+      computedEstimatedTotal =
+          Number((partEstimateSource + computedLaborEstimate).toFixed(2));
     } else {
       assignedTechnicianName = null;
       laborRate = null;

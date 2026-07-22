@@ -1,5 +1,5 @@
-import {ProtectedShell} from '@/app/components/protected-shell';
-import {requireAuthenticatedContext} from '@/lib/rbac/guard';
+import { ProtectedShell } from '@/app/components/protected-shell';
+import { requireAuthenticatedContext } from '@/lib/rbac/guard';
 
 export default async function ProtectedLayout({
   children,
