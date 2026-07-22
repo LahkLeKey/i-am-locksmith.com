@@ -1601,147 +1601,147 @@ export function JobsCrudPanel({
                                                             };
 
                                                             return (
-                                                        <div className="grid gap-2.5 sm:grid-cols-2">
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">SKU</span>
-                                                                <input
-                                                                    value={createSku[selectedJob.id] ?? ''}
-                                                                    onChange={(event) => setCreateSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                    placeholder="New SKU"
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Item Name</span>
-                                                                <input
-                                                                    value={createItemName[selectedJob.id] ?? ''}
-                                                                    onChange={(event) => setCreateItemName((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                    placeholder="Item name"
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Location</span>
-                                                                <input
-                                                                    value={createLocation[selectedJob.id] ?? ''}
-                                                                    onChange={(event) => setCreateLocation((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                    placeholder="Location"
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Supplier</span>
-                                                                <input
-                                                                    value={createSupplier[selectedJob.id] ?? ''}
-                                                                    onChange={(event) => setCreateSupplier((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                    placeholder="Supplier"
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">On Hand</span>
-                                                                <input
-                                                                    type="number"
-                                                                    min={0}
-                                                                    value={createOnHand[selectedJob.id] ?? 0}
-                                                                    onChange={(event) => setCreateOnHand((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Reorder Point</span>
-                                                                <input
-                                                                    type="number"
-                                                                    min={0}
-                                                                    value={createReorderPoint[selectedJob.id] ?? 1}
-                                                                    onChange={(event) => setCreateReorderPoint((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Suggested Qty</span>
-                                                                <input
-                                                                    type="number"
-                                                                    min={0}
-                                                                    value={createSuggestedOrderQty[selectedJob.id] ?? 5}
-                                                                    onChange={(event) =>
-                                                                        setCreateSuggestedOrderQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))
-                                                                    }
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Severity</span>
-                                                                <select
-                                                                    value={createSeverity[selectedJob.id] ?? 'medium'}
-                                                                    onChange={(event) => setCreateSeverity((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                    className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                >
-                                                                    <option value="low">low</option>
-                                                                    <option value="medium">medium</option>
-                                                                    <option value="high">high</option>
-                                                                    <option value="critical">critical</option>
-                                                                </select>
-                                                            </label>
-                                                            <label className="space-y-1.5 sm:col-span-2">
-                                                                <span className="text-[11px] text-[#475569]">Service Lines</span>
-                                                                <div className="space-y-2 rounded border border-[#d1d5db] bg-white p-2">
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        {currentServiceLines.length === 0 ? (
-                                                                            <span className="text-xs text-[#64748b]">No service lines selected.</span>
-                                                                        ) : (
-                                                                            currentServiceLines.map((line) => (
-                                                                                <span key={`${selectedJob.id}-${line}`} className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#334155]">
-                                                                                    {line}
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        aria-label={`Remove ${line}`}
-                                                                                        className="rounded-full border border-[#cbd5e1] px-1 text-[9px] leading-none text-[#475569]"
-                                                                                        onClick={() => removeServiceLineTag(line)}
-                                                                                    >
-                                                                                        X
-                                                                                    </button>
-                                                                                </span>
-                                                                            ))
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                                                                <div className="grid gap-2.5 sm:grid-cols-2">
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">SKU</span>
                                                                         <input
-                                                                            value={createServiceLineInput[selectedJob.id] ?? ''}
+                                                                            value={createSku[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="New SKU"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Item Name</span>
+                                                                        <input
+                                                                            value={createItemName[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateItemName((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="Item name"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Location</span>
+                                                                        <input
+                                                                            value={createLocation[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateLocation((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="Location"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Supplier</span>
+                                                                        <input
+                                                                            value={createSupplier[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateSupplier((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="Supplier"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">On Hand</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            value={createOnHand[selectedJob.id] ?? 0}
+                                                                            onChange={(event) => setCreateOnHand((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Reorder Point</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            value={createReorderPoint[selectedJob.id] ?? 1}
+                                                                            onChange={(event) => setCreateReorderPoint((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Suggested Qty</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            value={createSuggestedOrderQty[selectedJob.id] ?? 5}
                                                                             onChange={(event) =>
-                                                                                setCreateServiceLineInput((current) => ({
+                                                                                setCreateSuggestedOrderQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))
+                                                                            }
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Severity</span>
+                                                                        <select
+                                                                            value={createSeverity[selectedJob.id] ?? 'medium'}
+                                                                            onChange={(event) => setCreateSeverity((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        >
+                                                                            <option value="low">low</option>
+                                                                            <option value="medium">medium</option>
+                                                                            <option value="high">high</option>
+                                                                            <option value="critical">critical</option>
+                                                                        </select>
+                                                                    </label>
+                                                                    <label className="space-y-1.5 sm:col-span-2">
+                                                                        <span className="text-[11px] text-[#475569]">Service Lines</span>
+                                                                        <div className="space-y-2 rounded border border-[#d1d5db] bg-white p-2">
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {currentServiceLines.length === 0 ? (
+                                                                                    <span className="text-xs text-[#64748b]">No service lines selected.</span>
+                                                                                ) : (
+                                                                                    currentServiceLines.map((line) => (
+                                                                                        <span key={`${selectedJob.id}-${line}`} className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#334155]">
+                                                                                            {line}
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                aria-label={`Remove ${line}`}
+                                                                                                className="rounded-full border border-[#cbd5e1] px-1 text-[9px] leading-none text-[#475569]"
+                                                                                                onClick={() => removeServiceLineTag(line)}
+                                                                                            >
+                                                                                                X
+                                                                                            </button>
+                                                                                        </span>
+                                                                                    ))
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                                                                                <input
+                                                                                    value={createServiceLineInput[selectedJob.id] ?? ''}
+                                                                                    onChange={(event) =>
+                                                                                        setCreateServiceLineInput((current) => ({
+                                                                                            ...current,
+                                                                                            [selectedJob.id]: event.target.value,
+                                                                                        }))
+                                                                                    }
+                                                                                    placeholder="Add service line tag"
+                                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                                />
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="rounded border border-[#cbd5e1] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
+                                                                                    onClick={addServiceLineTag}
+                                                                                >
+                                                                                    Add Tag
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </label>
+                                                                    <div className="sm:col-span-2">
+                                                                        <RichTextMarkdownField
+                                                                            label="Compatibility Note"
+                                                                            value={createNote[selectedJob.id] ?? ''}
+                                                                            onChange={(value) =>
+                                                                                setCreateNote((current) => ({
                                                                                     ...current,
-                                                                                    [selectedJob.id]: event.target.value,
+                                                                                    [selectedJob.id]: value,
                                                                                 }))
                                                                             }
-                                                                            placeholder="Add service line tag"
-                                                                            className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            placeholder="Compatibility details, fitment caveats, and technician guidance"
+                                                                            minRows={3}
                                                                         />
-                                                                        <button
-                                                                            type="button"
-                                                                            className="rounded border border-[#cbd5e1] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
-                                                                            onClick={addServiceLineTag}
-                                                                        >
-                                                                            Add Tag
-                                                                        </button>
                                                                     </div>
                                                                 </div>
-                                                            </label>
-                                                            <div className="sm:col-span-2">
-                                                                <RichTextMarkdownField
-                                                                    label="Compatibility Note"
-                                                                    value={createNote[selectedJob.id] ?? ''}
-                                                                    onChange={(value) =>
-                                                                        setCreateNote((current) => ({
-                                                                            ...current,
-                                                                            [selectedJob.id]: value,
-                                                                        }))
-                                                                    }
-                                                                    placeholder="Compatibility details, fitment caveats, and technician guidance"
-                                                                    minRows={3}
-                                                                />
-                                                            </div>
-                                                        </div>
                                                             );
                                                         })()}
                                                         <div className="flex flex-wrap items-center gap-2 pt-1">
