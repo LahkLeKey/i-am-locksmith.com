@@ -40,6 +40,8 @@ type JobDraft = {
     scheduledFor: string;
     etaMinutes: string;
     followUpNote: string;
+    requiredSkus: string[];
+    assignedTechnicianId: string;
     quotePartEstimate: string;
     quoteLaborEstimate: string;
     quoteEstimatedMinutes: string;
@@ -56,7 +58,7 @@ type CloseoutDraft = {
 };
 
 type AddJobWizardStep = 1 | 2 | 3 | 4;
-type ActiveJobWizardStep = 1 | 2 | 3 | 4 | 5;
+type ActiveJobWizardStep = 1 | 2 | 3 | 4;
 
 type TimeClockDraft = {
     notes: string;
@@ -79,10 +81,9 @@ const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 
 const ACTIVE_WIZARD_STEPS: Array<{ step: ActiveJobWizardStep; label: string }> = [
     { step: 1, label: 'Core' },
-    { step: 2, label: 'Quote' },
+    { step: 2, label: 'Quote + Inventory' },
     { step: 3, label: 'Time Clock' },
-    { step: 4, label: 'Inventory' },
-    { step: 5, label: 'Closeout' },
+    { step: 4, label: 'Closeout' },
 ];
 
 function toNumber(value: string): number {
@@ -110,6 +111,26 @@ function quoteAsStrings(job: JobQueueItem) {
         quoteEstimatedTotal: String(job.quote?.estimatedTotal ?? 0),
         quoteNotes: job.quote?.notes ?? '',
     };
+}
+
+function computePartEstimateFromSkus(requiredSkus: string[], parts: InventoryLookupPart[]): number {
+    const normalized = requiredSkus.map((sku) => sku.toLowerCase());
+    return Number(
+        parts
+            .filter((part) => normalized.includes(part.sku.toLowerCase()))
+            .reduce((total, part) => total + part.estimatedUnitCost, 0)
+            .toFixed(2),
+    );
+}
+
+function sameSkus(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+        return false;
+    }
+
+    const leftNormalized = [...left].map((entry) => entry.toLowerCase()).sort();
+    const rightNormalized = [...right].map((entry) => entry.toLowerCase()).sort();
+    return leftNormalized.every((entry, index) => entry === rightNormalized[index]);
 }
 
 function buildAutoCloseoutDraft(job: JobQueueItem): CloseoutDraft {
@@ -357,19 +378,7 @@ export function JobsCrudPanel({
         return Number(((minutes / 60) * selectedTechnician.hourlyRate).toFixed(2));
     }, [estimatedMinutes, selectedTechnician]);
     const quotePartEstimate = useMemo(
-        () =>
-            Number(
-                requiredSkus
-                    .reduce((total, sku) => {
-                        const matched = sortedInventoryLookupParts.find((part) => part.sku === sku);
-                        if (!matched) {
-                            return total;
-                        }
-
-                        return total + Number(matched.estimatedUnitCost);
-                    }, 0)
-                    .toFixed(2),
-            ),
+        () => computePartEstimateFromSkus(requiredSkus, sortedInventoryLookupParts),
         [requiredSkus, sortedInventoryLookupParts],
     );
     const quoteEstimatedTotal = useMemo(() => {
@@ -412,6 +421,8 @@ export function JobsCrudPanel({
                 scheduledFor: toLocalDateTime(job.scheduledFor),
                 etaMinutes: job.etaMinutes === null ? '' : String(job.etaMinutes),
                 followUpNote: job.followUpNote ?? '',
+                requiredSkus: [...job.requiredSkus],
+                assignedTechnicianId: job.assignedTechnician?.id ?? '',
                 ...quoteAsStrings(job),
             }
         );
@@ -428,10 +439,9 @@ export function JobsCrudPanel({
             draft.scheduledFor !== toLocalDateTime(job.scheduledFor) ||
             draft.etaMinutes !== (job.etaMinutes === null ? '' : String(job.etaMinutes)) ||
             draft.followUpNote !== (job.followUpNote ?? '') ||
-            draft.quotePartEstimate !== String(job.quote?.partEstimate ?? 0) ||
-            draft.quoteLaborEstimate !== String(job.quote?.laborEstimate ?? 0) ||
+            !sameSkus(draft.requiredSkus, job.requiredSkus) ||
+            draft.assignedTechnicianId !== (job.assignedTechnician?.id ?? '') ||
             draft.quoteEstimatedMinutes !== String(job.quote?.estimatedMinutes ?? 0) ||
-            draft.quoteEstimatedTotal !== String(job.quote?.estimatedTotal ?? 0) ||
             draft.quoteNotes !== (job.quote?.notes ?? '')
         );
     }
@@ -891,7 +901,7 @@ export function JobsCrudPanel({
                                     className="rounded border border-[#bae6fd] bg-[#eff6ff] px-3 py-2 text-xs text-[#1d4ed8]"
                                     onClick={() => {
                                         setSelectedJobId(job.id);
-                                        setActiveJobWizardStep(4);
+                                        setActiveJobWizardStep(2);
                                         setIsActiveWorkflowOpen(true);
                                     }}
                                 >
@@ -980,6 +990,13 @@ export function JobsCrudPanel({
                                 const isDirty = isDraftDirty(selectedJob);
                                 const closeoutDraft = getCloseoutDraft(selectedJob);
                                 const timeClockDraft = getTimeClockDraft(selectedJob);
+                                const selectedWorkflowTechnician = selectableTechnicians.find((entry) => entry.id === draft.assignedTechnicianId) ?? null;
+                                const quoteMinutes = Math.max(0, Number(draft.quoteEstimatedMinutes || '0'));
+                                const quotePartEstimate = computePartEstimateFromSkus(draft.requiredSkus, sortedInventoryLookupParts);
+                                const quoteLaborEstimate = selectedWorkflowTechnician
+                                    ? Number(((quoteMinutes / 60) * selectedWorkflowTechnician.hourlyRate).toFixed(2))
+                                    : 0;
+                                const quoteEstimatedTotal = Number((quotePartEstimate + quoteLaborEstimate).toFixed(2));
 
                                 return (
                                     <div className="flex min-h-full flex-col gap-5">
@@ -1003,7 +1020,7 @@ export function JobsCrudPanel({
                                             </div>
                                         </div>
 
-                                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                                             {ACTIVE_WIZARD_STEPS.map((wizardStep) => {
                                                 const isActive = wizardStep.step === activeJobWizardStep;
                                                 return (
@@ -1154,44 +1171,29 @@ export function JobsCrudPanel({
 
                                         {activeJobWizardStep === 2 ? (
                                             <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
-                                                <div className="grid gap-2 sm:grid-cols-2">
+                                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                                     <label className="space-y-1">
-                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            step="0.01"
-                                                            value={draft.quotePartEstimate}
+                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Technician</span>
+                                                        <select
+                                                            value={draft.assignedTechnicianId}
                                                             onChange={(event) =>
                                                                 setDrafts((current) => ({
                                                                     ...current,
                                                                     [selectedJob.id]: {
                                                                         ...draft,
-                                                                        quotePartEstimate: event.target.value,
+                                                                        assignedTechnicianId: event.target.value,
                                                                     },
                                                                 }))
                                                             }
                                                             className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            step="0.01"
-                                                            value={draft.quoteLaborEstimate}
-                                                            onChange={(event) =>
-                                                                setDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: {
-                                                                        ...draft,
-                                                                        quoteLaborEstimate: event.target.value,
-                                                                    },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
+                                                        >
+                                                            <option value="">Select technician</option>
+                                                            {selectableTechnicians.map((entry) => (
+                                                                <option key={entry.id} value={entry.id}>
+                                                                    {entry.fullName} (${entry.hourlyRate}/hr) · {entry.availabilityStatus}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </label>
                                                     <label className="space-y-1">
                                                         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
@@ -1211,25 +1213,392 @@ export function JobsCrudPanel({
                                                             className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                                         />
                                                     </label>
+                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs text-[#475569]">
+                                                        <p className="font-semibold text-[#0f172a]">Required Parts</p>
+                                                        <p className="mt-1 break-words">{draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected yet'}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2 rounded border border-[#e2e8f0] bg-[#f8fafc] p-3">
                                                     <label className="space-y-1">
-                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
+                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Parts Selector</span>
                                                         <input
-                                                            type="number"
-                                                            min={0}
-                                                            step="0.01"
-                                                            value={draft.quoteEstimatedTotal}
-                                                            onChange={(event) =>
-                                                                setDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: {
-                                                                        ...draft,
-                                                                        quoteEstimatedTotal: event.target.value,
-                                                                    },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                            value={lookupQuery[selectedJob.id] ?? ''}
+                                                            onChange={(event) => setLookupQuery((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                            placeholder="Search SKU, part name, or location"
+                                                            className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
                                                         />
                                                     </label>
+                                                    <div className="max-h-44 overflow-auto rounded border border-[#e5e7eb] bg-white">
+                                                        {(() => {
+                                                            const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
+                                                            const matches = sortedInventoryLookupParts
+                                                                .filter((part) => {
+                                                                    if (!query) {
+                                                                        return true;
+                                                                    }
+                                                                    return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
+                                                                })
+                                                                .slice(0, 30);
+
+                                                            if (matches.length === 0) {
+                                                                return <p className="px-3 py-2 text-xs text-[#64748b]">No parts found for this search.</p>;
+                                                            }
+
+                                                            return matches.map((part) => {
+                                                                const isSelected = draft.requiredSkus.includes(part.sku);
+                                                                return (
+                                                                    <label key={`${selectedJob.id}-draft-part-${part.id}`} className="flex cursor-pointer items-center justify-between border-b border-[#e5e7eb] px-3 py-2 text-xs last:border-b-0 hover:bg-[#f8fafc]">
+                                                                        <span className="flex items-center gap-2">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={isSelected}
+                                                                                onChange={(event) => {
+                                                                                    const nextSkus = event.target.checked
+                                                                                        ? (draft.requiredSkus.includes(part.sku) ? draft.requiredSkus : [...draft.requiredSkus, part.sku])
+                                                                                        : draft.requiredSkus.filter((sku) => sku !== part.sku);
+                                                                                    setDrafts((current) => ({
+                                                                                        ...current,
+                                                                                        [selectedJob.id]: {
+                                                                                            ...draft,
+                                                                                            requiredSkus: nextSkus,
+                                                                                        },
+                                                                                    }));
+                                                                                }}
+                                                                            />
+                                                                            <span className="font-semibold text-[#0f172a]">{part.sku}</span>
+                                                                            <span className="text-[#475569]">{part.itemName}</span>
+                                                                        </span>
+                                                                        <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                                                    </label>
+                                                                );
+                                                            });
+                                                        })()}
+                                                    </div>
+                                                    <p className="text-[11px] text-[#475569]">Selected parts: {draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected'}</p>
+                                                </div>
+
+                                                <div className="grid gap-2 sm:grid-cols-3">
+                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
+                                                        <p className="text-[#475569]">Part Estimate (Auto)</p>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">${quotePartEstimate.toFixed(2)}</p>
+                                                    </div>
+                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
+                                                        <p className="text-[#475569]">Labor Estimate (Auto)</p>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">${quoteLaborEstimate.toFixed(2)}</p>
+                                                    </div>
+                                                    <div className="rounded border border-[#d1fae5] bg-[#f0fdf4] p-2 text-xs">
+                                                        <p className="text-[#166534]">Estimated Total (Auto)</p>
+                                                        <p className="text-sm font-semibold text-[#166534]">${quoteEstimatedTotal.toFixed(2)}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    <InventoryActionCard
+                                                        title="Reserve Existing Inventory"
+                                                        description="Search warehouse parts and reserve quantities directly for this job."
+                                                    >
+                                                        <label className="space-y-1.5">
+                                                            <span className="text-[11px] text-[#475569]">Lookup Warehoused Parts</span>
+                                                            <input
+                                                                value={lookupQuery[selectedJob.id] ?? ''}
+                                                                onChange={(event) => setLookupQuery((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                placeholder="Search SKU, item, or location"
+                                                                className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                            />
+                                                        </label>
+                                                        <div className="max-h-36 overflow-auto rounded border border-[#e5e7eb] bg-[#f8fafc]">
+                                                            {(() => {
+                                                                const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
+                                                                const matches = sortedInventoryLookupParts
+                                                                    .filter((part) => {
+                                                                        if (!query) {
+                                                                            return true;
+                                                                        }
+
+                                                                        return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
+                                                                    })
+                                                                    .slice(0, 8);
+
+                                                                if (matches.length === 0) {
+                                                                    return <p className="px-2 py-2 text-xs text-[#64748b]">No warehoused parts found for this search.</p>;
+                                                                }
+
+                                                                return matches.map((part) => (
+                                                                    <button
+                                                                        key={`${selectedJob.id}-${part.id}`}
+                                                                        type="button"
+                                                                        className="flex w-full items-center justify-between gap-2 border-b border-[#e5e7eb] px-3 py-2 text-left text-xs last:border-b-0 hover:bg-white"
+                                                                        onClick={() => {
+                                                                            setReserveSku((current) => ({ ...current, [selectedJob.id]: part.sku }));
+                                                                            setLookupQuery((current) => ({ ...current, [selectedJob.id]: part.sku }));
+                                                                        }}
+                                                                    >
+                                                                        <span>
+                                                                            <span className="font-semibold text-[#0f172a]">{part.sku}</span>
+                                                                            <span className="ml-2 text-[#475569]">{part.itemName}</span>
+                                                                        </span>
+                                                                        <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                                                    </button>
+                                                                ));
+                                                            })()}
+                                                        </div>
+                                                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-end">
+                                                            <label className="space-y-1.5">
+                                                                <span className="text-[11px] text-[#475569]">SKU to Reserve</span>
+                                                                <input
+                                                                    value={reserveSku[selectedJob.id] ?? ''}
+                                                                    onChange={(event) => setReserveSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                    placeholder="SKU to reserve"
+                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                />
+                                                            </label>
+                                                            <label className="space-y-1.5">
+                                                                <span className="text-[11px] text-[#475569]">Reserve Quantity</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    value={reserveQty[selectedJob.id] ?? 1}
+                                                                    onChange={(event) => setReserveQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                />
+                                                            </label>
+                                                            <button
+                                                                type="button"
+                                                                disabled={isPending}
+                                                                className="rounded border border-[#86efac] bg-[#f0fdf4] px-3 py-2 text-xs font-semibold text-[#166534]"
+                                                                onClick={async () => {
+                                                                    await runMutation({
+                                                                        method: 'PATCH',
+                                                                        headers: { 'content-type': 'application/json' },
+                                                                        body: JSON.stringify({
+                                                                            id: selectedJob.id,
+                                                                            inventoryAction: 'reserve',
+                                                                            inventorySku: reserveSku[selectedJob.id] ?? '',
+                                                                            reserveQuantity: reserveQty[selectedJob.id] ?? 1,
+                                                                        }),
+                                                                    }, '/api/jobs');
+                                                                }}
+                                                            >
+                                                                Reserve
+                                                            </button>
+                                                        </div>
+                                                    </InventoryActionCard>
+
+                                                    <InventoryActionCard
+                                                        title="Create Inventory Part"
+                                                        description="Add a missing catalog item and attach it to this job in one step."
+                                                    >
+                                                        {(() => {
+                                                            const currentServiceLines =
+                                                                createServiceLines[selectedJob.id] ?? ['mobile', 'shop'];
+
+                                                            const addServiceLineTag = () => {
+                                                                const nextTag = (createServiceLineInput[selectedJob.id] ?? '').trim().toLowerCase();
+                                                                if (!nextTag || currentServiceLines.includes(nextTag)) {
+                                                                    return;
+                                                                }
+
+                                                                setCreateServiceLines((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: [...currentServiceLines, nextTag],
+                                                                }));
+                                                                setCreateServiceLineInput((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: '',
+                                                                }));
+                                                            };
+
+                                                            const removeServiceLineTag = (tag: string) => {
+                                                                setCreateServiceLines((current) => {
+                                                                    const next = (current[selectedJob.id] ?? ['mobile', 'shop'])
+                                                                        .filter((entry) => entry !== tag);
+                                                                    return {
+                                                                        ...current,
+                                                                        [selectedJob.id]: next,
+                                                                    };
+                                                                });
+                                                            };
+
+                                                            return (
+                                                                <div className="grid gap-2.5 sm:grid-cols-2">
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">SKU</span>
+                                                                        <input
+                                                                            value={createSku[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="New SKU"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Item Name</span>
+                                                                        <input
+                                                                            value={createItemName[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateItemName((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="Item name"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Location</span>
+                                                                        <input
+                                                                            value={createLocation[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateLocation((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="Location"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Supplier</span>
+                                                                        <input
+                                                                            value={createSupplier[selectedJob.id] ?? ''}
+                                                                            onChange={(event) => setCreateSupplier((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            placeholder="Supplier"
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">On Hand</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            value={createOnHand[selectedJob.id] ?? 0}
+                                                                            onChange={(event) => setCreateOnHand((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Reorder Point</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            value={createReorderPoint[selectedJob.id] ?? 1}
+                                                                            onChange={(event) => setCreateReorderPoint((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Suggested Qty</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            value={createSuggestedOrderQty[selectedJob.id] ?? 5}
+                                                                            onChange={(event) =>
+                                                                                setCreateSuggestedOrderQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))
+                                                                            }
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="flex flex-col gap-1.5">
+                                                                        <span className="block text-[11px] text-[#475569]">Severity</span>
+                                                                        <select
+                                                                            value={createSeverity[selectedJob.id] ?? 'medium'}
+                                                                            onChange={(event) => setCreateSeverity((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                        >
+                                                                            <option value="low">low</option>
+                                                                            <option value="medium">medium</option>
+                                                                            <option value="high">high</option>
+                                                                            <option value="critical">critical</option>
+                                                                        </select>
+                                                                    </label>
+                                                                    <label className="space-y-1.5 sm:col-span-2">
+                                                                        <span className="text-[11px] text-[#475569]">Service Lines</span>
+                                                                        <div className="space-y-2 rounded border border-[#d1d5db] bg-white p-2">
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {currentServiceLines.length === 0 ? (
+                                                                                    <span className="text-xs text-[#64748b]">No service lines selected.</span>
+                                                                                ) : (
+                                                                                    currentServiceLines.map((line) => (
+                                                                                        <span key={`${selectedJob.id}-${line}`} className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#334155]">
+                                                                                            {line}
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                aria-label={`Remove ${line}`}
+                                                                                                className="rounded-full border border-[#cbd5e1] px-1 text-[9px] leading-none text-[#475569]"
+                                                                                                onClick={() => removeServiceLineTag(line)}
+                                                                                            >
+                                                                                                X
+                                                                                            </button>
+                                                                                        </span>
+                                                                                    ))
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                                                                                <input
+                                                                                    value={createServiceLineInput[selectedJob.id] ?? ''}
+                                                                                    onChange={(event) =>
+                                                                                        setCreateServiceLineInput((current) => ({
+                                                                                            ...current,
+                                                                                            [selectedJob.id]: event.target.value,
+                                                                                        }))
+                                                                                    }
+                                                                                    placeholder="Add service line tag"
+                                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                                />
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="rounded border border-[#cbd5e1] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
+                                                                                    onClick={addServiceLineTag}
+                                                                                >
+                                                                                    Add Tag
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </label>
+                                                                    <div className="sm:col-span-2">
+                                                                        <RichTextMarkdownField
+                                                                            label="Compatibility Note"
+                                                                            value={createNote[selectedJob.id] ?? ''}
+                                                                            onChange={(value) =>
+                                                                                setCreateNote((current) => ({
+                                                                                    ...current,
+                                                                                    [selectedJob.id]: value,
+                                                                                }))
+                                                                            }
+                                                                            placeholder="Compatibility details, fitment caveats, and technician guidance"
+                                                                            minRows={3}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                                                            <button
+                                                                type="button"
+                                                                disabled={isPending}
+                                                                className="ml-auto rounded border border-[#bae6fd] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#1d4ed8]"
+                                                                onClick={async () => {
+                                                                    await runMutation({
+                                                                        method: 'PATCH',
+                                                                        headers: { 'content-type': 'application/json' },
+                                                                        body: JSON.stringify({
+                                                                            id: selectedJob.id,
+                                                                            inventoryAction: 'create_inventory',
+                                                                            inventorySku: createSku[selectedJob.id] ?? '',
+                                                                            createInventory: {
+                                                                                itemName: createItemName[selectedJob.id] ?? '',
+                                                                                serviceLines:
+                                                                                    createServiceLines[selectedJob.id] && createServiceLines[selectedJob.id].length > 0 ?
+                                                                                        createServiceLines[selectedJob.id] :
+                                                                                        ['mobile', 'shop'],
+                                                                                location: createLocation[selectedJob.id] ?? '',
+                                                                                onHand: createOnHand[selectedJob.id] ?? 0,
+                                                                                reorderPoint: createReorderPoint[selectedJob.id] ?? 1,
+                                                                                suggestedOrderQty: createSuggestedOrderQty[selectedJob.id] ?? 5,
+                                                                                supplier: createSupplier[selectedJob.id] ?? '',
+                                                                                severity: createSeverity[selectedJob.id] ?? 'medium',
+                                                                                compatibilityNote: createNote[selectedJob.id] ?? '',
+                                                                            },
+                                                                        }),
+                                                                    }, '/api/jobs');
+                                                                }}
+                                                            >
+                                                                Create Part
+                                                            </button>
+                                                        </div>
+                                                    </InventoryActionCard>
                                                 </div>
                                                 <RichTextMarkdownField
                                                     label="Quote Notes"
@@ -1452,355 +1821,6 @@ export function JobsCrudPanel({
                                             </div>
                                         ) : null}
 
-                                        {activeJobWizardStep === 4 ? (
-                                            <div className="space-y-3 border-y border-[#dbe3f0] py-5">
-                                                <div className="rounded border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-xs text-[#475569]">
-                                                    Required Parts: {selectedJob.requiredSkus.length > 0 ? selectedJob.requiredSkus.join(', ') : 'None selected yet'}
-                                                </div>
-                                                <div className="grid gap-3 md:grid-cols-2">
-                                                    <InventoryActionCard
-                                                        title="Reserve Existing Inventory"
-                                                        description="Search warehouse parts and reserve quantities directly for this job."
-                                                    >
-                                                        <label className="space-y-1.5">
-                                                            <span className="text-[11px] text-[#475569]">Lookup Warehoused Parts</span>
-                                                            <input
-                                                                value={lookupQuery[selectedJob.id] ?? ''}
-                                                                onChange={(event) => setLookupQuery((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                placeholder="Search SKU, item, or location"
-                                                                className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                            />
-                                                        </label>
-                                                        <div className="max-h-36 overflow-auto rounded border border-[#e5e7eb] bg-[#f8fafc]">
-                                                            {(() => {
-                                                                const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
-                                                                const matches = sortedInventoryLookupParts
-                                                                    .filter((part) => {
-                                                                        if (!query) {
-                                                                            return true;
-                                                                        }
-
-                                                                        return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
-                                                                    })
-                                                                    .slice(0, 8);
-
-                                                                if (matches.length === 0) {
-                                                                    return <p className="px-2 py-2 text-xs text-[#64748b]">No warehoused parts found for this search.</p>;
-                                                                }
-
-                                                                return matches.map((part) => (
-                                                                    <button
-                                                                        key={`${selectedJob.id}-${part.id}`}
-                                                                        type="button"
-                                                                        className="flex w-full items-center justify-between gap-2 border-b border-[#e5e7eb] px-3 py-2 text-left text-xs last:border-b-0 hover:bg-white"
-                                                                        onClick={() => {
-                                                                            setReserveSku((current) => ({ ...current, [selectedJob.id]: part.sku }));
-                                                                            setLookupQuery((current) => ({ ...current, [selectedJob.id]: part.sku }));
-                                                                        }}
-                                                                    >
-                                                                        <span>
-                                                                            <span className="font-semibold text-[#0f172a]">{part.sku}</span>
-                                                                            <span className="ml-2 text-[#475569]">{part.itemName}</span>
-                                                                        </span>
-                                                                        <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
-                                                                    </button>
-                                                                ));
-                                                            })()}
-                                                        </div>
-                                                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-end">
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">SKU to Reserve</span>
-                                                                <input
-                                                                    value={reserveSku[selectedJob.id] ?? ''}
-                                                                    onChange={(event) => setReserveSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                    placeholder="SKU to reserve"
-                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Reserve Quantity</span>
-                                                                <input
-                                                                    type="number"
-                                                                    min={1}
-                                                                    value={reserveQty[selectedJob.id] ?? 1}
-                                                                    onChange={(event) => setReserveQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <button
-                                                                type="button"
-                                                                disabled={isPending}
-                                                                className="rounded border border-[#86efac] bg-[#f0fdf4] px-3 py-2 text-xs font-semibold text-[#166534]"
-                                                                onClick={async () => {
-                                                                    await runMutation({
-                                                                        method: 'PATCH',
-                                                                        headers: { 'content-type': 'application/json' },
-                                                                        body: JSON.stringify({
-                                                                            id: selectedJob.id,
-                                                                            inventoryAction: 'reserve',
-                                                                            inventorySku: reserveSku[selectedJob.id] ?? '',
-                                                                            reserveQuantity: reserveQty[selectedJob.id] ?? 1,
-                                                                        }),
-                                                                    }, '/api/jobs', {
-                                                                        optimisticJobs: (current) =>
-                                                                            current.map((entry) => {
-                                                                                if (entry.id !== selectedJob.id) {
-                                                                                    return entry;
-                                                                                }
-
-                                                                                const sku = (reserveSku[selectedJob.id] ?? '').trim();
-                                                                                if (!sku || entry.requiredSkus.includes(sku)) {
-                                                                                    return entry;
-                                                                                }
-
-                                                                                return {
-                                                                                    ...entry,
-                                                                                    requiredSkus: [...entry.requiredSkus, sku],
-                                                                                };
-                                                                            }),
-                                                                    });
-                                                                }}
-                                                            >
-                                                                Reserve
-                                                            </button>
-                                                        </div>
-                                                    </InventoryActionCard>
-
-                                                    <InventoryActionCard
-                                                        title="Create Inventory Part"
-                                                        description="Add a missing catalog item and attach it to this job in one step."
-                                                    >
-                                                        {(() => {
-                                                            const currentServiceLines =
-                                                                createServiceLines[selectedJob.id] ?? ['mobile', 'shop'];
-
-                                                            const addServiceLineTag = () => {
-                                                                const nextTag = (createServiceLineInput[selectedJob.id] ?? '').trim().toLowerCase();
-                                                                if (!nextTag || currentServiceLines.includes(nextTag)) {
-                                                                    return;
-                                                                }
-
-                                                                setCreateServiceLines((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: [...currentServiceLines, nextTag],
-                                                                }));
-                                                                setCreateServiceLineInput((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: '',
-                                                                }));
-                                                            };
-
-                                                            const removeServiceLineTag = (tag: string) => {
-                                                                setCreateServiceLines((current) => {
-                                                                    const next = (current[selectedJob.id] ?? ['mobile', 'shop'])
-                                                                        .filter((entry) => entry !== tag);
-                                                                    return {
-                                                                        ...current,
-                                                                        [selectedJob.id]: next,
-                                                                    };
-                                                                });
-                                                            };
-
-                                                            return (
-                                                                <div className="grid gap-2.5 sm:grid-cols-2">
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">SKU</span>
-                                                                        <input
-                                                                            value={createSku[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="New SKU"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Item Name</span>
-                                                                        <input
-                                                                            value={createItemName[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateItemName((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="Item name"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Location</span>
-                                                                        <input
-                                                                            value={createLocation[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateLocation((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="Location"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Supplier</span>
-                                                                        <input
-                                                                            value={createSupplier[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateSupplier((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="Supplier"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">On Hand</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            min={0}
-                                                                            value={createOnHand[selectedJob.id] ?? 0}
-                                                                            onChange={(event) => setCreateOnHand((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Reorder Point</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            min={0}
-                                                                            value={createReorderPoint[selectedJob.id] ?? 1}
-                                                                            onChange={(event) => setCreateReorderPoint((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Suggested Qty</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            min={0}
-                                                                            value={createSuggestedOrderQty[selectedJob.id] ?? 5}
-                                                                            onChange={(event) =>
-                                                                                setCreateSuggestedOrderQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))
-                                                                            }
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Severity</span>
-                                                                        <select
-                                                                            value={createSeverity[selectedJob.id] ?? 'medium'}
-                                                                            onChange={(event) => setCreateSeverity((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        >
-                                                                            <option value="low">low</option>
-                                                                            <option value="medium">medium</option>
-                                                                            <option value="high">high</option>
-                                                                            <option value="critical">critical</option>
-                                                                        </select>
-                                                                    </label>
-                                                                    <label className="space-y-1.5 sm:col-span-2">
-                                                                        <span className="text-[11px] text-[#475569]">Service Lines</span>
-                                                                        <div className="space-y-2 rounded border border-[#d1d5db] bg-white p-2">
-                                                                            <div className="flex flex-wrap gap-2">
-                                                                                {currentServiceLines.length === 0 ? (
-                                                                                    <span className="text-xs text-[#64748b]">No service lines selected.</span>
-                                                                                ) : (
-                                                                                    currentServiceLines.map((line) => (
-                                                                                        <span key={`${selectedJob.id}-${line}`} className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#334155]">
-                                                                                            {line}
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                aria-label={`Remove ${line}`}
-                                                                                                className="rounded-full border border-[#cbd5e1] px-1 text-[9px] leading-none text-[#475569]"
-                                                                                                onClick={() => removeServiceLineTag(line)}
-                                                                                            >
-                                                                                                X
-                                                                                            </button>
-                                                                                        </span>
-                                                                                    ))
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-                                                                                <input
-                                                                                    value={createServiceLineInput[selectedJob.id] ?? ''}
-                                                                                    onChange={(event) =>
-                                                                                        setCreateServiceLineInput((current) => ({
-                                                                                            ...current,
-                                                                                            [selectedJob.id]: event.target.value,
-                                                                                        }))
-                                                                                    }
-                                                                                    placeholder="Add service line tag"
-                                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                                />
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="rounded border border-[#cbd5e1] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
-                                                                                    onClick={addServiceLineTag}
-                                                                                >
-                                                                                    Add Tag
-                                                                                </button>
-                                                                            </div>
-                                                                        </div>
-                                                                    </label>
-                                                                    <div className="sm:col-span-2">
-                                                                        <RichTextMarkdownField
-                                                                            label="Compatibility Note"
-                                                                            value={createNote[selectedJob.id] ?? ''}
-                                                                            onChange={(value) =>
-                                                                                setCreateNote((current) => ({
-                                                                                    ...current,
-                                                                                    [selectedJob.id]: value,
-                                                                                }))
-                                                                            }
-                                                                            placeholder="Compatibility details, fitment caveats, and technician guidance"
-                                                                            minRows={3}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                                                            <button
-                                                                type="button"
-                                                                disabled={isPending}
-                                                                className="ml-auto rounded border border-[#bae6fd] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#1d4ed8]"
-                                                                onClick={async () => {
-                                                                    await runMutation({
-                                                                        method: 'PATCH',
-                                                                        headers: { 'content-type': 'application/json' },
-                                                                        body: JSON.stringify({
-                                                                            id: selectedJob.id,
-                                                                            inventoryAction: 'create_inventory',
-                                                                            inventorySku: createSku[selectedJob.id] ?? '',
-                                                                            createInventory: {
-                                                                                itemName: createItemName[selectedJob.id] ?? '',
-                                                                                serviceLines:
-                                                                                    createServiceLines[selectedJob.id] && createServiceLines[selectedJob.id].length > 0 ?
-                                                                                        createServiceLines[selectedJob.id] :
-                                                                                        ['mobile', 'shop'],
-                                                                                location: createLocation[selectedJob.id] ?? '',
-                                                                                onHand: createOnHand[selectedJob.id] ?? 0,
-                                                                                reorderPoint: createReorderPoint[selectedJob.id] ?? 1,
-                                                                                suggestedOrderQty: createSuggestedOrderQty[selectedJob.id] ?? 5,
-                                                                                supplier: createSupplier[selectedJob.id] ?? '',
-                                                                                severity: createSeverity[selectedJob.id] ?? 'medium',
-                                                                                compatibilityNote: createNote[selectedJob.id] ?? '',
-                                                                            },
-                                                                        }),
-                                                                    }, '/api/jobs', {
-                                                                        optimisticJobs: (current) =>
-                                                                            current.map((entry) => {
-                                                                                if (entry.id !== selectedJob.id) {
-                                                                                    return entry;
-                                                                                }
-
-                                                                                const sku = (createSku[selectedJob.id] ?? '').trim();
-                                                                                if (!sku || entry.requiredSkus.includes(sku)) {
-                                                                                    return entry;
-                                                                                }
-
-                                                                                return {
-                                                                                    ...entry,
-                                                                                    requiredSkus: [...entry.requiredSkus, sku],
-                                                                                };
-                                                                            }),
-                                                                    });
-                                                                }}
-                                                            >
-                                                                Create Part
-                                                            </button>
-                                                        </div>
-                                                    </InventoryActionCard>
-                                                </div>
-                                            </div>
-                                        ) : null}
-
                                         {activeJobWizardStep === 1 || activeJobWizardStep === 2 ? (
                                             <div className="flex flex-wrap gap-2">
                                                 <button
@@ -1820,11 +1840,13 @@ export function JobsCrudPanel({
                                                                 scheduledFor: draft.scheduledFor ? new Date(draft.scheduledFor).toISOString() : null,
                                                                 etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
                                                                 followUpNote: draft.followUpNote,
+                                                                requiredSkus: draft.requiredSkus,
+                                                                assignedTechnicianId: draft.assignedTechnicianId || null,
                                                                 quote: {
-                                                                    partEstimate: Number(draft.quotePartEstimate),
-                                                                    laborEstimate: Number(draft.quoteLaborEstimate),
+                                                                    partEstimate: quotePartEstimate,
+                                                                    laborEstimate: quoteLaborEstimate,
                                                                     estimatedMinutes: Number(draft.quoteEstimatedMinutes),
-                                                                    estimatedTotal: Number(draft.quoteEstimatedTotal),
+                                                                    estimatedTotal: quoteEstimatedTotal,
                                                                     notes: draft.quoteNotes,
                                                                 },
                                                             }),
@@ -1840,11 +1862,19 @@ export function JobsCrudPanel({
                                                                         scheduledFor: draft.scheduledFor ? new Date(draft.scheduledFor).toISOString() : null,
                                                                         etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
                                                                         followUpNote: draft.followUpNote,
+                                                                        requiredSkus: draft.requiredSkus,
+                                                                        assignedTechnician: draft.assignedTechnicianId
+                                                                            ? {
+                                                                                id: draft.assignedTechnicianId,
+                                                                                fullName: selectedWorkflowTechnician?.fullName ?? entry.assignedTechnician?.fullName ?? 'Assigned technician',
+                                                                                laborRate: selectedWorkflowTechnician?.hourlyRate ?? entry.assignedTechnician?.laborRate ?? 0,
+                                                                            }
+                                                                            : null,
                                                                         quote: {
-                                                                            partEstimate: Number(draft.quotePartEstimate),
-                                                                            laborEstimate: Number(draft.quoteLaborEstimate),
+                                                                            partEstimate: quotePartEstimate,
+                                                                            laborEstimate: quoteLaborEstimate,
                                                                             estimatedMinutes: Number(draft.quoteEstimatedMinutes),
-                                                                            estimatedTotal: Number(draft.quoteEstimatedTotal),
+                                                                            estimatedTotal: quoteEstimatedTotal,
                                                                             notes: draft.quoteNotes,
                                                                         },
                                                                     } : entry,
@@ -1865,7 +1895,7 @@ export function JobsCrudPanel({
                                             </div>
                                         ) : null}
 
-                                        {activeJobWizardStep === 5 ? (
+                                        {activeJobWizardStep === 4 ? (
                                             <div className="border-y border-[#dbe3f0] py-5">
                                                 <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[#334155]">Job Closeout</h4>
                                                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -2003,12 +2033,12 @@ export function JobsCrudPanel({
                                             >
                                                 Back
                                             </button>
-                                            <p className="text-[11px] text-[#64748b]">Step {activeJobWizardStep} of 5</p>
+                                            <p className="text-[11px] text-[#64748b]">Step {activeJobWizardStep} of 4</p>
                                             <button
                                                 type="button"
                                                 className="rounded border border-[#0f766e] bg-[#ecfeff] px-2 py-1 text-xs font-semibold text-[#0f766e] disabled:opacity-50"
-                                                disabled={activeJobWizardStep === 5}
-                                                onClick={() => setActiveJobWizardStep((step) => (step < 5 ? ((step + 1) as ActiveJobWizardStep) : step))}
+                                                disabled={activeJobWizardStep === 4}
+                                                onClick={() => setActiveJobWizardStep((step) => (step < 4 ? ((step + 1) as ActiveJobWizardStep) : step))}
                                             >
                                                 Next
                                             </button>
