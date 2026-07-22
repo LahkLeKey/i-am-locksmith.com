@@ -1,4 +1,4 @@
-import type {JobQueueItem, JobQueuePriority, JobQueueStatus} from '@/lib/dashboard/types';
+import type {JobQueueItem, JobQueuePriority, JobQueueStatus, TimeClockLedgerEntry,} from '@/lib/dashboard/types';
 import {prisma} from '@/lib/db/prisma';
 
 export type JobRecordInput = {
@@ -40,6 +40,7 @@ export type JobRecordUpdate = {
     clockedOutAt?: string | null;
     breakMinutes?: number;
     notes?: string | null;
+    ledger?: TimeClockLedgerEntry[];
   };
 };
 
@@ -70,6 +71,7 @@ type JobRecordRow = {
   clockedOutAt: Date | null;
   breakMinutes: number;
   timeClockNotes: string | null;
+  timeClockLedger: unknown;
   actualPartCost: unknown;
   actualLaborCost: unknown;
   actualMinutes: number | null;
@@ -107,6 +109,7 @@ type JobRecordClient = {
         clockedOutAt: Date | null;
         breakMinutes: number;
         timeClockNotes: string | null;
+        timeClockLedger: unknown;
       };
     }) => Promise<JobRecordRow>;
     update: (args: {where: {id: string}; data: Record<string, unknown>;}) =>
@@ -146,7 +149,79 @@ function toRequiredSkus(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
+function toLedgerEntries(value: unknown): TimeClockLedgerEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return null;
+        }
+
+        const candidate = entry as {
+          id?: unknown;
+          action?: unknown;
+          at?: unknown;
+          note?: unknown;
+        };
+
+        if ((candidate.action !== 'clock_in' &&
+             candidate.action !== 'clock_out') ||
+            typeof candidate.id !== 'string' ||
+            typeof candidate.at !== 'string') {
+          return null;
+        }
+
+        return {
+          id: candidate.id,
+          action: candidate.action,
+          at: candidate.at,
+          note: typeof candidate.note === 'string' ? candidate.note : null,
+        } satisfies TimeClockLedgerEntry;
+      })
+      .filter((entry): entry is TimeClockLedgerEntry => entry !== null)
+      .sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
+}
+
+function computeElapsedMinutes(
+    entries: TimeClockLedgerEntry[], breakMinutes: number): number {
+  let openClockInAt: number|null = null;
+  let totalMs = 0;
+
+  for (const entry of entries) {
+    const at = Date.parse(entry.at);
+    if (!Number.isFinite(at)) {
+      continue;
+    }
+
+    if (entry.action === 'clock_in') {
+      openClockInAt = at;
+      continue;
+    }
+
+    if (entry.action === 'clock_out' && openClockInAt !== null) {
+      totalMs += Math.max(0, at - openClockInAt);
+      openClockInAt = null;
+    }
+  }
+
+  if (openClockInAt !== null) {
+    totalMs += Math.max(0, Date.now() - openClockInAt);
+  }
+
+  const totalMinutes = Math.floor(totalMs / 60000);
+  return Math.max(0, totalMinutes - breakMinutes);
+}
+
 function toJobQueueItem(row: JobRecordRow): JobQueueItem {
+  const ledger = toLedgerEntries(row.timeClockLedger);
+  const lastClockIn =
+      [...ledger].reverse().find((entry) => entry.action === 'clock_in');
+  const lastClockOut =
+      [...ledger].reverse().find((entry) => entry.action === 'clock_out');
+
   return {
     id: row.jobNumber,
     customerName: row.customerName,
@@ -185,20 +260,14 @@ function toJobQueueItem(row: JobRecordRow): JobQueueItem {
       resolutionNotes: row.closeoutNotes,
     },
     timeClock: {
-      clockedInAt: row.clockedInAt ? row.clockedInAt.toISOString() : null,
-      clockedOutAt: row.clockedOutAt ? row.clockedOutAt.toISOString() : null,
+      clockedInAt: lastClockIn?.at ??
+          (row.clockedInAt ? row.clockedInAt.toISOString() : null),
+      clockedOutAt: lastClockOut?.at ??
+          (row.clockedOutAt ? row.clockedOutAt.toISOString() : null),
       breakMinutes: row.breakMinutes,
-      elapsedMinutes: (() => {
-        if (!row.clockedInAt) {
-          return 0;
-        }
-
-        const end = row.clockedOutAt ? row.clockedOutAt : new Date();
-        const elapsed = Math.max(
-            0, Math.floor((end.getTime() - row.clockedInAt.getTime()) / 60000));
-        return Math.max(0, elapsed - row.breakMinutes);
-      })(),
+      elapsedMinutes: computeElapsedMinutes(ledger, row.breakMinutes),
       notes: row.timeClockNotes,
+      ledger,
     },
   };
 }
@@ -258,6 +327,7 @@ export async function createJobRecord(
       clockedOutAt: null,
       breakMinutes: 0,
       timeClockNotes: null,
+      timeClockLedger: [],
     },
   });
 
@@ -332,6 +402,9 @@ export async function updateJobRecord(
               {}),
       ...(input.timeClock?.notes !== undefined ?
               {timeClockNotes: input.timeClock.notes} :
+              {}),
+      ...(input.timeClock?.ledger !== undefined ?
+              {timeClockLedger: input.timeClock.ledger} :
               {}),
     },
   });

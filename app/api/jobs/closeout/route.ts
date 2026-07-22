@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     actualLaborCost: actualLaborCost!,
     actualMinutes: actualMinutes!,
     finalTotal: finalTotal!,
-    resolutionNotes: body.resolutionNotes?.trim() || null,
+    resolutionNotes: body.resolutionNotes || null,
   });
 
   if (!job) {

@@ -47,9 +47,9 @@ type UpdateJobRequest = {
     estimatedTotal?: number;
     notes?: string | null;
   };
-  timeClockAction?: 'clock_in' | 'clock_out' | 'set_break' | 'set_notes';
-  breakMinutes?: number;
+  timeClockAction?: 'clock_in' | 'clock_out' | 'set_notes';
   timeClockNotes?: string | null;
+  timeClockActionNote?: string | null;
   inventoryAction?: 'reserve' | 'create_inventory';
   inventorySku?: string;
   reserveQuantity?: number;
@@ -85,6 +85,10 @@ function computePartEstimateFromSkus(
           .filter((part) => normalized.includes(part.sku.toLowerCase()))
           .reduce((total, part) => total + part.estimatedUnitCost, 0)
           .toFixed(2));
+}
+
+function computeLaborEstimate(minutes: number, hourlyRate: number): number {
+  return Number(((minutes / 60) * hourlyRate).toFixed(2));
 }
 
 function isJobPriority(value: unknown): value is JobQueuePriority {
@@ -257,7 +261,7 @@ export async function POST(request: Request) {
     priority: body.priority ?? 'normal',
     scheduledFor: body.scheduledFor ?? null,
     requiredSkus: normalizedSkus,
-    followUpNote: body.followUpNote?.trim() || null,
+    followUpNote: body.followUpNote || null,
     assignedTechnicianId,
     assignedTechnicianName: technician.fullName,
     laborRate: technician.hourlyRate,
@@ -266,7 +270,7 @@ export async function POST(request: Request) {
       laborEstimate: computedLaborEstimate,
       estimatedMinutes,
       estimatedTotal: computedEstimatedTotal,
-      notes: body.quote?.notes?.trim() || null,
+      notes: body.quote?.notes || null,
     },
   });
 
@@ -298,6 +302,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({error: 'id is required'}, {status: 400});
   }
 
+  const jobId = body.id;
+
   if (body.inventoryAction === 'reserve') {
     const authResult = await authorizeInventory('inventory.reserve');
 
@@ -319,7 +325,7 @@ export async function PATCH(request: Request) {
           {error: 'reserveQuantity must be greater than 0'}, {status: 400});
     }
 
-    const current = await getJobRecord(authResult.orgId, body.id);
+    const current = await getJobRecord(authResult.orgId, jobId);
 
     if (!current) {
       return NextResponse.json({error: 'Job not found'}, {status: 404});
@@ -345,9 +351,23 @@ export async function PATCH(request: Request) {
     const nextRequiredSkus = current.requiredSkus.includes(part.sku) ?
         current.requiredSkus :
         [...current.requiredSkus, part.sku];
+    const computedPartEstimate =
+        computePartEstimateFromSkus(nextRequiredSkus, parts);
+    const laborEstimate = current.quote?.laborEstimate ?? 0;
+    const computedEstimatedTotal = Number(
+      (computedPartEstimate + laborEstimate).toFixed(2));
 
     const updated = await updateJobRecord(
-        authResult.orgId, body.id, {requiredSkus: nextRequiredSkus});
+        authResult.orgId,
+        jobId,
+        {
+          requiredSkus: nextRequiredSkus,
+          quote: {
+            partEstimate: computedPartEstimate,
+            estimatedTotal: computedEstimatedTotal,
+          },
+        },
+    );
 
     if (!updated) {
       return NextResponse.json({error: 'Job not found'}, {status: 404});
@@ -409,10 +429,11 @@ export async function PATCH(request: Request) {
             .filter((entry) => entry.length > 0) :
         ['mobile', 'shop'];
 
+    const createdPartCost = 35;
     const createdPart = await createInventoryPart(authResult.orgId, {
       sku: inventorySku,
       itemName: draft.itemName.trim(),
-      estimatedUnitCost: 35,
+      estimatedUnitCost: createdPartCost,
       serviceLines,
       location: draft.location.trim(),
       onHand: draft.onHand!,
@@ -423,7 +444,7 @@ export async function PATCH(request: Request) {
       compatibilityNote: draft.compatibilityNote.trim(),
     });
 
-    const current = await getJobRecord(authResult.orgId, body.id);
+    const current = await getJobRecord(authResult.orgId, jobId);
 
     if (!current) {
       return NextResponse.json({error: 'Job not found'}, {status: 404});
@@ -432,9 +453,28 @@ export async function PATCH(request: Request) {
     const nextRequiredSkus = current.requiredSkus.includes(createdPart.sku) ?
         current.requiredSkus :
         [...current.requiredSkus, createdPart.sku];
+    const computedPartEstimate = computePartEstimateFromSkus(nextRequiredSkus, [
+      ...parts,
+      {
+        ...createdPart,
+        estimatedUnitCost: createdPartCost,
+      },
+    ]);
+    const laborEstimate = current.quote?.laborEstimate ?? 0;
+    const computedEstimatedTotal = Number(
+        (computedPartEstimate + laborEstimate).toFixed(2));
 
     const updated = await updateJobRecord(
-        authResult.orgId, body.id, {requiredSkus: nextRequiredSkus});
+        authResult.orgId,
+        jobId,
+        {
+          requiredSkus: nextRequiredSkus,
+          quote: {
+            partEstimate: computedPartEstimate,
+            estimatedTotal: computedEstimatedTotal,
+          },
+        },
+    );
 
     if (!updated) {
       return NextResponse.json({error: 'Job not found'}, {status: 404});
@@ -455,17 +495,26 @@ export async function PATCH(request: Request) {
       return authResult.error;
     }
 
-    const current = await getJobRecord(authResult.orgId, body.id);
+    const current = await getJobRecord(authResult.orgId, jobId);
     if (!current) {
       return NextResponse.json({error: 'Job not found'}, {status: 404});
     }
 
     if (body.timeClockAction === 'clock_in') {
-      const updated = await updateJobRecord(authResult.orgId, body.id, {
+      const ledger = [
+        ...(current.timeClock?.ledger ?? []), {
+          id: crypto.randomUUID(),
+          action: 'clock_in' as const,
+          at: new Date().toISOString(),
+          note: body.timeClockActionNote?.trim() || null,
+        }
+      ];
+
+      const updated = await updateJobRecord(authResult.orgId, jobId, {
         status: current.status === 'queued' ? 'in_progress' : undefined,
         timeClock: {
           clockedInAt: new Date().toISOString(),
-          clockedOutAt: null,
+          ledger,
         },
       });
 
@@ -478,9 +527,19 @@ export async function PATCH(request: Request) {
     }
 
     if (body.timeClockAction === 'clock_out') {
-      const updated = await updateJobRecord(authResult.orgId, body.id, {
+      const ledger = [
+        ...(current.timeClock?.ledger ?? []), {
+          id: crypto.randomUUID(),
+          action: 'clock_out' as const,
+          at: new Date().toISOString(),
+          note: body.timeClockActionNote?.trim() || null,
+        }
+      ];
+
+      const updated = await updateJobRecord(authResult.orgId, jobId, {
         timeClock: {
           clockedOutAt: new Date().toISOString(),
+          ledger,
         },
       });
 
@@ -492,31 +551,10 @@ export async function PATCH(request: Request) {
           {ok: true, message: `Clocked out ${updated.id}`, job: updated});
     }
 
-    if (body.timeClockAction === 'set_break') {
-      if (!Number.isFinite(body.breakMinutes) || body.breakMinutes! < 0) {
-        return NextResponse.json(
-            {error: 'breakMinutes must be a non-negative number'},
-            {status: 400});
-      }
-
-      const updated = await updateJobRecord(authResult.orgId, body.id, {
-        timeClock: {
-          breakMinutes: Math.trunc(body.breakMinutes!),
-        },
-      });
-
-      if (!updated) {
-        return NextResponse.json({error: 'Job not found'}, {status: 404});
-      }
-
-      return NextResponse.json(
-          {ok: true, message: `Updated break for ${updated.id}`, job: updated});
-    }
-
     if (body.timeClockAction === 'set_notes') {
-      const updated = await updateJobRecord(authResult.orgId, body.id, {
+      const updated = await updateJobRecord(authResult.orgId, jobId, {
         timeClock: {
-          notes: body.timeClockNotes?.trim() || null,
+          notes: body.timeClockNotes ?? null,
         },
       });
 
@@ -582,6 +620,16 @@ export async function PATCH(request: Request) {
   let laborRate: number|null|undefined;
   let computedLaborEstimate: number|undefined;
   let computedEstimatedTotal: number|undefined;
+  let currentJob: Awaited<ReturnType<typeof getJobRecord>>|null|undefined;
+
+  const loadCurrentJob = async () => {
+    if (currentJob !== undefined) {
+      return currentJob;
+    }
+
+    currentJob = await getJobRecord(authResult.orgId, jobId);
+    return currentJob;
+  };
 
   if (body.assignedTechnicianId !== undefined) {
     const nextTechnicianId = body.assignedTechnicianId?.trim() || null;
@@ -597,47 +645,58 @@ export async function PATCH(request: Request) {
       assignedTechnicianName = technician.fullName;
       laborRate = technician.hourlyRate;
 
-      if (body.quote?.estimatedMinutes !== undefined) {
-        const minutes = Math.trunc(body.quote.estimatedMinutes);
-        computedLaborEstimate =
-            Number(((minutes / 60) * technician.hourlyRate).toFixed(2));
-        if (body.quote.partEstimate !== undefined) {
-          computedEstimatedTotal = Number(
-              (body.quote.partEstimate + computedLaborEstimate).toFixed(2));
-        }
+      const current = await loadCurrentJob();
+      if (!current) {
+        return NextResponse.json({error: 'Job not found'}, {status: 404});
       }
+
+      const estimateMinutesSource = body.quote?.estimatedMinutes === undefined ?
+          (current.quote?.estimatedMinutes ?? 0) :
+          body.quote.estimatedMinutes;
+      const partEstimateSource = body.quote?.partEstimate === undefined ?
+          (current.quote?.partEstimate ?? 0) :
+          body.quote.partEstimate;
+      const normalizedMinutes = Math.trunc(estimateMinutesSource);
+
+      computedLaborEstimate =
+          computeLaborEstimate(normalizedMinutes, technician.hourlyRate);
+      computedEstimatedTotal = Number(
+          (partEstimateSource + computedLaborEstimate).toFixed(2));
     } else {
       assignedTechnicianName = null;
       laborRate = null;
     }
   }
 
-  const updated = await updateJobRecord(authResult.orgId, body.id, {
+  const quoteUpdate = body.quote || computedLaborEstimate !== undefined ||
+          computedEstimatedTotal !== undefined ?
+      {
+        partEstimate: body.quote?.partEstimate,
+        laborEstimate: computedLaborEstimate ?? body.quote?.laborEstimate,
+        estimatedMinutes: body.quote?.estimatedMinutes === undefined ?
+            undefined :
+            Math.trunc(body.quote.estimatedMinutes),
+        estimatedTotal: computedEstimatedTotal ?? body.quote?.estimatedTotal,
+        notes: body.quote?.notes === undefined ? undefined :
+                                                 body.quote.notes || null,
+      } :
+      undefined;
+
+  const updated = await updateJobRecord(authResult.orgId, jobId, {
     customerName: body.customerName?.trim(),
     site: body.site?.trim(),
     status: body.status,
     priority: body.priority,
     etaMinutes: body.etaMinutes,
     scheduledFor: body.scheduledFor,
-    followUpNote: body.followUpNote === undefined ?
-        undefined :
-        body.followUpNote?.trim() || null,
+    followUpNote: body.followUpNote === undefined ? undefined :
+                                                    body.followUpNote || null,
     assignedTechnicianId: body.assignedTechnicianId === undefined ?
         undefined :
         body.assignedTechnicianId?.trim() || null,
     assignedTechnicianName,
     laborRate,
-    quote: body.quote ? {
-      partEstimate: body.quote.partEstimate,
-      laborEstimate: computedLaborEstimate ?? body.quote.laborEstimate,
-      estimatedMinutes: body.quote.estimatedMinutes === undefined ?
-          undefined :
-          Math.trunc(body.quote.estimatedMinutes),
-      estimatedTotal: computedEstimatedTotal ?? body.quote.estimatedTotal,
-      notes: body.quote.notes === undefined ? undefined :
-                                              body.quote.notes?.trim() || null,
-    } :
-                        undefined,
+    quote: quoteUpdate,
   });
 
   if (!updated) {

@@ -1,0 +1,2 @@
+ALTER TABLE "JobRecord"
+ADD COLUMN "timeClockLedger" JSONB NOT NULL DEFAULT '[]';

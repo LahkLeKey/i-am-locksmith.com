@@ -72,6 +72,7 @@ model JobRecord {
     clockedOutAt           DateTime?
     breakMinutes           Int       @default(0)
     timeClockNotes         String?
+    timeClockLedger        Json      @default("[]")
     actualPartCost         Decimal?  @db.Decimal(10, 2)
     actualLaborCost        Decimal?  @db.Decimal(10, 2)
     actualMinutes          Int?

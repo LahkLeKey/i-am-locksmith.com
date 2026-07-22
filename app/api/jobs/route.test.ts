@@ -70,6 +70,14 @@ const BASE_JOB = {
     closedOutAt: null,
     resolutionNotes: null,
   },
+  timeClock: {
+    clockedInAt: null,
+    clockedOutAt: null,
+    breakMinutes: 0,
+    elapsedMinutes: 0,
+    notes: null,
+    ledger: [],
+  },
 } as const;
 
 describe('jobs api route', () => {
@@ -288,7 +296,18 @@ describe('jobs api route', () => {
 
     expect(response?.status).toBe(200);
     expect(mockedUpdateInventoryPart).toHaveBeenCalledOnce();
-    expect(mockedUpdateJobRecord).toHaveBeenCalled();
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1',
+            'JOB-1',
+            expect.objectContaining({
+              requiredSkus: ['SKU-1'],
+              quote: expect.objectContaining({
+                partEstimate: 42.5,
+                estimatedTotal: 92.5,
+              }),
+            }),
+        );
   });
 
   it('returns 404 when reserve SKU does not exist', async () => {
@@ -377,7 +396,57 @@ describe('jobs api route', () => {
 
        expect(response?.status).toBe(200);
        expect(mockedCreateInventoryPart).toHaveBeenCalledOnce();
-       expect(mockedUpdateJobRecord).toHaveBeenCalled();
+       expect(mockedUpdateJobRecord)
+           .toHaveBeenCalledWith(
+               'org_1',
+               'JOB-1',
+               expect.objectContaining({
+                 requiredSkus: ['SKU-NEW'],
+                 quote: expect.objectContaining({
+                   partEstimate: 35,
+                   estimatedTotal: 85,
+                 }),
+               }),
+           );
+     });
+
+  it('recomputes labor and total when technician changes without quote payload',
+     async () => {
+       mockedGetJobRecord.mockResolvedValue({
+         ...BASE_JOB,
+         quote: {
+           ...BASE_JOB.quote,
+           partEstimate: 120,
+           estimatedMinutes: 90,
+         },
+       } as never);
+
+       const request = new Request('http://localhost/api/jobs', {
+         method: 'PATCH',
+         headers: {'content-type': 'application/json'},
+         body: JSON.stringify({
+           id: 'JOB-1',
+           assignedTechnicianId: 'tech_1',
+         }),
+       });
+
+       const response = await PATCH(request);
+
+       expect(response?.status).toBe(200);
+       expect(mockedUpdateJobRecord)
+           .toHaveBeenCalledWith(
+               'org_1',
+               'JOB-1',
+               expect.objectContaining({
+                 assignedTechnicianId: 'tech_1',
+                 assignedTechnicianName: 'Taylor Ford',
+                 laborRate: 95,
+                 quote: expect.objectContaining({
+                   laborEstimate: 142.5,
+                   estimatedTotal: 262.5,
+                 }),
+               }),
+           );
      });
 
   it('clocks in a job via time clock action', async () => {
@@ -400,20 +469,21 @@ describe('jobs api route', () => {
             expect.objectContaining({
               timeClock: expect.objectContaining({
                 clockedInAt: expect.any(String),
-                clockedOutAt: null,
+                ledger: expect.arrayContaining([
+                  expect.objectContaining({action: 'clock_in'}),
+                ]),
               }),
             }),
         );
   });
 
-  it('sets break minutes via time clock action', async () => {
+  it('clocks out a job via time clock action', async () => {
     const request = new Request('http://localhost/api/jobs', {
       method: 'PATCH',
       headers: {'content-type': 'application/json'},
       body: JSON.stringify({
         id: 'JOB-1',
-        timeClockAction: 'set_break',
-        breakMinutes: 20,
+        timeClockAction: 'clock_out',
       }),
     });
 
@@ -425,24 +495,37 @@ describe('jobs api route', () => {
             'org_1',
             'JOB-1',
             expect.objectContaining({
-              timeClock: {breakMinutes: 20},
+              timeClock: expect.objectContaining({
+                clockedOutAt: expect.any(String),
+                ledger: expect.arrayContaining([
+                  expect.objectContaining({action: 'clock_out'}),
+                ]),
+              }),
             }),
         );
   });
 
-  it('rejects invalid break minutes via time clock action', async () => {
+  it('saves markdown time notes via time clock action', async () => {
     const request = new Request('http://localhost/api/jobs', {
       method: 'PATCH',
       headers: {'content-type': 'application/json'},
       body: JSON.stringify({
         id: 'JOB-1',
-        timeClockAction: 'set_break',
-        breakMinutes: -2,
+        timeClockAction: 'set_notes',
+        timeClockNotes: '## Shift Log\n- Started early',
       }),
     });
 
     const response = await PATCH(request);
 
-    expect(response?.status).toBe(400);
+    expect(response?.status).toBe(200);
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1',
+            'JOB-1',
+            expect.objectContaining({
+              timeClock: {notes: '## Shift Log\n- Started early'},
+            }),
+        );
   });
 });

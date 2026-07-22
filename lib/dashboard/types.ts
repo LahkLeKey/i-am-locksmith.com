@@ -16,6 +16,10 @@ export type JobQueueStatus =
 
 export type JobQueuePriority = 'low'|'normal'|'high'|'urgent';
 
+export type TimeClockLedgerEntry = {
+  id: string; action: 'clock_in' | 'clock_out'; at: string; note: string | null;
+};
+
 export type JobQueueItem = {
   id: string; customerName: string; site: string; priority: JobQueuePriority;
   status: JobQueueStatus;
@@ -42,6 +46,7 @@ export type JobQueueItem = {
     breakMinutes: number;
     elapsedMinutes: number;
     notes: string | null;
+    ledger: TimeClockLedgerEntry[];
   };
 };
 
