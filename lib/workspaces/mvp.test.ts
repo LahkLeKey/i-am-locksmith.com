@@ -60,7 +60,6 @@ describe('workspace mvp snapshots', () => {
     expect(MVP_WORKSPACE_KEYS).toEqual([
       'customers',
       'jobs',
-      'quotes',
       'invoices',
       'reports',
       'settings',

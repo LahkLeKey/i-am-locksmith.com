@@ -6,7 +6,6 @@ import type {WorkflowActionType} from './workflow-actions';
 export const MVP_WORKSPACE_KEYS = [
   'customers',
   'jobs',
-  'quotes',
   'invoices',
   'reports',
   'settings',
@@ -77,7 +76,7 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
   jobs: {
     title: 'Jobs Workspace',
     subtitle:
-        'Move work from quote-approved to dispatched and completed with inventory context.',
+        'Move work from quote intake to dispatched and completed with inventory context.',
     primaryAction: {
       label: 'Dispatch next queued job',
       actionType: 'jobs.dispatch_next',
@@ -110,46 +109,10 @@ const WORKSPACE_MVP_SNAPSHOTS: Record<MvpWorkspaceKey, WorkspaceMvpSnapshot> = {
       },
     ],
     checklist: [
+      'Capture quote intake details before dispatch scheduling.',
       'Attach inventory reservations before assigning technicians.',
       'Track eta changes to reduce customer no-answer rates.',
       'Mark completed jobs with parts consumed for margin visibility.',
-    ],
-  },
-  quotes: {
-    title: 'Quotes Workspace',
-    subtitle:
-        'Prepare scoped quotes with labor, parts, and approval timing at a glance.',
-    primaryAction: {
-      label: 'Approve pending quote',
-      actionType: 'quotes.approve_pending',
-      summary: 'Advances quote workflow and updates projected daily revenue.',
-    },
-    kpis: [
-      {label: 'Draft quotes', value: '23', trend: '6 created today'},
-      {label: 'Approval rate', value: '62%', trend: '+8% month over month'},
-      {label: 'Average turnaround', value: '19h', trend: 'Target < 24h'},
-    ],
-    queue: [
-      {
-        title: 'Access control retrofit proposal',
-        detail: 'Awaiting final hardware cost from supplier',
-        status: 'urgent',
-      },
-      {
-        title: 'Multi-site rekey estimate',
-        detail: 'Need site visit notes from technician',
-        status: 'attention',
-      },
-      {
-        title: 'Preventive maintenance renewal',
-        detail: 'Schedule send after customer budget meeting',
-        status: 'scheduled',
-      },
-    ],
-    checklist: [
-      'Reuse approved labor templates to keep quote margins consistent.',
-      'Flag parts with low stock before sending customer-facing totals.',
-      'Track approval blockers to shorten close cycles.',
     ],
   },
   invoices: {
@@ -416,32 +379,9 @@ function withDashboardSignals(
           trend: `${dashboardData.vansBelowMin} vans below min levels`,
         },
         {
-          label: 'Revenue tied to active jobs',
+          label: 'Quote + job revenue pipeline',
           value: formatUsd(dashboardData.revenueToday),
-          trend: 'Use dispatch sequencing to protect completion velocity',
-        },
-      ],
-    };
-  }
-
-  if (workspaceKey === 'quotes') {
-    return {
-      ...shared,
-      kpis: [
-        {
-          label: 'Pipeline jobs for quoting',
-          value: String(dashboardData.jobsQueue.length),
-          trend: `${urgentJobCount} high-priority jobs need fast turnarounds`,
-        },
-        {
-          label: 'Gross margin this week',
-          value: formatPercent(dashboardData.grossMarginWeek),
-          trend: 'Use margin guardrails when pricing parts + labor',
-        },
-        {
-          label: 'Low-stock influence',
-          value: String(dashboardData.lowStockSkus),
-          trend: 'Flag stock-sensitive quotes before approval',
+          trend: `${dashboardData.lowStockSkus} low-stock SKUs can delay quote-to-job conversion`,
         },
       ],
     };

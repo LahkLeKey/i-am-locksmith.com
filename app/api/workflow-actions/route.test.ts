@@ -145,7 +145,7 @@ describe('workflow actions route', () => {
     const request = new Request('http://localhost/api/workflow-actions', {
       method: 'POST',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify({actionType: 'jobs.dispatch_next'}),
+      body: JSON.stringify({actionType: 'jobs.capture_quote_intake'}),
     });
 
     const response = await POST(request);

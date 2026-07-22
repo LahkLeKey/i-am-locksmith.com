@@ -16,7 +16,6 @@ describe('buildVisibleWidgets', () => {
       'jobs.read',
       'settings.read',
       'customers.read',
-      'quotes.read',
     ]);
 
     const visible = buildVisibleWidgets(permissions as never);

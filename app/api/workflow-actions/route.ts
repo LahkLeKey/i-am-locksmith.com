@@ -11,7 +11,7 @@ type WorkflowActionRequest = {
 const ACTION_PERMISSION_MAP: Record<WorkflowActionType, Permission> = {
   'customers.record_follow_up': 'customers.update',
   'jobs.dispatch_next': 'jobs.assign',
-  'quotes.approve_pending': 'quotes.approve',
+  'jobs.capture_quote_intake': 'jobs.update',
   'invoices.send_one': 'invoices.send',
   'reports.refresh_snapshot': 'reports.read',
   'settings.apply_replenishment_guardrail': 'settings.update',

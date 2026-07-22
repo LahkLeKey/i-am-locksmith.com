@@ -70,8 +70,8 @@ describe('applyWorkflowAction', () => {
     expect(next.data.jobsQueue[0]?.etaMinutes).toBe(30);
   });
 
-  it('increments revenue when quote approved', () => {
-    const next = applyWorkflowAction(BASE_DATA, 'quotes.approve_pending');
+  it('increments revenue when quote intake is captured from jobs', () => {
+    const next = applyWorkflowAction(BASE_DATA, 'jobs.capture_quote_intake');
 
     expect(next.data.revenueToday).toBe(5750);
   });

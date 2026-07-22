@@ -11,7 +11,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {href: '/jobs', label: 'Jobs', permission: 'jobs.read'},
   {href: '/inventory', label: 'Inventory', permission: 'inventory.read'},
   {href: '/customers', label: 'Customers', permission: 'customers.read'},
-  {href: '/quotes', label: 'Quotes', permission: 'quotes.read'},
   {href: '/invoices', label: 'Invoices', permission: 'invoices.read'},
   {href: '/reports', label: 'Reports', permission: 'reports.read'},
   {href: '/settings', label: 'Settings', permission: 'settings.read'},

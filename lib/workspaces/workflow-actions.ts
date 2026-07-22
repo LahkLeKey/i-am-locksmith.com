@@ -1,7 +1,7 @@
 import type {DashboardData, JobQueueItem, ReplenishmentAlert} from '../dashboard/types';
 
 export type WorkflowActionType =|'customers.record_follow_up'|
-    'jobs.dispatch_next'|'quotes.approve_pending'|'invoices.send_one'|
+  'jobs.dispatch_next'|'jobs.capture_quote_intake'|'invoices.send_one'|
     'reports.refresh_snapshot'|'settings.apply_replenishment_guardrail';
 
 export function applyWorkflowAction(
@@ -35,14 +35,14 @@ export function applyWorkflowAction(
     };
   }
 
-  if (actionType === 'quotes.approve_pending') {
+  if (actionType === 'jobs.capture_quote_intake') {
     return {
       data: {
         ...dashboardData,
         generatedAt: nowIso,
         revenueToday: dashboardData.revenueToday + 750,
       },
-      message: 'Quote approved and projected revenue updated.',
+      message: 'Quote intake logged in jobs operations and projected revenue updated.',
     };
   }
 

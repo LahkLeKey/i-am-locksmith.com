@@ -3,6 +3,7 @@ import { getDashboardData } from '@/lib/dashboard/repository';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
 
 import { JobsCrudPanel } from '@/app/components/jobs-crud-panel';
+import { WorkspaceActionPanel } from '@/app/components/workspace-action-panel';
 
 export default async function JobsPage() {
   const context = await requireRouteContext('/jobs');
@@ -25,9 +26,14 @@ export default async function JobsPage() {
       <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
         <h1 className="text-2xl font-semibold">Jobs Operations</h1>
         <p className="mt-1 text-sm text-[#4b5563]">
-          Manage dispatch jobs directly with inline updates and inventory actions linked to reporting.
+          Manage quote intake, dispatch jobs, and inventory actions in one operational queue.
         </p>
       </article>
+      <WorkspaceActionPanel
+        actionType="jobs.capture_quote_intake"
+        label="Log Quote Intake"
+        summary="Capture quote progress directly in Jobs Operations and update projected revenue context."
+      />
       <JobsCrudPanel initialJobs={dashboardData.jobsQueue} inventoryLookupParts={inventoryLookupParts} />
     </section>
   );
