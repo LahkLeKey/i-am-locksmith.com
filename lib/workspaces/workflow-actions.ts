@@ -1,7 +1,7 @@
 import type {DashboardData, JobQueueItem, ReplenishmentAlert} from '../dashboard/types';
 
 export type WorkflowActionType =|'jobs.record_customer_follow_up'|
-  'jobs.dispatch_next'|'jobs.capture_quote_intake'|'invoices.send_one'|
+    'jobs.dispatch_next'|'jobs.capture_quote_intake'|'invoices.send_one'|
     'reports.refresh_snapshot'|'settings.apply_replenishment_guardrail';
 
 export function applyWorkflowAction(

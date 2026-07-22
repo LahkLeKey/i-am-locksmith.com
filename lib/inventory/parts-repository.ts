@@ -41,7 +41,7 @@ type InventoryPartClient = {
   };
 };
 
-type InventoryPartRow = Omit<InventoryPartRecord, 'estimatedUnitCost'> & {
+type InventoryPartRow = Omit<InventoryPartRecord, 'estimatedUnitCost'>&{
   estimatedUnitCost: unknown;
 };
 
