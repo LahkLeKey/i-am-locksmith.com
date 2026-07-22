@@ -190,7 +190,7 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                                     <p className="font-semibold text-[#0f172a]">{part.itemName}</p>
                                     <p className="text-[11px] text-[#64748b]">{part.sku} · {part.location}</p>
                                     <p className="mt-1 text-[11px] text-[#64748b]">{part.supplier}</p>
-                                    <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${part.estimatedUnitCost.toFixed(2)}</p>
+                                    <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${Number(part.estimatedUnitCost).toFixed(2)}</p>
                                 </td>
                                 <td className="px-3 py-3">
                                     <div className="flex flex-wrap gap-2">

@@ -173,7 +173,7 @@ export function JobsCrudPanel({
                             return total;
                         }
 
-                        return total + matched.estimatedUnitCost;
+                        return total + Number(matched.estimatedUnitCost);
                     }, 0)
                     .toFixed(2),
             ),

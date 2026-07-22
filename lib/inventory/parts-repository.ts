@@ -41,6 +41,22 @@ type InventoryPartClient = {
   };
 };
 
+type InventoryPartRow = Omit<InventoryPartRecord, 'estimatedUnitCost'> & {
+  estimatedUnitCost: unknown;
+};
+
+function toFiniteNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toInventoryPartRecord(row: InventoryPartRow): InventoryPartRecord {
+  return {
+    ...row,
+    estimatedUnitCost: toFiniteNumber(row.estimatedUnitCost),
+  };
+}
+
 async function getClient(): Promise<InventoryPartClient> {
   return prisma as unknown as InventoryPartClient;
 }
@@ -49,17 +65,21 @@ export async function listInventoryParts(orgId: string):
     Promise<InventoryPartRecord[]> {
   const client = await getClient();
 
-  return client.inventoryPart.findMany({
+  const rows = await client.inventoryPart.findMany({
     where: {orgId},
     orderBy: [{sku: 'asc'}, {itemName: 'asc'}],
   });
+
+  return rows.map((row) => toInventoryPartRecord(row as InventoryPartRow));
 }
 
 export async function createInventoryPart(
     orgId: string, data: InventoryPartInput): Promise<InventoryPartRecord> {
   const client = await getClient();
 
-  return client.inventoryPart.create({data: {...data, orgId}});
+  const row = await client.inventoryPart.create({data: {...data, orgId}});
+
+  return toInventoryPartRecord(row as InventoryPartRow);
 }
 
 export async function updateInventoryPart(
@@ -67,12 +87,16 @@ export async function updateInventoryPart(
     data: Partial<InventoryPartInput>): Promise<InventoryPartRecord> {
   const client = await getClient();
 
-  return client.inventoryPart.update({where: {id}, data});
+  const row = await client.inventoryPart.update({where: {id}, data});
+
+  return toInventoryPartRecord(row as InventoryPartRow);
 }
 
 export async function deleteInventoryPart(id: string):
     Promise<InventoryPartRecord> {
   const client = await getClient();
 
-  return client.inventoryPart.delete({where: {id}});
+  const row = await client.inventoryPart.delete({where: {id}});
+
+  return toInventoryPartRecord(row as InventoryPartRow);
 }
