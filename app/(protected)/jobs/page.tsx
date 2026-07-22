@@ -24,9 +24,9 @@ export default async function JobsPage() {
   }));
 
   return (
-    <section className="space-y-6">
-      <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
-        <h1 className="text-2xl font-semibold">Jobs Operations</h1>
+    <section className="space-y-4">
+      <article className="px-1 py-1">
+        <h1 className="text-2xl font-semibold text-[#0f172a]">Jobs Operations</h1>
         <p className="mt-1 text-sm text-[#4b5563]">
           Manage quote intake, dispatch, closeout financials, and inventory actions in one operational queue.
         </p>
