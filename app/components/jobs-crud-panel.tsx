@@ -13,6 +13,7 @@ type InventoryLookupPart = {
     id: string;
     sku: string;
     itemName: string;
+    estimatedUnitCost: number;
     location: string;
     onHand: number;
 };
@@ -107,7 +108,6 @@ export function JobsCrudPanel({
     const [followUpNote, setFollowUpNote] = useState('');
     const [assignedTechnicianId, setAssignedTechnicianId] = useState('');
     const [estimatedMinutes, setEstimatedMinutes] = useState('60');
-    const [quotePartEstimate, setQuotePartEstimate] = useState('0');
     const [quoteNotes, setQuoteNotes] = useState('');
 
     const [isPending, setIsPending] = useState(false);
@@ -163,13 +163,24 @@ export function JobsCrudPanel({
 
         return Number(((minutes / 60) * selectedTechnician.hourlyRate).toFixed(2));
     }, [estimatedMinutes, selectedTechnician]);
-    const quoteEstimatedTotal = useMemo(() => {
-        const partEstimate = Number(quotePartEstimate);
-        if (!Number.isFinite(partEstimate) || partEstimate < 0) {
-            return quoteLaborEstimate;
-        }
+    const quotePartEstimate = useMemo(
+        () =>
+            Number(
+                requiredSkus
+                    .reduce((total, sku) => {
+                        const matched = sortedInventoryLookupParts.find((part) => part.sku === sku);
+                        if (!matched) {
+                            return total;
+                        }
 
-        return Number((partEstimate + quoteLaborEstimate).toFixed(2));
+                        return total + matched.estimatedUnitCost;
+                    }, 0)
+                    .toFixed(2),
+            ),
+        [requiredSkus, sortedInventoryLookupParts],
+    );
+    const quoteEstimatedTotal = useMemo(() => {
+        return Number((quotePartEstimate + quoteLaborEstimate).toFixed(2));
     }, [quotePartEstimate, quoteLaborEstimate]);
     const filteredPartsForWizard = useMemo(() => {
         const query = partsLookupQuery.trim().toLowerCase();
@@ -274,7 +285,6 @@ export function JobsCrudPanel({
         setFollowUpNote('');
         setAssignedTechnicianId('');
         setEstimatedMinutes('60');
-        setQuotePartEstimate('0');
         setQuoteNotes('');
     }
 
@@ -318,7 +328,7 @@ export function JobsCrudPanel({
                             followUpNote,
                             assignedTechnicianId: selectedTechnician?.id ?? null,
                             quote: {
-                                partEstimate: toNumber(quotePartEstimate),
+                                partEstimate: quotePartEstimate,
                                 laborEstimate: 0,
                                 estimatedMinutes: toNumber(estimatedMinutes),
                                 estimatedTotal: 0,
@@ -493,15 +503,11 @@ export function JobsCrudPanel({
                             />
                         </label>
                         <label className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate (Auto)</span>
                             <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={quotePartEstimate}
-                                onChange={(event) => setQuotePartEstimate(event.target.value)}
-                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                required
+                                value={`$${quotePartEstimate.toFixed(2)} from ${requiredSkus.length} selected part(s)`}
+                                className="w-full rounded-md border border-[#d1d5db] bg-[#f8fafc] px-3 py-2 text-xs"
+                                readOnly
                             />
                         </label>
                     </div>
@@ -521,7 +527,7 @@ export function JobsCrudPanel({
                         <div className="grid gap-2 sm:grid-cols-3">
                             <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
                                 <p className="text-[#475569]">Part Estimate</p>
-                                <p className="text-sm font-semibold text-[#0f172a]">${Number(quotePartEstimate || '0').toFixed(2)}</p>
+                                <p className="text-sm font-semibold text-[#0f172a]">${quotePartEstimate.toFixed(2)}</p>
                             </div>
                             <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
                                 <p className="text-[#475569]">Labor Estimate</p>

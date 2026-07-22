@@ -72,6 +72,18 @@ const ALLOWED_PRIORITIES: JobQueuePriority[] =
 const ALLOWED_STATUSES: JobQueueStatus[] =
     ['queued', 'scheduled', 'in_progress', 'blocked', 'completed'];
 
+function computePartEstimateFromSkus(
+    requiredSkus: string[],
+    inventoryParts: Awaited<ReturnType<typeof listInventoryParts>>): number {
+  const normalized = requiredSkus.map((sku) => sku.toLowerCase());
+
+  return Number(
+      inventoryParts
+          .filter((part) => normalized.includes(part.sku.toLowerCase()))
+          .reduce((total, part) => total + part.estimatedUnitCost, 0)
+          .toFixed(2));
+}
+
 function isJobPriority(value: unknown): value is JobQueuePriority {
   return typeof value === 'string' &&
       ALLOWED_PRIORITIES.includes(value as JobQueuePriority);
@@ -227,23 +239,27 @@ export async function POST(request: Request) {
   }
 
   const estimatedMinutes = Math.trunc(body.quote!.estimatedMinutes!);
+  const normalizedSkus = normalizeSkus(body.requiredSkus);
+  const inventoryParts = await listInventoryParts(authResult.orgId);
+  const computedPartEstimate =
+      computePartEstimateFromSkus(normalizedSkus, inventoryParts);
   const computedLaborEstimate =
       Number(((estimatedMinutes / 60) * technician.hourlyRate).toFixed(2));
   const computedEstimatedTotal =
-      Number((body.quote!.partEstimate! + computedLaborEstimate).toFixed(2));
+      Number((computedPartEstimate + computedLaborEstimate).toFixed(2));
 
   const nextJob = await createJobRecord(authResult.orgId, {
     customerName,
     site,
     priority: body.priority ?? 'normal',
     scheduledFor: body.scheduledFor ?? null,
-    requiredSkus: normalizeSkus(body.requiredSkus),
+    requiredSkus: normalizedSkus,
     followUpNote: body.followUpNote?.trim() || null,
     assignedTechnicianId,
     assignedTechnicianName: technician.fullName,
     laborRate: technician.hourlyRate,
     quote: {
-      partEstimate: body.quote!.partEstimate!,
+      partEstimate: computedPartEstimate,
       laborEstimate: computedLaborEstimate,
       estimatedMinutes,
       estimatedTotal: computedEstimatedTotal,
@@ -393,6 +409,7 @@ export async function PATCH(request: Request) {
     const createdPart = await createInventoryPart(authResult.orgId, {
       sku: inventorySku,
       itemName: draft.itemName.trim(),
+      estimatedUnitCost: 35,
       serviceLines,
       location: draft.location.trim(),
       onHand: draft.onHand!,

@@ -5,6 +5,7 @@ import {NextResponse} from 'next/server';
 type CreatePartRequest = {
   sku?: string;
   itemName?: string;
+  estimatedUnitCost?: number;
   serviceLines?: string[];
   location?: string;
   onHand?: number;
@@ -99,12 +100,13 @@ export async function POST(request: Request) {
   }
 
   if (!isNonNegativeNumber(body.onHand) ||
+      !isNonNegativeNumber(body.estimatedUnitCost) ||
       !isNonNegativeNumber(body.reorderPoint) ||
       !isNonNegativeNumber(body.suggestedOrderQty)) {
     return NextResponse.json(
         {
           error:
-              'onHand, reorderPoint, and suggestedOrderQty must be non-negative numbers'
+              'estimatedUnitCost, onHand, reorderPoint, and suggestedOrderQty must be non-negative numbers'
         },
         {status: 400});
   }
@@ -118,6 +120,7 @@ export async function POST(request: Request) {
   const part = await createInventoryPart(authResult.orgId, {
     sku,
     itemName,
+    estimatedUnitCost: body.estimatedUnitCost,
     serviceLines,
     location,
     onHand: body.onHand,
@@ -162,6 +165,8 @@ export async function PATCH(request: Request) {
   if (body.serviceLines)
     updateData.serviceLines = normalizeServiceLines(body.serviceLines);
   if (isNonNegativeNumber(body.onHand)) updateData.onHand = body.onHand;
+  if (isNonNegativeNumber(body.estimatedUnitCost))
+    updateData.estimatedUnitCost = body.estimatedUnitCost;
   if (isNonNegativeNumber(body.reorderPoint))
     updateData.reorderPoint = body.reorderPoint;
   if (isNonNegativeNumber(body.suggestedOrderQty))

@@ -2,6 +2,7 @@ import {prisma} from '@/lib/db/prisma';
 
 export type InventoryPartRecord = {
   id: string; orgId: string; sku: string; itemName: string;
+  estimatedUnitCost: number;
   serviceLines: string[];
   location: string;
   onHand: number;
@@ -14,6 +15,7 @@ export type InventoryPartRecord = {
 
 export type InventoryPartInput = {
   sku: string; itemName: string; serviceLines: string[]; location: string;
+  estimatedUnitCost: number;
   onHand: number;
   reorderPoint: number;
   suggestedOrderQty: number;

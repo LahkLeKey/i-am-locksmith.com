@@ -32,6 +32,7 @@ model InventoryPart {
     orgId             String
     sku               String
     itemName          String
+    estimatedUnitCost Decimal  @default(35) @db.Decimal(10, 2)
     serviceLines      Json
     location          String
     onHand            Int

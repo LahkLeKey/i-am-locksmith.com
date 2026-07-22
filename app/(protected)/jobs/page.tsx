@@ -18,6 +18,7 @@ export default async function JobsPage() {
     id: part.id,
     sku: part.sku,
     itemName: part.itemName,
+    estimatedUnitCost: part.estimatedUnitCost,
     location: part.location,
     onHand: part.onHand,
   }));

@@ -2,6 +2,7 @@ import {type DashboardData, type ReplenishmentAlert} from '../dashboard/types';
 
 export type InventoryPartSource = {
   id: string; sku: string; itemName: string; serviceLines: string[];
+  estimatedUnitCost: number;
   location: string;
   onHand: number;
   reorderPoint: number;
@@ -16,6 +17,7 @@ export type InventoryServiceLine = 'automotive'|'mobile'|'shop';
 export type InventoryCatalogRow = {
   id: string; sku: string; itemName: string;
   serviceLines: InventoryServiceLine[];
+  estimatedUnitCost: number;
   location: string;
   onHand: number;
   reorderPoint: number;
@@ -87,6 +89,8 @@ function buildCatalogRows(parts: Array<ReplenishmentAlert|InventoryPartSource>):
       sku: part.sku,
       itemName: part.itemName,
       serviceLines,
+      estimatedUnitCost: 'estimatedUnitCost' in part ? part.estimatedUnitCost :
+                                                       35,
       location: part.location,
       onHand: part.onHand,
       reorderPoint: part.reorderPoint,

@@ -93,6 +93,7 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                         body: JSON.stringify({
                             sku: String(formData.get('sku') ?? ''),
                             itemName: String(formData.get('itemName') ?? ''),
+                            estimatedUnitCost: Number(formData.get('estimatedUnitCost') ?? 0),
                             location: String(formData.get('location') ?? ''),
                             supplier: String(formData.get('supplier') ?? ''),
                             compatibilityNote: String(formData.get('compatibilityNote') ?? ''),
@@ -130,6 +131,10 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                 <label className="space-y-1 xl:col-span-2">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Compatibility Note</span>
                     <input name="compatibilityNote" placeholder="Compatibility note" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Est Unit Cost</span>
+                    <input name="estimatedUnitCost" type="number" step="0.01" min={0} defaultValue={35} required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
                 </label>
                 <label className="space-y-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">On Hand</span>
@@ -185,6 +190,7 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                                     <p className="font-semibold text-[#0f172a]">{part.itemName}</p>
                                     <p className="text-[11px] text-[#64748b]">{part.sku} · {part.location}</p>
                                     <p className="mt-1 text-[11px] text-[#64748b]">{part.supplier}</p>
+                                    <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${part.estimatedUnitCost.toFixed(2)}</p>
                                 </td>
                                 <td className="px-3 py-3">
                                     <div className="flex flex-wrap gap-2">

@@ -120,6 +120,7 @@ describe('jobs api route', () => {
         orgId: 'org_1',
         sku: 'SKU-1',
         itemName: 'Key blank',
+        estimatedUnitCost: 42.5,
         serviceLines: ['mobile'],
         location: 'Van 1',
         onHand: 8,
@@ -174,6 +175,9 @@ describe('jobs api route', () => {
               assignedTechnicianId: 'tech_1',
               assignedTechnicianName: 'Taylor Ford',
               laborRate: 95,
+              quote: expect.objectContaining({
+                partEstimate: 42.5,
+              }),
             }),
         );
     expect(mockedGetTechnicianById).toHaveBeenCalledWith('org_1', 'tech_1');

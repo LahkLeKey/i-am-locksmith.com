@@ -62,6 +62,7 @@ describe('inventory parts api route', () => {
           body: JSON.stringify({
             sku: 'AUTO-1',
             itemName: 'Auto part',
+            estimatedUnitCost: 42.5,
             serviceLines: ['automotive'],
             location: 'Van 1',
             onHand: 3,
