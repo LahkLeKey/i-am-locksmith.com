@@ -10,6 +10,7 @@ type CreateJobRequest = {
   priority?: JobQueuePriority;
   requiredSkus?: string[];
   scheduledFor?: string | null;
+  followUpNote?: string | null;
   quote?: {
     partEstimate?: number;
     laborEstimate?: number;
@@ -215,6 +216,7 @@ export async function POST(request: Request) {
     priority: body.priority ?? 'normal',
     scheduledFor: body.scheduledFor ?? null,
     requiredSkus: normalizeSkus(body.requiredSkus),
+    followUpNote: body.followUpNote?.trim() || null,
     quote: {
       partEstimate: body.quote!.partEstimate!,
       laborEstimate: body.quote!.laborEstimate!,

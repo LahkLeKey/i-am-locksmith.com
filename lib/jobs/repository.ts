@@ -5,6 +5,7 @@ export type JobRecordInput = {
   customerName: string; site: string; priority: JobQueuePriority;
   scheduledFor: string | null;
   requiredSkus: string[];
+  followUpNote: string | null;
   quote: {
     partEstimate: number; laborEstimate: number; estimatedMinutes: number;
     estimatedTotal: number;
@@ -195,7 +196,7 @@ export async function createJobRecord(
       scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : null,
       etaMinutes: null,
       requiredSkus: input.requiredSkus,
-      followUpNote: null,
+      followUpNote: input.followUpNote,
       partEstimate: input.quote.partEstimate,
       laborEstimate: input.quote.laborEstimate,
       estimatedMinutes: input.quote.estimatedMinutes,

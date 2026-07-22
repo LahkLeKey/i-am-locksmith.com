@@ -126,6 +126,10 @@ describe('jobs api route', () => {
       body: JSON.stringify({
         customerName: 'New Co',
         site: 'Austin',
+        priority: 'high',
+        scheduledFor: '2026-07-23T15:00:00.000Z',
+        requiredSkus: ['SKU-1', 'SKU-2'],
+        followUpNote: 'Call customer before arrival',
         quote: {
           partEstimate: 100,
           laborEstimate: 80,
@@ -140,6 +144,17 @@ describe('jobs api route', () => {
 
     expect(response?.status).toBe(200);
     expect(mockedCreateJobRecord).toHaveBeenCalledOnce();
+    expect(mockedCreateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1',
+            expect.objectContaining({
+              customerName: 'New Co',
+              site: 'Austin',
+              priority: 'high',
+              requiredSkus: ['SKU-1', 'SKU-2'],
+              followUpNote: 'Call customer before arrival',
+            }),
+        );
   });
 
   it('lists jobs', async () => {

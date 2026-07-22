@@ -40,6 +40,8 @@ type CloseoutDraft = {
     resolutionNotes: string;
 };
 
+type AddJobWizardStep = 1 | 2 | 3;
+
 function toNumber(value: string): number {
     return Number(value);
 }
@@ -83,6 +85,9 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
     const [customerName, setCustomerName] = useState('');
     const [site, setSite] = useState('');
     const [priority, setPriority] = useState<JobQueuePriority>('normal');
+    const [scheduledFor, setScheduledFor] = useState('');
+    const [requiredSkus, setRequiredSkus] = useState('');
+    const [followUpNote, setFollowUpNote] = useState('');
     const [quotePartEstimate, setQuotePartEstimate] = useState('0');
     const [quoteLaborEstimate, setQuoteLaborEstimate] = useState('0');
     const [quoteEstimatedMinutes, setQuoteEstimatedMinutes] = useState('0');
@@ -92,6 +97,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
     const [isPending, setIsPending] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [wizardStep, setWizardStep] = useState<AddJobWizardStep>(1);
 
     const [reserveSku, setReserveSku] = useState<Record<string, string>>({});
     const [reserveQty, setReserveQty] = useState<Record<string, number>>({});
@@ -207,6 +213,33 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
         }
     }
 
+    function resetWizard() {
+        setWizardStep(1);
+        setCustomerName('');
+        setSite('');
+        setPriority('normal');
+        setScheduledFor('');
+        setRequiredSkus('');
+        setFollowUpNote('');
+        setQuotePartEstimate('0');
+        setQuoteLaborEstimate('0');
+        setQuoteEstimatedMinutes('0');
+        setQuoteEstimatedTotal('0');
+        setQuoteNotes('');
+    }
+
+    function canAdvanceFromStep(step: AddJobWizardStep): boolean {
+        if (step === 1) {
+            return customerName.trim().length > 0 && site.trim().length > 0;
+        }
+
+        if (step === 2) {
+            return true;
+        }
+
+        return false;
+    }
+
     return (
         <section className="space-y-4 rounded-md border border-[#e5e7eb] bg-white p-4">
             <div>
@@ -215,7 +248,7 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
             </div>
 
             <form
-                className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+                className="space-y-3 rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-3"
                 onSubmit={async (event) => {
                     event.preventDefault();
 
@@ -226,6 +259,12 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                             customerName,
                             site,
                             priority,
+                            scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
+                            requiredSkus: requiredSkus
+                                .split(',')
+                                .map((entry) => entry.trim())
+                                .filter(Boolean),
+                            followUpNote,
                             quote: {
                                 partEstimate: toNumber(quotePartEstimate),
                                 laborEstimate: toNumber(quoteLaborEstimate),
@@ -236,114 +275,196 @@ export function JobsCrudPanel({ initialJobs, inventoryLookupParts }: { initialJo
                         }),
                     });
 
-                    setCustomerName('');
-                    setSite('');
-                    setPriority('normal');
-                    setQuotePartEstimate('0');
-                    setQuoteLaborEstimate('0');
-                    setQuoteEstimatedMinutes('0');
-                    setQuoteEstimatedTotal('0');
-                    setQuoteNotes('');
+                    resetWizard();
                 }}
             >
-                <label className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer</span>
-                    <input
-                        value={customerName}
-                        onChange={(event) => setCustomerName(event.target.value)}
-                        placeholder="Customer name"
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                        required
-                    />
-                </label>
-                <label className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Site</span>
-                    <input
-                        value={site}
-                        onChange={(event) => setSite(event.target.value)}
-                        placeholder="Service address"
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                        required
-                    />
-                </label>
-                <label className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Priority</span>
-                    <select
-                        value={priority}
-                        onChange={(event) => setPriority(event.target.value as JobQueuePriority)}
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                    >
-                        {PRIORITIES.map((entry) => (
-                            <option key={entry} value={entry}>
-                                {entry}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
-                    <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={quotePartEstimate}
-                        onChange={(event) => setQuotePartEstimate(event.target.value)}
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                        required
-                    />
-                </label>
-                <label className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
-                    <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={quoteLaborEstimate}
-                        onChange={(event) => setQuoteLaborEstimate(event.target.value)}
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                        required
-                    />
-                </label>
-                <label className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
-                    <input
-                        type="number"
-                        min={0}
-                        value={quoteEstimatedMinutes}
-                        onChange={(event) => setQuoteEstimatedMinutes(event.target.value)}
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                        required
-                    />
-                </label>
-                <label className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
-                    <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={quoteEstimatedTotal}
-                        onChange={(event) => setQuoteEstimatedTotal(event.target.value)}
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                        required
-                    />
-                </label>
-                <label className="space-y-1 sm:col-span-2 lg:col-span-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
-                    <input
-                        value={quoteNotes}
-                        onChange={(event) => setQuoteNotes(event.target.value)}
-                        placeholder="Scope, exclusions, or customer notes"
-                        className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                    />
-                </label>
-                <div className="sm:col-span-2 lg:col-span-1 lg:self-end">
+                <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#334155]">Add Job Wizard</p>
+                    <p className="text-[11px] text-[#64748b]">Step {wizardStep} of 3</p>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                    <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 1 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
+                        1. Customer + Site
+                    </div>
+                    <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 2 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
+                        2. Schedule + Parts
+                    </div>
+                    <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 3 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
+                        3. Quote + Submit
+                    </div>
+                </div>
+
+                {wizardStep === 1 ? (
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer</span>
+                            <input
+                                value={customerName}
+                                onChange={(event) => setCustomerName(event.target.value)}
+                                placeholder="Customer name"
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Site</span>
+                            <input
+                                value={site}
+                                onChange={(event) => setSite(event.target.value)}
+                                placeholder="Service address"
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Priority</span>
+                            <select
+                                value={priority}
+                                onChange={(event) => setPriority(event.target.value as JobQueuePriority)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                            >
+                                {PRIORITIES.map((entry) => (
+                                    <option key={entry} value={entry}>
+                                        {entry}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+                ) : null}
+
+                {wizardStep === 2 ? (
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Scheduled For</span>
+                            <input
+                                type="datetime-local"
+                                value={scheduledFor}
+                                onChange={(event) => setScheduledFor(event.target.value)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                            />
+                        </label>
+                        <label className="space-y-1 sm:col-span-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Required SKUs</span>
+                            <input
+                                value={requiredSkus}
+                                onChange={(event) => setRequiredSkus(event.target.value)}
+                                placeholder="Comma separated (e.g. SKU-100, SKU-200)"
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                            />
+                        </label>
+                        <label className="space-y-1 sm:col-span-2 lg:col-span-3">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Follow-up Note</span>
+                            <input
+                                value={followUpNote}
+                                onChange={(event) => setFollowUpNote(event.target.value)}
+                                placeholder="Call-ahead instructions or customer context"
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                            />
+                        </label>
+                    </div>
+                ) : null}
+
+                {wizardStep === 3 ? (
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Part Estimate</span>
+                            <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={quotePartEstimate}
+                                onChange={(event) => setQuotePartEstimate(event.target.value)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
+                            <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={quoteLaborEstimate}
+                                onChange={(event) => setQuoteLaborEstimate(event.target.value)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
+                            <input
+                                type="number"
+                                min={0}
+                                value={quoteEstimatedMinutes}
+                                onChange={(event) => setQuoteEstimatedMinutes(event.target.value)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Total</span>
+                            <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={quoteEstimatedTotal}
+                                onChange={(event) => setQuoteEstimatedTotal(event.target.value)}
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                required
+                            />
+                        </label>
+                        <label className="space-y-1 sm:col-span-2 lg:col-span-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Quote Notes</span>
+                            <input
+                                value={quoteNotes}
+                                onChange={(event) => setQuoteNotes(event.target.value)}
+                                placeholder="Scope, exclusions, or customer notes"
+                                className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                            />
+                        </label>
+                    </div>
+                ) : null}
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <button
-                        type="submit"
-                        disabled={isPending}
-                        className="w-full rounded-md bg-[#0f766e] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70"
+                        type="button"
+                        className="rounded border border-[#cbd5e1] bg-white px-3 py-2 text-xs"
+                        disabled={wizardStep === 1 || isPending}
+                        onClick={() => setWizardStep((current) => (current > 1 ? ((current - 1) as AddJobWizardStep) : current))}
                     >
-                        Add Job With Quote
+                        Back
                     </button>
+
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            className="rounded border border-[#cbd5e1] bg-white px-3 py-2 text-xs"
+                            disabled={isPending}
+                            onClick={resetWizard}
+                        >
+                            Reset
+                        </button>
+                        {wizardStep < 3 ? (
+                            <button
+                                type="button"
+                                disabled={isPending || !canAdvanceFromStep(wizardStep)}
+                                className="rounded border border-[#0f766e] bg-[#ecfeff] px-3 py-2 text-xs font-semibold text-[#0f766e] disabled:opacity-70"
+                                onClick={() => setWizardStep((current) => (current < 3 ? ((current + 1) as AddJobWizardStep) : current))}
+                            >
+                                Next
+                            </button>
+                        ) : (
+                            <button
+                                type="submit"
+                                disabled={isPending}
+                                className="rounded-md bg-[#0f766e] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70"
+                            >
+                                Create Job
+                            </button>
+                        )}
+                    </div>
                 </div>
             </form>
 
