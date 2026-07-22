@@ -251,8 +251,9 @@ function RichTextMarkdownField({
     return (
         <label className="space-y-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">{label}</span>
-            <div className="rounded-md border border-[#d1d5db] bg-white">
+            <div className="jobs-quill-shell overflow-hidden rounded-md border border-[#d1d5db] bg-white">
                 <ReactQuill
+                    className="jobs-quill"
                     theme="snow"
                     value={htmlValue}
                     onChange={(html) => {
