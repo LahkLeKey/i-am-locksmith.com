@@ -49,8 +49,8 @@ export function ProtectedShell({
   return (
     <div className="min-h-screen bg-[#f7f8fb]">
       <header className="border-b border-[#e6e8ef] bg-white">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-          <Link href={homeHref} className="text-sm font-semibold tracking-wide">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+          <Link href={homeHref} className="min-w-0 truncate text-sm font-semibold tracking-wide">
             Locksmith Dashboard
           </Link>
           <div className="flex items-center gap-3">
@@ -70,8 +70,8 @@ export function ProtectedShell({
           </div>
         </div>
       </header>
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-6 py-6 md:grid-cols-[220px_1fr]">
-        <aside className="rounded-lg border border-[#e6e8ef] bg-white p-3">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-6 xl:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="min-w-0 rounded-lg border border-[#e6e8ef] bg-white p-3">
           {navItems.length > 0 ? (
             <nav aria-label="Primary navigation" className="space-y-1">
               {navItems.map((item) => (
@@ -92,7 +92,7 @@ export function ProtectedShell({
           )}
           <OrganizationMembershipsPanel />
         </aside>
-        <main className="rounded-lg border border-[#e6e8ef] bg-white p-6">
+        <main className="min-w-0 rounded-lg border border-[#e6e8ef] bg-white p-4 sm:p-6">
           {children}
         </main>
       </div>

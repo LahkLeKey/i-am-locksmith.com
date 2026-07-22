@@ -107,20 +107,50 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                     form.reset();
                 }}
             >
-                <input name="sku" placeholder="SKU" required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
-                <input name="itemName" placeholder="Item name" required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
-                <input name="location" placeholder="Location" required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
-                <input name="supplier" placeholder="Supplier" required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
-                <input name="serviceLines" placeholder="Service lines (comma-separated)" required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs xl:col-span-2" />
-                <input name="compatibilityNote" placeholder="Compatibility note" required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs xl:col-span-2" />
-                <input name="onHand" type="number" min={0} defaultValue={0} required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
-                <input name="reorderPoint" type="number" min={0} defaultValue={0} required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
-                <input name="suggestedOrderQty" type="number" min={0} defaultValue={0} required className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
-                <select name="severity" defaultValue="medium" className="rounded-md border border-[#d1d5db] px-3 py-2 text-xs">
-                    {SEVERITY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                    ))}
-                </select>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">SKU</span>
+                    <input name="sku" placeholder="SKU" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Item Name</span>
+                    <input name="itemName" placeholder="Item name" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Location</span>
+                    <input name="location" placeholder="Location" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Supplier</span>
+                    <input name="supplier" placeholder="Supplier" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1 xl:col-span-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Service Lines</span>
+                    <input name="serviceLines" placeholder="Service lines (comma-separated)" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1 xl:col-span-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Compatibility Note</span>
+                    <input name="compatibilityNote" placeholder="Compatibility note" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">On Hand</span>
+                    <input name="onHand" type="number" min={0} defaultValue={0} required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Reorder Point</span>
+                    <input name="reorderPoint" type="number" min={0} defaultValue={0} required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Suggested Order Qty</span>
+                    <input name="suggestedOrderQty" type="number" min={0} defaultValue={0} required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Severity</span>
+                    <select name="severity" defaultValue="medium" className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs">
+                        {SEVERITY_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                        ))}
+                    </select>
+                </label>
                 <div className="flex gap-2 xl:col-span-4">
                     <div className="flex flex-wrap gap-2">
                         {SERVICE_LINE_OPTIONS.map((option) => (
