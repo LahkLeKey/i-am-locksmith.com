@@ -558,4 +558,71 @@ describe('jobs api route', () => {
             }),
         );
   });
+
+  it('updates time clock ledger entries through set_time_clock', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: 'JOB-1',
+        timeClockAction: 'set_time_clock',
+        timeClockLedger: [
+          {
+            id: 'entry-1',
+            action: 'clock_in',
+            at: '2026-07-22T10:00:00.000Z',
+            note: 'Start',
+          },
+          {
+            id: 'entry-2',
+            action: 'clock_out',
+            at: '2026-07-22T11:30:00.000Z',
+            note: 'Done',
+          },
+        ],
+      }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1',
+            'JOB-1',
+            expect.objectContaining({
+              timeClock: expect.objectContaining({
+                clockedInAt: '2026-07-22T10:00:00.000Z',
+                clockedOutAt: '2026-07-22T11:30:00.000Z',
+                ledger: expect.arrayContaining([
+                  expect.objectContaining({id: 'entry-1', action: 'clock_in'}),
+                  expect.objectContaining({id: 'entry-2', action: 'clock_out'}),
+                ]),
+              }),
+            }),
+        );
+  });
+
+  it('rejects invalid time clock ledger payload', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: 'JOB-1',
+        timeClockAction: 'set_time_clock',
+        timeClockLedger: [
+          {
+            id: '',
+            action: 'clock_in',
+            at: 'not-a-date',
+          },
+        ],
+      }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(400);
+    expect(mockedUpdateJobRecord).not.toHaveBeenCalled();
+  });
 });

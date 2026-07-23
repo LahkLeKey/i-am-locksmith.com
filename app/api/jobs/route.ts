@@ -55,6 +55,10 @@ type UpdateJobRequest = {
   timeClockClockedInAt?: string | null;
   timeClockClockedOutAt?: string | null;
   timeClockBreakMinutes?: number | null;
+  timeClockLedger?: Array<{
+    id: string; action: 'clock_in' | 'clock_out'; at: string;
+    note?: string | null;
+  }>;
   inventoryAction?: 'reserve' | 'create_inventory';
   inventorySku?: string;
   reserveQuantity?: number;
@@ -122,6 +126,66 @@ function normalizeStringList(value: unknown): string[] {
 
   return value.map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
       .filter((entry) => entry.length > 0);
+}
+
+function normalizeTimeClockLedger(value: unknown): Array<{
+  id: string; action: 'clock_in' | 'clock_out'; at: string; note: string | null;
+}>|null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const normalized =
+      value
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') {
+              return null;
+            }
+
+            const candidate = entry as {
+              id?: unknown;
+              action?: unknown;
+              at?: unknown;
+              note?: unknown;
+            };
+
+            if (typeof candidate.id !== 'string' ||
+                candidate.id.trim().length === 0) {
+              return null;
+            }
+
+            if (candidate.action !== 'clock_in' &&
+                candidate.action !== 'clock_out') {
+              return null;
+            }
+
+            if (typeof candidate.at !== 'string' ||
+                Number.isNaN(Date.parse(candidate.at))) {
+              return null;
+            }
+
+            return {
+              id: candidate.id,
+              action: candidate.action,
+              at: candidate.at,
+              note: typeof candidate.note === 'string' ? candidate.note : null,
+            };
+          })
+          .filter(
+              (entry):
+                  entry is {
+                    id: string;
+                    action: 'clock_in'|'clock_out';
+                    at: string;
+                    note: string|null;
+                  } => entry !== null)
+          .sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
+
+  if (normalized.length !== value.length) {
+    return null;
+  }
+
+  return normalized;
 }
 
 function validateQuoteDraft(
@@ -625,22 +689,43 @@ export async function PATCH(request: Request) {
             {status: 400});
       }
 
-        const currentClock = current.timeClock ?? {
+      let nextLedger = current.timeClock?.ledger ?? [];
+      if (body.timeClockLedger !== undefined) {
+        const normalizedLedger = normalizeTimeClockLedger(body.timeClockLedger);
+        if (!normalizedLedger) {
+          return NextResponse.json(
+              {
+                error:
+                    'timeClockLedger entries must include id, action, and valid at date values'
+              },
+              {status: 400});
+        }
+        nextLedger = normalizedLedger;
+      }
+
+      const currentClock = current.timeClock ?? {
         clockedInAt: null,
         clockedOutAt: null,
         breakMinutes: 0,
         elapsedMinutes: 0,
         notes: null,
         ledger: [],
-        };
+      };
 
-        const nextClockedInAt = body.timeClockClockedInAt === undefined ?
-          currentClock.clockedInAt :
-          body.timeClockClockedInAt;
-        const nextClockedOutAt = body.timeClockClockedOutAt === undefined ?
-          currentClock.clockedOutAt :
-          body.timeClockClockedOutAt;
-        const nextBreakMinutes = body.timeClockBreakMinutes === undefined ?
+      const lastClockIn = [...nextLedger].reverse().find(
+          (entry) => entry.action === 'clock_in');
+      const lastClockOut = [...nextLedger].reverse().find(
+          (entry) => entry.action === 'clock_out');
+
+      const nextClockedInAt = body.timeClockClockedInAt !== undefined ?
+          body.timeClockClockedInAt :
+          (body.timeClockLedger !== undefined ? (lastClockIn?.at ?? null) :
+                                                currentClock.clockedInAt);
+      const nextClockedOutAt = body.timeClockClockedOutAt !== undefined ?
+          body.timeClockClockedOutAt :
+          (body.timeClockLedger !== undefined ? (lastClockOut?.at ?? null) :
+                                                currentClock.clockedOutAt);
+      const nextBreakMinutes = body.timeClockBreakMinutes === undefined ?
           currentClock.breakMinutes :
           body.timeClockBreakMinutes;
 
@@ -649,6 +734,7 @@ export async function PATCH(request: Request) {
           clockedInAt: nextClockedInAt,
           clockedOutAt: nextClockedOutAt,
           breakMinutes: nextBreakMinutes,
+          ledger: nextLedger,
         },
       });
 
