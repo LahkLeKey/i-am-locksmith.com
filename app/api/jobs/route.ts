@@ -12,6 +12,7 @@ type CreateJobRequest = {
   requiredSkus?: string[];
   scheduledFor?: string | null;
   followUpNote?: string | null;
+  assignedTechnicianIds?: string[];
   assignedTechnicianId?: string | null;
   quote?: {
     partEstimate?: number;
@@ -39,6 +40,7 @@ type UpdateJobRequest = {
   etaMinutes?: number | null;
   scheduledFor?: string | null;
   followUpNote?: string | null;
+  assignedTechnicianIds?: string[];
   assignedTechnicianId?: string | null;
   quote?: {
     partEstimate?: number;
@@ -102,6 +104,15 @@ function isJobStatus(value: unknown): value is JobQueueStatus {
 }
 
 function normalizeSkus(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter((entry) => entry.length > 0);
+}
+
+function normalizeStringList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -232,18 +243,28 @@ export async function POST(request: Request) {
     return NextResponse.json({error: quoteValidationError}, {status: 400});
   }
 
-  const assignedTechnicianId = body.assignedTechnicianId?.trim() || null;
-  if (!assignedTechnicianId) {
+  const assignedTechnicianIds = normalizeStringList(
+      body.assignedTechnicianIds ??
+      (body.assignedTechnicianId ? [body.assignedTechnicianId] : []));
+  if (assignedTechnicianIds.length === 0) {
     return NextResponse.json(
-        {error: 'assignedTechnicianId is required'}, {status: 400});
+        {error: 'assignedTechnicianIds is required'}, {status: 400});
   }
 
-  const technician =
-      await getTechnicianById(authResult.orgId, assignedTechnicianId);
-  if (!technician || !technician.isActive) {
-    return NextResponse.json(
-        {error: 'Assigned technician not found'}, {status: 404});
+  const technicians:
+      Array<NonNullable<Awaited<ReturnType<typeof getTechnicianById>>>> = [];
+  for (const technicianId of assignedTechnicianIds) {
+    const technician = await getTechnicianById(authResult.orgId, technicianId);
+    if (!technician || !technician.isActive) {
+      return NextResponse.json(
+          {error: `Assigned technician not found: ${technicianId}`},
+          {status: 404});
+    }
+
+    technicians.push(technician);
   }
+
+  const primaryTechnician = technicians[0];
 
   const estimatedMinutes = Math.trunc(body.quote!.estimatedMinutes!);
   const normalizedSkus = normalizeSkus(body.requiredSkus);
@@ -251,7 +272,13 @@ export async function POST(request: Request) {
   const computedPartEstimate =
       computePartEstimateFromSkus(normalizedSkus, inventoryParts);
   const computedLaborEstimate =
-      Number(((estimatedMinutes / 60) * technician.hourlyRate).toFixed(2));
+      Number(technicians
+                 .reduce(
+                     (total, technician) => total +
+                         ((estimatedMinutes / 60) * technician.hourlyRate),
+                     0,
+                     )
+                 .toFixed(2));
   const computedEstimatedTotal =
       Number((computedPartEstimate + computedLaborEstimate).toFixed(2));
 
@@ -262,9 +289,9 @@ export async function POST(request: Request) {
     scheduledFor: body.scheduledFor ?? null,
     requiredSkus: normalizedSkus,
     followUpNote: body.followUpNote || null,
-    assignedTechnicianId,
-    assignedTechnicianName: technician.fullName,
-    laborRate: technician.hourlyRate,
+    assignedTechnicianIds,
+    assignedTechnicianName: primaryTechnician.fullName,
+    laborRate: primaryTechnician.hourlyRate,
     quote: {
       partEstimate: computedPartEstimate,
       laborEstimate: computedLaborEstimate,
@@ -616,6 +643,7 @@ export async function PATCH(request: Request) {
     }
   }
 
+  let assignedTechnicianIds: string[]|undefined;
   let assignedTechnicianName: string|null|undefined;
   let laborRate: number|null|undefined;
   let computedLaborEstimate: number|undefined;
@@ -631,19 +659,32 @@ export async function PATCH(request: Request) {
     return currentJob;
   };
 
-  if (body.assignedTechnicianId !== undefined) {
-    const nextTechnicianId = body.assignedTechnicianId?.trim() || null;
+  if (body.assignedTechnicianIds !== undefined ||
+      body.assignedTechnicianId !== undefined) {
+    const nextTechnicianIds = normalizeStringList(
+        body.assignedTechnicianIds ??
+        (body.assignedTechnicianId ? [body.assignedTechnicianId] : []));
+    assignedTechnicianIds = nextTechnicianIds;
 
-    if (nextTechnicianId) {
-      const technician =
-          await getTechnicianById(authResult.orgId, nextTechnicianId);
-      if (!technician || !technician.isActive) {
-        return NextResponse.json(
-            {error: 'Assigned technician not found'}, {status: 404});
+    if (nextTechnicianIds.length > 0) {
+      const technicians:
+          Array<NonNullable<Awaited<ReturnType<typeof getTechnicianById>>>> =
+              [];
+
+      for (const technicianId of nextTechnicianIds) {
+        const technician =
+            await getTechnicianById(authResult.orgId, technicianId);
+        if (!technician || !technician.isActive) {
+          return NextResponse.json(
+              {error: `Assigned technician not found: ${technicianId}`},
+              {status: 404});
+        }
+
+        technicians.push(technician);
       }
 
-      assignedTechnicianName = technician.fullName;
-      laborRate = technician.hourlyRate;
+      assignedTechnicianName = technicians[0]?.fullName ?? null;
+      laborRate = technicians[0]?.hourlyRate ?? null;
 
       const current = await loadCurrentJob();
       if (!current) {
@@ -659,7 +700,14 @@ export async function PATCH(request: Request) {
       const normalizedMinutes = Math.trunc(estimateMinutesSource);
 
       computedLaborEstimate =
-          computeLaborEstimate(normalizedMinutes, technician.hourlyRate);
+          Number(technicians
+                     .reduce(
+                         (total, technician) => total +
+                             computeLaborEstimate(normalizedMinutes,
+                                                  technician.hourlyRate),
+                         0,
+                         )
+                     .toFixed(2));
       computedEstimatedTotal =
           Number((partEstimateSource + computedLaborEstimate).toFixed(2));
     } else {
@@ -691,9 +739,7 @@ export async function PATCH(request: Request) {
     scheduledFor: body.scheduledFor,
     followUpNote: body.followUpNote === undefined ? undefined :
                                                     body.followUpNote || null,
-    assignedTechnicianId: body.assignedTechnicianId === undefined ?
-        undefined :
-        body.assignedTechnicianId?.trim() || null,
+    assignedTechnicianIds,
     assignedTechnicianName,
     laborRate,
     quote: quoteUpdate,

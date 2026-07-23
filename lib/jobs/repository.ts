@@ -6,7 +6,7 @@ export type JobRecordInput = {
   scheduledFor: string | null;
   requiredSkus: string[];
   followUpNote: string | null;
-  assignedTechnicianId: string | null;
+  assignedTechnicianIds: string[];
   assignedTechnicianName: string | null;
   laborRate: number | null;
   quote: {
@@ -25,7 +25,7 @@ export type JobRecordUpdate = {
   scheduledFor?: string | null;
   followUpNote?: string | null;
   requiredSkus?: string[];
-  assignedTechnicianId?: string | null;
+  assignedTechnicianIds?: string[];
   assignedTechnicianName?: string | null;
   laborRate?: number | null;
   quote?: {
@@ -59,7 +59,7 @@ type JobRecordRow = {
   etaMinutes: number | null;
   requiredSkus: unknown;
   followUpNote: string | null;
-  assignedTechnicianId: string | null;
+  assignedTechnicianIds: unknown;
   assignedTechnicianName: string | null;
   laborRate: unknown;
   partEstimate: unknown;
@@ -97,7 +97,7 @@ type JobRecordClient = {
         etaMinutes: number | null;
         requiredSkus: unknown;
         followUpNote: string | null;
-        assignedTechnicianId: string | null;
+        assignedTechnicianIds: unknown;
         assignedTechnicianName: string | null;
         laborRate: number | null;
         partEstimate: number;
@@ -147,6 +147,15 @@ function toRequiredSkus(value: unknown): string[] {
   }
 
   return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function toStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter((entry) => entry.length > 0);
 }
 
 function toLedgerEntries(value: unknown): TimeClockLedgerEntry[] {
@@ -232,9 +241,10 @@ function toJobQueueItem(row: JobRecordRow): JobQueueItem {
     etaMinutes: row.etaMinutes,
     requiredSkus: toRequiredSkus(row.requiredSkus),
     followUpNote: row.followUpNote,
-    assignedTechnician: row.assignedTechnicianId && row.assignedTechnicianName ?
+    assignedTechnician: toStringList(row.assignedTechnicianIds).length > 0 &&
+            row.assignedTechnicianName ?
         {
-          id: row.assignedTechnicianId,
+          id: toStringList(row.assignedTechnicianIds)[0],
           fullName: row.assignedTechnicianName,
           laborRate: toFiniteMoney(row.laborRate),
         } :
@@ -315,7 +325,7 @@ export async function createJobRecord(
       etaMinutes: null,
       requiredSkus: input.requiredSkus,
       followUpNote: input.followUpNote,
-      assignedTechnicianId: input.assignedTechnicianId,
+      assignedTechnicianIds: input.assignedTechnicianIds,
       assignedTechnicianName: input.assignedTechnicianName,
       laborRate: input.laborRate,
       partEstimate: input.quote.partEstimate,
@@ -361,8 +371,8 @@ export async function updateJobRecord(
       ...(input.followUpNote !== undefined ?
               {followUpNote: input.followUpNote} :
               {}),
-      ...(input.assignedTechnicianId !== undefined ?
-              {assignedTechnicianId: input.assignedTechnicianId} :
+      ...(input.assignedTechnicianIds !== undefined ?
+              {assignedTechnicianIds: input.assignedTechnicianIds} :
               {}),
       ...(input.assignedTechnicianName !== undefined ?
               {assignedTechnicianName: input.assignedTechnicianName} :

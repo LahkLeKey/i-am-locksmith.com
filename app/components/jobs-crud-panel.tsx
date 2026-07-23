@@ -41,7 +41,7 @@ type JobDraft = {
     etaMinutes: string;
     followUpNote: string;
     requiredSkus: string[];
-    assignedTechnicianId: string;
+    assignedTechnicianIds: string[];
     quotePartEstimate: string;
     quoteLaborEstimate: string;
     quoteEstimatedMinutes: string;
@@ -131,6 +131,10 @@ function sameSkus(left: string[], right: string[]): boolean {
     const leftNormalized = [...left].map((entry) => entry.toLowerCase()).sort();
     const rightNormalized = [...right].map((entry) => entry.toLowerCase()).sort();
     return leftNormalized.every((entry, index) => entry === rightNormalized[index]);
+}
+
+function sameIds(left: string[], right: string[]): boolean {
+    return sameSkus(left, right);
 }
 
 function buildAutoCloseoutDraft(job: JobQueueItem): CloseoutDraft {
@@ -422,7 +426,7 @@ export function JobsCrudPanel({
                 etaMinutes: job.etaMinutes === null ? '' : String(job.etaMinutes),
                 followUpNote: job.followUpNote ?? '',
                 requiredSkus: [...job.requiredSkus],
-                assignedTechnicianId: job.assignedTechnician?.id ?? '',
+                assignedTechnicianIds: job.assignedTechnician?.id ? [job.assignedTechnician.id] : [],
                 ...quoteAsStrings(job),
             }
         );
@@ -440,7 +444,7 @@ export function JobsCrudPanel({
             draft.etaMinutes !== (job.etaMinutes === null ? '' : String(job.etaMinutes)) ||
             draft.followUpNote !== (job.followUpNote ?? '') ||
             !sameSkus(draft.requiredSkus, job.requiredSkus) ||
-            draft.assignedTechnicianId !== (job.assignedTechnician?.id ?? '') ||
+            !sameIds(draft.assignedTechnicianIds, job.assignedTechnician?.id ? [job.assignedTechnician.id] : []) ||
             draft.quoteEstimatedMinutes !== String(job.quote?.estimatedMinutes ?? 0) ||
             draft.quoteNotes !== (job.quote?.notes ?? '')
         );
@@ -569,7 +573,7 @@ export function JobsCrudPanel({
             {isAddWizardOpen ? (
                 <div className="fixed inset-0 z-40 bg-[#f7f8fb]">
                     <form
-                        className="flex min-h-screen flex-col overflow-y-auto px-4 py-6 sm:px-6"
+                        className="flex h-dvh min-h-0 flex-col overflow-hidden px-4 py-6 sm:px-6"
                         onKeyDown={(event) => {
                             if (event.key === 'Enter') {
                                 event.preventDefault();
@@ -579,7 +583,7 @@ export function JobsCrudPanel({
                             event.preventDefault();
                         }}
                     >
-                        <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col space-y-5">
+                        <div className="relative mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col space-y-5 overflow-y-auto overscroll-contain pb-10 [-webkit-overflow-scrolling:touch]">
                             <button
                                 type="button"
                                 aria-label="Close add job wizard"
@@ -982,24 +986,26 @@ export function JobsCrudPanel({
 
             {isActiveWorkflowOpen && selectedDesktopJob ? (
                 <div className="fixed inset-0 z-40 bg-[#f7f8fb]">
-                    <section className="flex min-h-screen flex-col overflow-y-auto px-4 py-6 sm:px-6">
-                        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5">
+                    <section className="flex h-dvh min-h-0 flex-col overflow-hidden px-4 py-6 sm:px-6">
+                        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-5 overflow-y-auto overscroll-contain pb-10 [-webkit-overflow-scrolling:touch]">
                             {(() => {
                                 const selectedJob = selectedDesktopJob;
                                 const draft = getDraft(selectedJob);
                                 const isDirty = isDraftDirty(selectedJob);
                                 const closeoutDraft = getCloseoutDraft(selectedJob);
                                 const timeClockDraft = getTimeClockDraft(selectedJob);
-                                const selectedWorkflowTechnician = selectableTechnicians.find((entry) => entry.id === draft.assignedTechnicianId) ?? null;
+                                const selectedWorkflowTechnicians = selectableTechnicians.filter((entry) => draft.assignedTechnicianIds.includes(entry.id));
                                 const quoteMinutes = Math.max(0, Number(draft.quoteEstimatedMinutes || '0'));
                                 const quotePartEstimate = computePartEstimateFromSkus(draft.requiredSkus, sortedInventoryLookupParts);
-                                const quoteLaborEstimate = selectedWorkflowTechnician
-                                    ? Number(((quoteMinutes / 60) * selectedWorkflowTechnician.hourlyRate).toFixed(2))
-                                    : 0;
+                                const quoteLaborEstimate = Number(
+                                    selectedWorkflowTechnicians
+                                        .reduce((total, technician) => total + ((quoteMinutes / 60) * technician.hourlyRate), 0)
+                                        .toFixed(2),
+                                );
                                 const quoteEstimatedTotal = Number((quotePartEstimate + quoteLaborEstimate).toFixed(2));
 
                                 return (
-                                    <div className="flex min-h-full flex-col gap-5">
+                                    <div className="flex flex-1 flex-col gap-5">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                             <div>
                                                 <h3 className="text-sm font-semibold text-[#0f172a]">{selectedJob.id}</h3>
@@ -1175,25 +1181,27 @@ export function JobsCrudPanel({
                                                     <label className="space-y-1">
                                                         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Technician</span>
                                                         <select
-                                                            value={draft.assignedTechnicianId}
-                                                            onChange={(event) =>
+                                                            multiple
+                                                            value={draft.assignedTechnicianIds}
+                                                            onChange={(event) => {
+                                                                const selectedIds = Array.from(event.currentTarget.selectedOptions).map((option) => option.value);
                                                                 setDrafts((current) => ({
                                                                     ...current,
                                                                     [selectedJob.id]: {
                                                                         ...draft,
-                                                                        assignedTechnicianId: event.target.value,
+                                                                        assignedTechnicianIds: selectedIds,
                                                                     },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                                }));
+                                                            }}
+                                                            className="h-28 w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                                         >
-                                                            <option value="">Select technician</option>
                                                             {selectableTechnicians.map((entry) => (
                                                                 <option key={entry.id} value={entry.id}>
                                                                     {entry.fullName} (${entry.hourlyRate}/hr) · {entry.availabilityStatus}
                                                                 </option>
                                                             ))}
                                                         </select>
+                                                        <p className="text-[11px] text-[#64748b]">Hold Ctrl/Command to select multiple technicians.</p>
                                                     </label>
                                                     <label className="space-y-1">
                                                         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
@@ -1215,7 +1223,11 @@ export function JobsCrudPanel({
                                                     </label>
                                                     <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs text-[#475569]">
                                                         <p className="font-semibold text-[#0f172a]">Required Parts</p>
-                                                        <p className="mt-1 break-words">{draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected yet'}</p>
+                                                        <p className="mt-1 wrap-break-word">{draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected yet'}</p>
+                                                    </div>
+                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs text-[#475569]">
+                                                        <p className="font-semibold text-[#0f172a]">Selected Technicians</p>
+                                                        <p className="mt-1 wrap-break-word">{selectedWorkflowTechnicians.length > 0 ? selectedWorkflowTechnicians.map((entry) => entry.fullName).join(', ') : 'None selected yet'}</p>
                                                     </div>
                                                 </div>
 
@@ -1841,7 +1853,7 @@ export function JobsCrudPanel({
                                                                 etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
                                                                 followUpNote: draft.followUpNote,
                                                                 requiredSkus: draft.requiredSkus,
-                                                                assignedTechnicianId: draft.assignedTechnicianId || null,
+                                                                assignedTechnicianIds: draft.assignedTechnicianIds,
                                                                 quote: {
                                                                     partEstimate: quotePartEstimate,
                                                                     laborEstimate: quoteLaborEstimate,
@@ -1863,11 +1875,11 @@ export function JobsCrudPanel({
                                                                         etaMinutes: draft.etaMinutes === '' ? null : Number(draft.etaMinutes),
                                                                         followUpNote: draft.followUpNote,
                                                                         requiredSkus: draft.requiredSkus,
-                                                                        assignedTechnician: draft.assignedTechnicianId
+                                                                        assignedTechnician: draft.assignedTechnicianIds[0]
                                                                             ? {
-                                                                                id: draft.assignedTechnicianId,
-                                                                                fullName: selectedWorkflowTechnician?.fullName ?? entry.assignedTechnician?.fullName ?? 'Assigned technician',
-                                                                                laborRate: selectedWorkflowTechnician?.hourlyRate ?? entry.assignedTechnician?.laborRate ?? 0,
+                                                                                id: draft.assignedTechnicianIds[0],
+                                                                                fullName: selectedWorkflowTechnicians[0]?.fullName ?? entry.assignedTechnician?.fullName ?? 'Assigned technician',
+                                                                                laborRate: selectedWorkflowTechnicians[0]?.hourlyRate ?? entry.assignedTechnician?.laborRate ?? 0,
                                                                             }
                                                                             : null,
                                                                         quote: {

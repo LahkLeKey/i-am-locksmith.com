@@ -156,7 +156,7 @@ describe('jobs api route', () => {
         scheduledFor: '2026-07-23T15:00:00.000Z',
         requiredSkus: ['SKU-1', 'SKU-2'],
         followUpNote: 'Call customer before arrival',
-        assignedTechnicianId: 'tech_1',
+        assignedTechnicianIds: ['tech_1'],
         quote: {
           partEstimate: 100,
           laborEstimate: 0,
@@ -180,7 +180,7 @@ describe('jobs api route', () => {
               priority: 'high',
               requiredSkus: ['SKU-1', 'SKU-2'],
               followUpNote: 'Call customer before arrival',
-              assignedTechnicianId: 'tech_1',
+              assignedTechnicianIds: ['tech_1'],
               assignedTechnicianName: 'Taylor Ford',
               laborRate: 95,
               quote: expect.objectContaining({
@@ -426,7 +426,7 @@ describe('jobs api route', () => {
          headers: {'content-type': 'application/json'},
          body: JSON.stringify({
            id: 'JOB-1',
-           assignedTechnicianId: 'tech_1',
+           assignedTechnicianIds: ['tech_1'],
          }),
        });
 
@@ -438,7 +438,7 @@ describe('jobs api route', () => {
                'org_1',
                'JOB-1',
                expect.objectContaining({
-                 assignedTechnicianId: 'tech_1',
+                 assignedTechnicianIds: ['tech_1'],
                  assignedTechnicianName: 'Taylor Ford',
                  laborRate: 95,
                  quote: expect.objectContaining({

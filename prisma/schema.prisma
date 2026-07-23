@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
     provider = "postgresql"
-    url      = env("DATABASE_URL")
 }
 
 model DashboardSnapshot {
@@ -60,7 +59,7 @@ model JobRecord {
     etaMinutes             Int?
     requiredSkus           Json
     followUpNote           String?
-    assignedTechnicianId   String?
+    assignedTechnicianIds  Json      @default("[]")
     assignedTechnicianName String?
     laborRate              Decimal?  @db.Decimal(10, 2)
     partEstimate           Decimal   @db.Decimal(10, 2)
@@ -84,7 +83,6 @@ model JobRecord {
 
     @@unique([orgId, jobNumber])
     @@index([orgId, status, updatedAt])
-    @@index([orgId, assignedTechnicianId])
 }
 
 model Technician {
