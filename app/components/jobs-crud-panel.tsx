@@ -60,9 +60,48 @@ type CloseoutDraft = {
 type AddJobWizardStep = 1 | 2 | 3 | 4;
 type ActiveJobWizardStep = 1 | 2 | 3 | 4;
 
-type TimeClockDraft = {
+type EditableLedgerEntry = {
+    id: string;
+    action: 'clock_in' | 'clock_out';
+    at: string;
+    note: string | null;
+};
+
+type TimeClockTableActionMode = 'break' | 'notes';
+
+type TimeClockTableActionDraft = {
+    jobId: string;
+    mode: TimeClockTableActionMode;
+    breakMinutes: number;
     notes: string;
-    actionNote: string;
+};
+
+type LedgerPairValidation = {
+    isValid: boolean;
+    unmatchedClockIns: number;
+    unmatchedClockOuts: number;
+};
+
+type LedgerPairStatus = 'paired' | 'open_clock_in' | 'unmatched_clock_out';
+
+type LedgerAnnotatedEntry = EditableLedgerEntry & {
+    pairStatus: LedgerPairStatus;
+};
+
+type LedgerPairAnalysis = {
+    entries: LedgerAnnotatedEntry[];
+    openClockInEntry: EditableLedgerEntry | null;
+    pairedCount: number;
+    pairRows: LedgerPairRow[];
+};
+
+type LedgerPairRowStatus = 'paired' | 'open' | 'unmatched_clock_out';
+
+type LedgerPairRow = {
+    id: string;
+    status: LedgerPairRowStatus;
+    clockInEntry: EditableLedgerEntry | null;
+    clockOutEntry: EditableLedgerEntry | null;
 };
 
 type JobsMutationOptions = {
@@ -139,12 +178,12 @@ function sameIds(left: string[], right: string[]): boolean {
 
 function buildAutoCloseoutDraft(job: JobQueueItem): CloseoutDraft {
     const quote = job.quote;
-    const trackedMinutes = job.timeClock?.elapsedMinutes ?? 0;
+    const trackedMinutes = computeElapsedMinutesFromLedger(job.timeClock?.ledger ?? [], job.timeClock?.breakMinutes ?? 0);
     const laborRate = job.assignedTechnician?.laborRate ?? 0;
-    const actualMinutes = job.closeout?.actualMinutes ?? trackedMinutes;
+    const actualMinutes = trackedMinutes;
     const actualPartCost = job.closeout?.actualPartCost ?? quote?.partEstimate ?? 0;
-    const actualLaborCost = job.closeout?.actualLaborCost ?? Number(((actualMinutes / 60) * laborRate).toFixed(2));
-    const finalTotal = job.closeout?.finalTotal ?? Number((actualPartCost + actualLaborCost).toFixed(2));
+    const actualLaborCost = Number(((actualMinutes / 60) * laborRate).toFixed(2));
+    const finalTotal = Number((actualPartCost + actualLaborCost).toFixed(2));
 
     return {
         actualPartCost: String(actualPartCost),
@@ -156,17 +195,7 @@ function buildAutoCloseoutDraft(job: JobQueueItem): CloseoutDraft {
 }
 
 function closeoutAsDraft(job: JobQueueItem): CloseoutDraft {
-    if (!job.closeout || (job.closeout.actualPartCost === null && job.closeout.actualLaborCost === null && job.closeout.actualMinutes === null && job.closeout.finalTotal === null)) {
-        return buildAutoCloseoutDraft(job);
-    }
-
-    return {
-        actualPartCost: job.closeout?.actualPartCost === null || job.closeout?.actualPartCost === undefined ? '' : String(job.closeout.actualPartCost),
-        actualLaborCost: job.closeout?.actualLaborCost === null || job.closeout?.actualLaborCost === undefined ? '' : String(job.closeout.actualLaborCost),
-        actualMinutes: job.closeout?.actualMinutes === null || job.closeout?.actualMinutes === undefined ? '' : String(job.closeout.actualMinutes),
-        finalTotal: job.closeout?.finalTotal === null || job.closeout?.finalTotal === undefined ? '' : String(job.closeout.finalTotal),
-        resolutionNotes: job.closeout?.resolutionNotes ?? '',
-    };
+    return buildAutoCloseoutDraft(job);
 }
 
 function formatDateTime(value: string | null): string {
@@ -182,10 +211,92 @@ function formatDateTime(value: string | null): string {
     return new Date(parsed).toLocaleString();
 }
 
-function timeClockAsDraft(job: JobQueueItem): TimeClockDraft {
+function ensureLedgerPairs(ledger: EditableLedgerEntry[]): EditableLedgerEntry[] {
+    return [...ledger].sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
+}
+
+function validateLedgerPairs(ledger: EditableLedgerEntry[]): LedgerPairValidation {
+    const normalized = ensureLedgerPairs(ledger);
+    let openClockIns = 0;
+    let unmatchedClockOuts = 0;
+
+    for (const entry of normalized) {
+        if (entry.action === 'clock_in') {
+            openClockIns += 1;
+            continue;
+        }
+
+        if (openClockIns === 0) {
+            unmatchedClockOuts += 1;
+        } else {
+            openClockIns -= 1;
+        }
+    }
+
     return {
-        notes: job.timeClock?.notes ?? '',
-        actionNote: '',
+        isValid: openClockIns === 0 && unmatchedClockOuts === 0,
+        unmatchedClockIns: openClockIns,
+        unmatchedClockOuts,
+    };
+}
+
+function analyzeLedgerPairs(ledger: EditableLedgerEntry[]): LedgerPairAnalysis {
+    const normalized = ensureLedgerPairs(ledger);
+    const statusById = new Map<string, LedgerPairStatus>();
+    const openClockInStack: EditableLedgerEntry[] = [];
+    const rowStack: LedgerPairRow[] = [];
+    const pairRows: LedgerPairRow[] = [];
+    let unmatchedClockOutCount = 0;
+    let pairedCount = 0;
+
+    for (const entry of normalized) {
+        if (entry.action === 'clock_in') {
+            openClockInStack.push(entry);
+            statusById.set(entry.id, 'open_clock_in');
+            const row: LedgerPairRow = {
+                id: `pair-row-${entry.id}`,
+                status: 'open',
+                clockInEntry: entry,
+                clockOutEntry: null,
+            };
+            rowStack.push(row);
+            pairRows.push(row);
+            continue;
+        }
+
+        const matchedClockIn = openClockInStack.pop();
+        if (!matchedClockIn) {
+            statusById.set(entry.id, 'unmatched_clock_out');
+            unmatchedClockOutCount += 1;
+            pairRows.push({
+                id: `orphan-clock-out-${entry.id}-${unmatchedClockOutCount}`,
+                status: 'unmatched_clock_out',
+                clockInEntry: null,
+                clockOutEntry: entry,
+            });
+            continue;
+        }
+
+        statusById.set(matchedClockIn.id, 'paired');
+        statusById.set(entry.id, 'paired');
+        const nextOpenRow = rowStack.pop();
+        if (nextOpenRow) {
+            nextOpenRow.clockOutEntry = entry;
+            nextOpenRow.status = 'paired';
+        }
+        pairedCount += 1;
+    }
+
+    const entries = normalized.map((entry) => ({
+        ...entry,
+        pairStatus: statusById.get(entry.id) ?? (entry.action === 'clock_in' ? 'open_clock_in' : 'unmatched_clock_out'),
+    }));
+
+    return {
+        entries,
+        openClockInEntry: openClockInStack.length > 0 ? openClockInStack[openClockInStack.length - 1] : null,
+        pairedCount,
+        pairRows,
     };
 }
 
@@ -359,7 +470,12 @@ export function JobsCrudPanel({
     const [lookupQuery, setLookupQuery] = useState<Record<string, string>>({});
     const [drafts, setDrafts] = useState<Record<string, JobDraft>>({});
     const [closeoutDrafts, setCloseoutDrafts] = useState<Record<string, CloseoutDraft>>({});
-    const [timeClockDrafts, setTimeClockDrafts] = useState<Record<string, TimeClockDraft>>({});
+    const [ledgerDrafts, setLedgerDrafts] = useState<Record<string, EditableLedgerEntry[]>>({});
+    const [timeClockTableActionDraft, setTimeClockTableActionDraft] = useState<TimeClockTableActionDraft | null>(null);
+    const [editingLedgerEntry, setEditingLedgerEntry] = useState<{
+        jobId: string;
+        entry: EditableLedgerEntry;
+    } | null>(null);
     const [activeJobWizardStep, setActiveJobWizardStep] = useState<ActiveJobWizardStep>(1);
 
     useEffect(() => {
@@ -467,8 +583,14 @@ export function JobsCrudPanel({
         return closeoutDrafts[job.id] ?? closeoutAsDraft(job);
     }
 
-    function getTimeClockDraft(job: JobQueueItem): TimeClockDraft {
-        return timeClockDrafts[job.id] ?? timeClockAsDraft(job);
+    function getLedgerDraft(job: JobQueueItem): EditableLedgerEntry[] {
+        return ledgerDrafts[job.id] ??
+            (job.timeClock?.ledger ?? []).map((entry) => ({
+                id: entry.id,
+                action: entry.action,
+                at: entry.at,
+                note: entry.note,
+            }));
     }
 
     function canCloseOut(draft: CloseoutDraft): boolean {
@@ -484,6 +606,19 @@ export function JobsCrudPanel({
         setCloseoutDrafts((current) => ({
             ...current,
             [job.id]: buildAutoCloseoutDraft(job),
+        }));
+    }
+
+    function syncLedgerDraft(job: JobQueueItem) {
+        const ledger = (job.timeClock?.ledger ?? []).map((entry) => ({
+            id: entry.id,
+            action: entry.action,
+            at: entry.at,
+            note: entry.note,
+        }));
+        setLedgerDrafts((current) => ({
+            ...current,
+            [job.id]: ledger,
         }));
     }
 
@@ -712,7 +847,7 @@ export function JobsCrudPanel({
                                                 filteredPartsForWizard.slice(0, 30).map((part) => {
                                                     const isSelected = requiredSkus.includes(part.sku);
                                                     return (
-                                                        <label key={part.id} className="flex cursor-pointer items-center justify-between border-b border-[#e5e7eb] px-3 py-2 text-xs last:border-b-0 hover:bg-[#f8fafc]">
+                                                        <label key={`wizard-part-${part.id}`} className="flex cursor-pointer items-center justify-between border-b border-[#e5e7eb] px-3 py-2 text-xs last:border-b-0 hover:bg-[#f8fafc]">
                                                             <span className="flex items-center gap-2">
                                                                 <input
                                                                     type="checkbox"
@@ -734,40 +869,7 @@ export function JobsCrudPanel({
                                                 })
                                             )}
                                         </div>
-                                        <p className="mt-2 text-[11px] text-[#475569]">Selected parts: {requiredSkus.length > 0 ? requiredSkus.join(', ') : 'None selected'}</p>
                                     </div>
-                                </div>
-                            ) : null}
-
-                            {wizardStep === 3 ? (
-                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Technician</span>
-                                        <select
-                                            value={assignedTechnicianId}
-                                            onChange={(event) => setAssignedTechnicianId(event.target.value)}
-                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                            required
-                                        >
-                                            <option value="">Select technician</option>
-                                            {selectableTechnicians.map((entry) => (
-                                                <option key={entry.id} value={entry.id}>
-                                                    {entry.fullName} (${entry.hourlyRate}/hr) · {entry.availabilityStatus}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            value={estimatedMinutes}
-                                            onChange={(event) => setEstimatedMinutes(event.target.value)}
-                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                            required
-                                        />
-                                    </label>
                                     <label className="space-y-1">
                                         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Labor Estimate</span>
                                         <input
@@ -1013,7 +1115,12 @@ export function JobsCrudPanel({
                                 const draft = getDraft(selectedJob);
                                 const isDirty = isDraftDirty(selectedJob);
                                 const closeoutDraft = getCloseoutDraft(selectedJob);
-                                const timeClockDraft = getTimeClockDraft(selectedJob);
+                                const ledgerDraft = getLedgerDraft(selectedJob);
+                                const normalizedLedgerDraft = ensureLedgerPairs(ledgerDraft);
+                                const ledgerPairValidation = validateLedgerPairs(normalizedLedgerDraft);
+                                const ledgerPairAnalysis = analyzeLedgerPairs(ledgerDraft);
+                                const hasOpenClockIn = ledgerPairAnalysis.openClockInEntry !== null;
+                                const isEditingTableAction = timeClockTableActionDraft?.jobId === selectedJob.id;
                                 const selectedWorkflowTechnicians = selectableTechnicians.filter((entry) => draft.assignedTechnicianIds.includes(entry.id));
                                 const quoteMinutes = Math.max(0, Number(draft.quoteEstimatedMinutes || '0'));
                                 const quotePartEstimate = computePartEstimateFromSkus(draft.requiredSkus, sortedInventoryLookupParts);
@@ -1023,6 +1130,12 @@ export function JobsCrudPanel({
                                         .toFixed(2),
                                 );
                                 const quoteEstimatedTotal = Number((quotePartEstimate + quoteLaborEstimate).toFixed(2));
+                                const timeClockBreakMinutes = selectedJob.timeClock?.breakMinutes ?? 0;
+                                const derivedActualMinutes = computeElapsedMinutesFromLedger(normalizedLedgerDraft, timeClockBreakMinutes);
+                                const derivedLaborRate = selectedWorkflowTechnicians.reduce((total, technician) => total + technician.hourlyRate, 0);
+                                const derivedActualLaborCost = Number(((derivedActualMinutes / 60) * derivedLaborRate).toFixed(2));
+                                const derivedActualPartCost = Number(closeoutDraft.actualPartCost || '0');
+                                const derivedFinalTotal = Number((derivedActualPartCost + derivedActualLaborCost).toFixed(2));
 
                                 return (
                                     <div className="flex flex-1 flex-col gap-5">
@@ -1678,28 +1791,274 @@ export function JobsCrudPanel({
                                                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] pb-3">
                                                     <div>
                                                         <p className="text-sm font-semibold text-[#0f172a]">Time Clock Review</p>
-                                                        <p className="text-xs text-[#64748b]">Adjust the clock before reviewing closeout.</p>
+                                                        <p className="text-xs text-[#64748b]">Manage time only through table actions before reviewing closeout.</p>
                                                     </div>
                                                     <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">
                                                         {selectedJob.timeClock?.elapsedMinutes ?? 0} minutes tracked
                                                     </span>
                                                 </div>
 
-                                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] text-[#475569]">Clock In</span>
-                                                        <input
-                                                            type="datetime-local"
-                                                            value={toLocalDateTime(selectedJob.timeClock?.clockedInAt ?? null)}
-                                                            onChange={(event) => {
-                                                                const nextClockedInAt = event.target.value ? new Date(event.target.value).toISOString() : null;
-                                                                const currentClockedOutAt = selectedJob.timeClock?.clockedOutAt ?? null;
-                                                                const nextElapsed = nextClockedInAt && currentClockedOutAt ?
-                                                                    computeElapsedMinutesFromLedger([
-                                                                        {action: 'clock_in', at: nextClockedInAt},
-                                                                        {action: 'clock_out', at: currentClockedOutAt},
-                                                                    ], selectedJob.timeClock?.breakMinutes ?? 0) :
-                                                                    selectedJob.timeClock?.elapsedMinutes ?? 0;
+                                                <div className="rounded border border-[#dbe3f0] bg-white p-3">
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <div>
+                                                            <p className="text-[11px] font-semibold text-[#475569]">Time Clock Ledger</p>
+                                                            <p className="text-[10px] text-[#64748b]">
+                                                                {hasOpenClockIn ? 'An active clock in is open. Complete it with a clock out entry.' : 'No open clock in entry. Start a new pair to track active work.'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex flex-wrap items-center justify-end gap-2">
+                                                            <span className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] font-semibold text-[#334155]">
+                                                                {ledgerPairAnalysis.pairedCount} pair{ledgerPairAnalysis.pairedCount === 1 ? '' : 's'} completed
+                                                            </span>
+                                                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${ledgerPairValidation.isValid ? 'bg-[#dcfce7] text-[#166534]' : 'bg-[#fef3c7] text-[#92400e]'}`}>
+                                                                {ledgerPairValidation.isValid ? 'All entries paired' : 'Pairing needs review'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    {!ledgerPairValidation.isValid ? (
+                                                        <p className="mt-2 rounded border border-[#fde68a] bg-[#fffbeb] px-2 py-1 text-[11px] text-[#92400e]">
+                                                            Pair verification: {ledgerPairValidation.unmatchedClockIns} open clock in {ledgerPairValidation.unmatchedClockIns === 1 ? 'entry' : 'entries'} and {ledgerPairValidation.unmatchedClockOuts} unmatched clock out {ledgerPairValidation.unmatchedClockOuts === 1 ? 'entry' : 'entries'}.
+                                                        </p>
+                                                    ) : null}
+                                                    <div className="mt-2 max-h-52 overflow-auto rounded border border-[#e2e8f0]">
+                                                        {ledgerDraft.length === 0 ? (
+                                                            <p className="text-xs text-[#64748b]">No ledger events yet.</p>
+                                                        ) : (
+                                                            <table className="min-w-full divide-y divide-[#e2e8f0] text-left text-xs">
+                                                                <thead className="bg-[#f8fafc] text-[#475569]">
+                                                                    <tr>
+                                                                        <th className="px-2 py-1.5 font-semibold">Pair</th>
+                                                                        <th className="px-2 py-1.5 font-semibold">Clock In</th>
+                                                                        <th className="px-2 py-1.5 font-semibold">Clock Out</th>
+                                                                        <th className="px-2 py-1.5 font-semibold">Status</th>
+                                                                        <th className="px-2 py-1.5 font-semibold text-right">Actions</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-[#e2e8f0] bg-white text-[#334155]">
+                                                                    {[...ledgerPairAnalysis.pairRows]
+                                                                        .sort((left, right) => {
+                                                                            const leftAt = left.clockOutEntry?.at ?? left.clockInEntry?.at ?? '';
+                                                                            const rightAt = right.clockOutEntry?.at ?? right.clockInEntry?.at ?? '';
+                                                                            return Date.parse(rightAt) - Date.parse(leftAt);
+                                                                        })
+                                                                        .map((row, index) => {
+                                                                            const clockInEntry = row.clockInEntry;
+                                                                            const clockOutEntry = row.clockOutEntry;
+                                                                            const statusLabel = row.status === 'paired' ? 'paired' : row.status === 'open' ? 'open' : 'unmatched';
+                                                                            const statusClassName = row.status === 'paired'
+                                                                                ? 'bg-[#dcfce7] text-[#166534]'
+                                                                                : row.status === 'open'
+                                                                                    ? 'bg-[#dbeafe] text-[#1d4ed8]'
+                                                                                    : 'bg-[#fee2e2] text-[#991b1b]';
+
+                                                                            const editEntry = (entry: EditableLedgerEntry | null) => {
+                                                                                if (!entry) {
+                                                                                    return;
+                                                                                }
+
+                                                                                setEditingLedgerEntry({
+                                                                                    jobId: selectedJob.id,
+                                                                                    entry: {
+                                                                                        id: entry.id,
+                                                                                        action: entry.action,
+                                                                                        at: entry.at,
+                                                                                        note: entry.note ?? '',
+                                                                                    },
+                                                                                });
+                                                                            };
+
+                                                                            const deleteEntry = (entryId: string | null) => {
+                                                                                if (!entryId) {
+                                                                                    return;
+                                                                                }
+
+                                                                                setLedgerDrafts((current) => ({
+                                                                                    ...current,
+                                                                                    [selectedJob.id]: ledgerDraft.filter((item) => item.id !== entryId),
+                                                                                }));
+                                                                            };
+
+                                                                            return (
+                                                                                <tr key={row.id} className="hover:bg-[#f8fafc]">
+                                                                                    <td className="px-2 py-2 text-[11px] font-semibold text-[#0f172a]">Pair {index + 1}</td>
+                                                                                    <td className="px-2 py-2 text-[11px] text-[#334155]">
+                                                                                        {clockInEntry ? (
+                                                                                            <div className="space-y-1">
+                                                                                                <p>{formatDateTime(clockInEntry.at)}</p>
+                                                                                                <p className="text-[10px] text-[#64748b]">{clockInEntry.note?.trim() || 'No note'}</p>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <span className="text-[#94a3b8]">Missing clock in</span>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="px-2 py-2 text-[11px] text-[#334155]">
+                                                                                        {clockOutEntry ? (
+                                                                                            <div className="space-y-1">
+                                                                                                <p>{formatDateTime(clockOutEntry.at)}</p>
+                                                                                                <p className="text-[10px] text-[#64748b]">{clockOutEntry.note?.trim() || 'No note'}</p>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <span className="text-[#94a3b8]">Open - waiting for clock out</span>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="px-2 py-2">
+                                                                                        <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${statusClassName}`}>
+                                                                                            {statusLabel}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-2 py-2">
+                                                                                        <div className="flex justify-end gap-1.5">
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="rounded border border-[#bae6fd] bg-[#eff6ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]"
+                                                                                                disabled={!clockInEntry}
+                                                                                                onClick={() => editEntry(clockInEntry)}
+                                                                                            >
+                                                                                                Edit In
+                                                                                            </button>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="rounded border border-[#bae6fd] bg-[#eff6ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]"
+                                                                                                disabled={!clockOutEntry}
+                                                                                                onClick={() => editEntry(clockOutEntry)}
+                                                                                            >
+                                                                                                Edit Out
+                                                                                            </button>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="rounded border border-[#fecaca] bg-[#fef2f2] px-2 py-0.5 text-[10px] font-semibold text-[#991b1b]"
+                                                                                                disabled={!clockInEntry}
+                                                                                                onClick={() => deleteEntry(clockInEntry?.id ?? null)}
+                                                                                            >
+                                                                                                Delete In
+                                                                                            </button>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="rounded border border-[#fecaca] bg-[#fef2f2] px-2 py-0.5 text-[10px] font-semibold text-[#991b1b]"
+                                                                                                disabled={!clockOutEntry}
+                                                                                                onClick={() => deleteEntry(clockOutEntry?.id ?? null)}
+                                                                                            >
+                                                                                                Delete Out
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
+                                                                </tbody>
+                                                            </table>
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={isPending || hasOpenClockIn || isEditingTableAction}
+                                                            className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
+                                                            onClick={() => {
+                                                                const nowIso = new Date().toISOString();
+                                                                const nextLedger = [
+                                                                    ...ledgerDraft,
+                                                                    {
+                                                                        id: `manual-clock-in-${Date.now()}`,
+                                                                        action: 'clock_in' as const,
+                                                                        at: nowIso,
+                                                                        note: 'Started via pair workflow',
+                                                                    },
+                                                                ];
+                                                                setLedgerDrafts((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: nextLedger,
+                                                                }));
+                                                            }}
+                                                        >
+                                                            Start New Pair
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isPending || !hasOpenClockIn || isEditingTableAction}
+                                                            className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs font-semibold text-[#334155] disabled:opacity-50"
+                                                            onClick={() => {
+                                                                const nowIso = new Date().toISOString();
+                                                                const nextLedger = [
+                                                                    ...ledgerDraft,
+                                                                    {
+                                                                        id: `manual-clock-out-${Date.now()}`,
+                                                                        action: 'clock_out' as const,
+                                                                        at: nowIso,
+                                                                        note: 'Closed via pair workflow',
+                                                                    },
+                                                                ];
+                                                                setLedgerDrafts((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: nextLedger,
+                                                                }));
+                                                            }}
+                                                        >
+                                                            Close Open Pair
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isPending || isEditingTableAction}
+                                                            className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs font-semibold text-[#334155] disabled:opacity-50"
+                                                            onClick={() => {
+                                                                setTimeClockTableActionDraft({
+                                                                    jobId: selectedJob.id,
+                                                                    mode: 'break',
+                                                                    breakMinutes: selectedJob.timeClock?.breakMinutes ?? 0,
+                                                                    notes: selectedJob.timeClock?.notes ?? '',
+                                                                });
+                                                            }}
+                                                        >
+                                                            Add Break
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isPending || isEditingTableAction}
+                                                            className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs font-semibold text-[#334155] disabled:opacity-50"
+                                                            onClick={() => {
+                                                                setTimeClockTableActionDraft({
+                                                                    jobId: selectedJob.id,
+                                                                    mode: 'notes',
+                                                                    breakMinutes: selectedJob.timeClock?.breakMinutes ?? 0,
+                                                                    notes: selectedJob.timeClock?.notes ?? '',
+                                                                });
+                                                            }}
+                                                        >
+                                                            Add Notes
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isPending || isEditingTableAction}
+                                                            className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
+                                                            onClick={() => {
+                                                                const nextLedger = [...ledgerDraft, {
+                                                                    id: `manual-${Date.now()}`,
+                                                                    action: hasOpenClockIn ? 'clock_out' as const : 'clock_in' as const,
+                                                                    at: new Date().toISOString(),
+                                                                    note: hasOpenClockIn ? 'Manual close entry' : 'Manual open entry',
+                                                                }];
+                                                                setLedgerDrafts((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: nextLedger,
+                                                                }));
+                                                            }}
+                                                        >
+                                                            {hasOpenClockIn ? 'Add Clock Out Entry' : 'Add Clock In Entry'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isPending || isEditingTableAction || !ledgerPairValidation.isValid}
+                                                            className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
+                                                            onClick={async () => {
+                                                                const nextLedger = ensureLedgerPairs(ledgerDraft);
+                                                                const nextPairValidation = validateLedgerPairs(nextLedger);
+                                                                if (!nextPairValidation.isValid) {
+                                                                    setError('Time clock ledger must have paired clock in/clock out entries before saving.');
+                                                                    return;
+                                                                }
+                                                                const nextClockedInAt = [...nextLedger].reverse().find((entry) => entry.action === 'clock_in')?.at ?? null;
+                                                                const nextClockedOutAt = [...nextLedger].reverse().find((entry) => entry.action === 'clock_out')?.at ?? null;
+                                                                const nextElapsed = computeElapsedMinutesFromLedger(nextLedger, selectedJob.timeClock?.breakMinutes ?? 0);
                                                                 const nextTimeClockJob: JobQueueItem = {
                                                                     ...selectedJob,
                                                                     timeClock: {
@@ -1712,25 +2071,19 @@ export function JobsCrudPanel({
                                                                             ledger: [],
                                                                         }),
                                                                         clockedInAt: nextClockedInAt,
+                                                                        clockedOutAt: nextClockedOutAt,
                                                                         elapsedMinutes: nextElapsed,
+                                                                        ledger: nextLedger,
                                                                     },
                                                                 };
 
-                                                                setTimeClockDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: {
-                                                                        ...timeClockDraft,
-                                                                        actionNote: timeClockDraft.actionNote,
-                                                                    },
-                                                                }));
-
-                                                                runMutation({
+                                                                const ok = await runMutation({
                                                                     method: 'PATCH',
                                                                     headers: { 'content-type': 'application/json' },
                                                                     body: JSON.stringify({
                                                                         id: selectedJob.id,
                                                                         timeClockAction: 'set_time_clock',
-                                                                        timeClockClockedInAt: nextClockedInAt,
+                                                                        timeClockLedger: nextLedger,
                                                                     }),
                                                                 }, '/api/jobs', {
                                                                     optimisticJobs: (current) => current.map((entry) => entry.id === selectedJob.id ? {
@@ -1738,324 +2091,280 @@ export function JobsCrudPanel({
                                                                         timeClock: {
                                                                             ...(entry.timeClock ?? { clockedInAt: null, clockedOutAt: null, breakMinutes: 0, elapsedMinutes: 0, notes: null, ledger: [] }),
                                                                             clockedInAt: nextClockedInAt,
-                                                                            elapsedMinutes: nextElapsed,
-                                                                        },
-                                                                    } : entry),
-                                                                });
-                                                                syncCloseoutFromTimeClock(nextTimeClockJob);
-                                                            }}
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] text-[#475569]">Clock Out</span>
-                                                        <input
-                                                            type="datetime-local"
-                                                            value={toLocalDateTime(selectedJob.timeClock?.clockedOutAt ?? null)}
-                                                            onChange={(event) => {
-                                                                const nextClockedOutAt = event.target.value ? new Date(event.target.value).toISOString() : null;
-                                                                const nextElapsed = selectedJob.timeClock?.clockedInAt && nextClockedOutAt ?
-                                                                    computeElapsedMinutesFromLedger([
-                                                                        {action: 'clock_in', at: selectedJob.timeClock.clockedInAt},
-                                                                        {action: 'clock_out', at: nextClockedOutAt},
-                                                                    ], selectedJob.timeClock?.breakMinutes ?? 0) :
-                                                                    selectedJob.timeClock?.elapsedMinutes ?? 0;
-                                                                const nextTimeClockJob: JobQueueItem = {
-                                                                    ...selectedJob,
-                                                                    timeClock: {
-                                                                        ...(selectedJob.timeClock ?? {
-                                                                            clockedInAt: null,
-                                                                            clockedOutAt: null,
-                                                                            breakMinutes: 0,
-                                                                            elapsedMinutes: 0,
-                                                                            notes: null,
-                                                                            ledger: [],
-                                                                        }),
-                                                                        clockedOutAt: nextClockedOutAt,
-                                                                        elapsedMinutes: nextElapsed,
-                                                                    },
-                                                                };
-                                                                setTimeClockDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: {
-                                                                        ...timeClockDraft,
-                                                                        actionNote: timeClockDraft.actionNote,
-                                                                    },
-                                                                }));
-                                                                runMutation({
-                                                                    method: 'PATCH',
-                                                                    headers: { 'content-type': 'application/json' },
-                                                                    body: JSON.stringify({
-                                                                        id: selectedJob.id,
-                                                                        timeClockAction: 'set_time_clock',
-                                                                        timeClockClockedOutAt: nextClockedOutAt,
-                                                                    }),
-                                                                }, '/api/jobs', {
-                                                                    optimisticJobs: (current) => current.map((entry) => entry.id === selectedJob.id ? {
-                                                                        ...entry,
-                                                                        timeClock: {
-                                                                            ...(entry.timeClock ?? { clockedInAt: null, clockedOutAt: null, breakMinutes: 0, elapsedMinutes: 0, notes: null, ledger: [] }),
                                                                             clockedOutAt: nextClockedOutAt,
-                                                                            elapsedMinutes: computeElapsedMinutesFromLedger(
-                                                                                [
-                                                                                    ...(entry.timeClock?.ledger ?? []).filter((ledgerEntry) => ledgerEntry.action !== 'clock_in' && ledgerEntry.action !== 'clock_out'),
-                                                                                    ...(nextClockedOutAt ? [{ action: 'clock_out' as const, at: nextClockedOutAt }] : []),
-                                                                                ],
-                                                                                entry.timeClock?.breakMinutes ?? 0,
-                                                                            ),
+                                                                            elapsedMinutes: nextElapsed,
+                                                                            ledger: nextLedger,
                                                                         },
                                                                     } : entry),
                                                                 });
-                                                                syncCloseoutFromTimeClock(nextTimeClockJob);
+
+                                                                if (ok) {
+                                                                    syncLedgerDraft(nextTimeClockJob);
+                                                                    syncCloseoutFromTimeClock(nextTimeClockJob);
+                                                                }
                                                             }}
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] text-[#475569]">Break Minutes</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            value={selectedJob.timeClock?.breakMinutes ?? 0}
-                                                            onChange={(event) => {
-                                                                const nextBreakMinutes = Number(event.target.value);
-                                                                const nextTimeClockJob: JobQueueItem = {
-                                                                    ...selectedJob,
-                                                                    timeClock: {
-                                                                        ...(selectedJob.timeClock ?? {
-                                                                            clockedInAt: null,
-                                                                            clockedOutAt: null,
-                                                                            breakMinutes: 0,
-                                                                            elapsedMinutes: 0,
-                                                                            notes: null,
-                                                                            ledger: [],
-                                                                        }),
-                                                                        breakMinutes: nextBreakMinutes,
-                                                                        elapsedMinutes: computeElapsedMinutesFromLedger(selectedJob.timeClock?.ledger ?? [], nextBreakMinutes),
-                                                                    },
-                                                                };
-                                                                runMutation({
-                                                                    method: 'PATCH',
-                                                                    headers: { 'content-type': 'application/json' },
-                                                                    body: JSON.stringify({
-                                                                        id: selectedJob.id,
-                                                                        timeClockAction: 'set_time_clock',
-                                                                        timeClockBreakMinutes: nextBreakMinutes,
-                                                                    }),
-                                                                }, '/api/jobs', {
-                                                                    optimisticJobs: (current) => current.map((entry) => entry.id === selectedJob.id ? {
-                                                                        ...entry,
-                                                                        timeClock: {
-                                                                            ...(entry.timeClock ?? { clockedInAt: null, clockedOutAt: null, breakMinutes: 0, elapsedMinutes: 0, notes: null, ledger: [] }),
-                                                                            breakMinutes: nextBreakMinutes,
-                                                                            elapsedMinutes: computeElapsedMinutesFromLedger(entry.timeClock?.ledger ?? [], nextBreakMinutes),
-                                                                        },
-                                                                    } : entry),
-                                                                });
-                                                                syncCloseoutFromTimeClock(nextTimeClockJob);
-                                                            }}
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                </div>
-
-                                                <label className="space-y-1">
-                                                    <span className="text-[11px] text-[#475569]">Clock Action Note</span>
-                                                    <input
-                                                        value={timeClockDraft.actionNote}
-                                                        onChange={(event) =>
-                                                            setTimeClockDrafts((current) => ({
-                                                                ...current,
-                                                                [selectedJob.id]: {
-                                                                    ...timeClockDraft,
-                                                                    actionNote: event.target.value,
-                                                                },
-                                                            }))
-                                                        }
-                                                        placeholder="Optional note for this clock action"
-                                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                    />
-                                                </label>
-
-                                                <RichTextMarkdownField
-                                                    label="Time Clock Notes"
-                                                    value={timeClockDraft.notes}
-                                                    onChange={(next) =>
-                                                        setTimeClockDrafts((current) => ({
-                                                            ...current,
-                                                            [selectedJob.id]: {
-                                                                ...timeClockDraft,
-                                                                notes: next,
-                                                            },
-                                                        }))
-                                                    }
-                                                />
-
-                                                <div className="flex flex-wrap gap-2">
-                                                    <button
-                                                        type="button"
-                                                        disabled={isPending}
-                                                        className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
-                                                        onClick={async () => {
-                                                            const actionAt = new Date().toISOString();
-                                                            await runMutation({
-                                                                method: 'PATCH',
-                                                                headers: { 'content-type': 'application/json' },
-                                                                body: JSON.stringify({
-                                                                    id: selectedJob.id,
-                                                                    timeClockAction: 'clock_in',
-                                                                    timeClockActionNote: timeClockDraft.actionNote,
-                                                                }),
-                                                            }, '/api/jobs', {
-                                                                optimisticJobs: (current) =>
-                                                                    current.map((entry) => {
-                                                                        if (entry.id !== selectedJob.id) {
-                                                                            return entry;
-                                                                        }
-
-                                                                        const existingTimeClock = entry.timeClock ?? {
-                                                                            clockedInAt: null,
-                                                                            clockedOutAt: null,
-                                                                            breakMinutes: 0,
-                                                                            elapsedMinutes: 0,
-                                                                            notes: null,
-                                                                            ledger: [],
-                                                                        };
-                                                                        const ledger = [
-                                                                            ...(existingTimeClock.ledger ?? []),
-                                                                            {
-                                                                                id: `optimistic-clock-in-${Date.now()}`,
-                                                                                action: 'clock_in' as const,
-                                                                                at: actionAt,
-                                                                                note: timeClockDraft.actionNote.trim() || null,
-                                                                            },
-                                                                        ];
-
-                                                                        return {
-                                                                            ...entry,
-                                                                            status: entry.status === 'queued' ? 'in_progress' : entry.status,
-                                                                            timeClock: {
-                                                                                ...existingTimeClock,
-                                                                                clockedInAt: actionAt,
-                                                                                ledger,
-                                                                                elapsedMinutes: computeElapsedMinutesFromLedger(ledger, existingTimeClock.breakMinutes),
-                                                                            },
-                                                                        };
-                                                                    }),
-                                                            });
-                                                        }}
-                                                    >
-                                                        Clock In
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        disabled={isPending}
-                                                        className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
-                                                        onClick={async () => {
-                                                            const actionAt = new Date().toISOString();
-                                                            await runMutation({
-                                                                method: 'PATCH',
-                                                                headers: { 'content-type': 'application/json' },
-                                                                body: JSON.stringify({
-                                                                    id: selectedJob.id,
-                                                                    timeClockAction: 'clock_out',
-                                                                    timeClockActionNote: timeClockDraft.actionNote,
-                                                                }),
-                                                            }, '/api/jobs', {
-                                                                optimisticJobs: (current) =>
-                                                                    current.map((entry) => {
-                                                                        if (entry.id !== selectedJob.id) {
-                                                                            return entry;
-                                                                        }
-
-                                                                        const existingTimeClock = entry.timeClock ?? {
-                                                                            clockedInAt: null,
-                                                                            clockedOutAt: null,
-                                                                            breakMinutes: 0,
-                                                                            elapsedMinutes: 0,
-                                                                            notes: null,
-                                                                            ledger: [],
-                                                                        };
-                                                                        const ledger = [
-                                                                            ...(existingTimeClock.ledger ?? []),
-                                                                            {
-                                                                                id: `optimistic-clock-out-${Date.now()}`,
-                                                                                action: 'clock_out' as const,
-                                                                                at: actionAt,
-                                                                                note: timeClockDraft.actionNote.trim() || null,
-                                                                            },
-                                                                        ];
-
-                                                                        return {
-                                                                            ...entry,
-                                                                            timeClock: {
-                                                                                ...existingTimeClock,
-                                                                                clockedOutAt: actionAt,
-                                                                                ledger,
-                                                                                elapsedMinutes: computeElapsedMinutesFromLedger(ledger, existingTimeClock.breakMinutes),
-                                                                            },
-                                                                        };
-                                                                    }),
-                                                            });
-                                                        }}
-                                                    >
-                                                        Clock Out
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        disabled={isPending}
-                                                        className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs disabled:opacity-50"
-                                                        onClick={async () => {
-                                                            await runMutation({
-                                                                method: 'PATCH',
-                                                                headers: { 'content-type': 'application/json' },
-                                                                body: JSON.stringify({
-                                                                    id: selectedJob.id,
-                                                                    timeClockAction: 'set_notes',
-                                                                    timeClockNotes: timeClockDraft.notes,
-                                                                }),
-                                                            }, '/api/jobs', {
-                                                                optimisticJobs: (current) =>
-                                                                    current.map((entry) =>
-                                                                        entry.id === selectedJob.id ? {
-                                                                            ...entry,
-                                                                            timeClock: {
-                                                                                ...(entry.timeClock ?? {
-                                                                                    clockedInAt: null,
-                                                                                    clockedOutAt: null,
-                                                                                    breakMinutes: 0,
-                                                                                    elapsedMinutes: 0,
-                                                                                    notes: null,
-                                                                                    ledger: [],
-                                                                                }),
-                                                                                notes: timeClockDraft.notes,
-                                                                            },
-                                                                        } : entry,
-                                                                    ),
-                                                            });
-                                                        }}
-                                                    >
-                                                        Save Notes
-                                                    </button>
-                                                </div>
-                                                <div className="rounded border border-[#dbe3f0] bg-white p-3">
-                                                    <p className="text-[11px] font-semibold text-[#475569]">Time Clock Ledger</p>
-                                                    <div className="mt-2 max-h-44 space-y-1 overflow-auto">
-                                                        {(selectedJob.timeClock?.ledger ?? []).length === 0 ? (
-                                                            <p className="text-xs text-[#64748b]">No ledger events yet.</p>
-                                                        ) : (
-                                                            [...(selectedJob.timeClock?.ledger ?? [])]
-                                                                .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
-                                                                .map((entry) => (
-                                                                    <div key={entry.id} className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1 text-xs text-[#334155]">
-                                                                        <span className="font-semibold uppercase text-[#0f172a]">{entry.action.replace('_', ' ')}</span>
-                                                                        <span className="ml-2">{new Date(entry.at).toLocaleString()}</span>
-                                                                        {entry.note ? <p className="mt-1 whitespace-pre-wrap text-[#475569]">{entry.note}</p> : null}
-                                                                    </div>
-                                                                ))
-                                                        )}
+                                                        >
+                                                            Save Ledger Changes
+                                                        </button>
                                                     </div>
                                                 </div>
+
+                                                {editingLedgerEntry && editingLedgerEntry.jobId === selectedJob.id ? (
+                                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+                                                        <article className="w-full max-w-xl rounded-lg border border-[#dbe3f0] bg-white p-4 shadow-xl">
+                                                            <div className="flex items-center justify-between gap-2 border-b border-[#e2e8f0] pb-2">
+                                                                <h4 className="text-sm font-semibold text-[#0f172a]">Edit Ledger Entry</h4>
+                                                                <button
+                                                                    type="button"
+                                                                    className="rounded border border-[#cbd5e1] px-2 py-0.5 text-xs text-[#475569]"
+                                                                    onClick={() => setEditingLedgerEntry(null)}
+                                                                >
+                                                                    X
+                                                                </button>
+                                                            </div>
+                                                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                                                <label className="space-y-1">
+                                                                    <span className="text-[11px] text-[#475569]">Action</span>
+                                                                    <select
+                                                                        value={editingLedgerEntry.entry.action}
+                                                                        onChange={(event) =>
+                                                                            setEditingLedgerEntry((current) =>
+                                                                                current ? {
+                                                                                    ...current,
+                                                                                    entry: {
+                                                                                        ...current.entry,
+                                                                                        action: event.target.value as 'clock_in' | 'clock_out',
+                                                                                    },
+                                                                                } : null,
+                                                                            )
+                                                                        }
+                                                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                                    >
+                                                                        <option value="clock_in">clock in</option>
+                                                                        <option value="clock_out">clock out</option>
+                                                                    </select>
+                                                                </label>
+                                                                <label className="space-y-1">
+                                                                    <span className="text-[11px] text-[#475569]">Timestamp</span>
+                                                                    <input
+                                                                        type="datetime-local"
+                                                                        value={toLocalDateTime(editingLedgerEntry.entry.at)}
+                                                                        onChange={(event) =>
+                                                                            setEditingLedgerEntry((current) =>
+                                                                                current ? {
+                                                                                    ...current,
+                                                                                    entry: {
+                                                                                        ...current.entry,
+                                                                                        at: event.target.value ? new Date(event.target.value).toISOString() : current.entry.at,
+                                                                                    },
+                                                                                } : null,
+                                                                            )
+                                                                        }
+                                                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                                    />
+                                                                </label>
+                                                                <label className="space-y-1 sm:col-span-2">
+                                                                    <span className="text-[11px] text-[#475569]">Note</span>
+                                                                    <input
+                                                                        value={editingLedgerEntry.entry.note ?? ''}
+                                                                        onChange={(event) =>
+                                                                            setEditingLedgerEntry((current) =>
+                                                                                current ? {
+                                                                                    ...current,
+                                                                                    entry: {
+                                                                                        ...current.entry,
+                                                                                        note: event.target.value || null,
+                                                                                    },
+                                                                                } : null,
+                                                                            )
+                                                                        }
+                                                                        placeholder="Optional ledger note"
+                                                                        className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                                    />
+                                                                </label>
+                                                            </div>
+                                                            <div className="mt-4 flex justify-end gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    className="rounded border border-[#cbd5e1] bg-white px-3 py-1 text-xs"
+                                                                    onClick={() => setEditingLedgerEntry(null)}
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="rounded border border-[#86efac] bg-[#f0fdf4] px-3 py-1 text-xs font-semibold text-[#166534]"
+                                                                    onClick={() => {
+                                                                        setLedgerDrafts((current) => {
+                                                                            const currentLedger = current[selectedJob.id] ?? ledgerDraft;
+                                                                            return {
+                                                                                ...current,
+                                                                                [selectedJob.id]: currentLedger.map((entry) =>
+                                                                                    entry.id === editingLedgerEntry.entry.id ? editingLedgerEntry.entry : entry,
+                                                                                ),
+                                                                            };
+                                                                        });
+                                                                        setEditingLedgerEntry(null);
+                                                                    }}
+                                                                >
+                                                                    Save Entry
+                                                                </button>
+                                                            </div>
+                                                        </article>
+                                                    </div>
+                                                ) : null}
+
+                                                {timeClockTableActionDraft && timeClockTableActionDraft.jobId === selectedJob.id ? (
+                                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+                                                        <article className="w-full max-w-xl rounded-lg border border-[#dbe3f0] bg-white p-4 shadow-xl">
+                                                            <div className="flex items-center justify-between gap-2 border-b border-[#e2e8f0] pb-2">
+                                                                <h4 className="text-sm font-semibold text-[#0f172a]">
+                                                                    {timeClockTableActionDraft.mode === 'break' ? 'Add Break Minutes' : 'Edit Time Clock Notes'}
+                                                                </h4>
+                                                                <button
+                                                                    type="button"
+                                                                    className="rounded border border-[#cbd5e1] px-2 py-0.5 text-xs text-[#475569]"
+                                                                    onClick={() => setTimeClockTableActionDraft(null)}
+                                                                >
+                                                                    X
+                                                                </button>
+                                                            </div>
+
+                                                            {timeClockTableActionDraft.mode === 'break' ? (
+                                                                <div className="mt-3 space-y-3">
+                                                                    <p className="text-xs text-[#64748b]">Enter total break minutes to subtract from tracked time.</p>
+                                                                    <label className="space-y-1">
+                                                                        <span className="text-[11px] text-[#475569]">Break Minutes</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            value={timeClockTableActionDraft.breakMinutes}
+                                                                            onChange={(event) =>
+                                                                                setTimeClockTableActionDraft((current) =>
+                                                                                    current ? {
+                                                                                        ...current,
+                                                                                        breakMinutes: Number(event.target.value),
+                                                                                    } : null,
+                                                                                )
+                                                                            }
+                                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                                        />
+                                                                    </label>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="mt-3">
+                                                                    <RichTextMarkdownField
+                                                                        label="Time Clock Notes"
+                                                                        value={timeClockTableActionDraft.notes}
+                                                                        onChange={(next) =>
+                                                                            setTimeClockTableActionDraft((current) =>
+                                                                                current ? {
+                                                                                    ...current,
+                                                                                    notes: next,
+                                                                                } : null,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            )}
+
+                                                            <div className="mt-4 flex justify-end gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    className="rounded border border-[#cbd5e1] bg-white px-3 py-1 text-xs"
+                                                                    onClick={() => setTimeClockTableActionDraft(null)}
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isPending}
+                                                                    className="rounded border border-[#86efac] bg-[#f0fdf4] px-3 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
+                                                                    onClick={async () => {
+                                                                        if (!timeClockTableActionDraft) {
+                                                                            return;
+                                                                        }
+
+                                                                        if (timeClockTableActionDraft.mode === 'break') {
+                                                                            const nextBreakMinutes = Math.max(0, timeClockTableActionDraft.breakMinutes);
+                                                                            const nextTimeClockJob: JobQueueItem = {
+                                                                                ...selectedJob,
+                                                                                timeClock: {
+                                                                                    ...(selectedJob.timeClock ?? {
+                                                                                        clockedInAt: null,
+                                                                                        clockedOutAt: null,
+                                                                                        breakMinutes: 0,
+                                                                                        elapsedMinutes: 0,
+                                                                                        notes: null,
+                                                                                        ledger: [],
+                                                                                    }),
+                                                                                    breakMinutes: nextBreakMinutes,
+                                                                                    elapsedMinutes: computeElapsedMinutesFromLedger(selectedJob.timeClock?.ledger ?? [], nextBreakMinutes),
+                                                                                },
+                                                                            };
+
+                                                                            await runMutation({
+                                                                                method: 'PATCH',
+                                                                                headers: { 'content-type': 'application/json' },
+                                                                                body: JSON.stringify({
+                                                                                    id: selectedJob.id,
+                                                                                    timeClockAction: 'set_time_clock',
+                                                                                    timeClockBreakMinutes: nextBreakMinutes,
+                                                                                }),
+                                                                            }, '/api/jobs', {
+                                                                                optimisticJobs: (current) => current.map((entry) => entry.id === selectedJob.id ? {
+                                                                                    ...entry,
+                                                                                    timeClock: {
+                                                                                        ...(entry.timeClock ?? { clockedInAt: null, clockedOutAt: null, breakMinutes: 0, elapsedMinutes: 0, notes: null, ledger: [] }),
+                                                                                        breakMinutes: nextBreakMinutes,
+                                                                                        elapsedMinutes: computeElapsedMinutesFromLedger(entry.timeClock?.ledger ?? [], nextBreakMinutes),
+                                                                                    },
+                                                                                } : entry),
+                                                                            });
+
+                                                                            syncLedgerDraft(nextTimeClockJob);
+                                                                            syncCloseoutFromTimeClock(nextTimeClockJob);
+                                                                            setTimeClockTableActionDraft(null);
+                                                                            return;
+                                                                        }
+
+                                                                        await runMutation({
+                                                                            method: 'PATCH',
+                                                                            headers: { 'content-type': 'application/json' },
+                                                                            body: JSON.stringify({
+                                                                                id: selectedJob.id,
+                                                                                timeClockAction: 'set_notes',
+                                                                                timeClockNotes: timeClockTableActionDraft.notes,
+                                                                            }),
+                                                                        }, '/api/jobs', {
+                                                                            optimisticJobs: (current) =>
+                                                                                current.map((entry) =>
+                                                                                    entry.id === selectedJob.id ? {
+                                                                                        ...entry,
+                                                                                        timeClock: {
+                                                                                            ...(entry.timeClock ?? {
+                                                                                                clockedInAt: null,
+                                                                                                clockedOutAt: null,
+                                                                                                breakMinutes: 0,
+                                                                                                elapsedMinutes: 0,
+                                                                                                notes: null,
+                                                                                                ledger: [],
+                                                                                            }),
+                                                                                            notes: timeClockTableActionDraft.notes,
+                                                                                        },
+                                                                                    } : entry,
+                                                                                ),
+                                                                        });
+
+                                                                        setTimeClockTableActionDraft(null);
+                                                                    }}
+                                                                >
+                                                                    Save
+                                                                </button>
+                                                            </div>
+                                                        </article>
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         ) : null}
 
@@ -2152,17 +2461,23 @@ export function JobsCrudPanel({
                                                     </div>
                                                     <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-3 text-xs">
                                                         <p className="text-[#475569]">Actual Labor Cost</p>
-                                                        <p className="text-sm font-semibold text-[#0f172a]">${closeoutDraft.actualLaborCost || '0.00'}</p>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">${derivedActualLaborCost.toFixed(2)}</p>
                                                     </div>
                                                     <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-3 text-xs">
                                                         <p className="text-[#475569]">Actual Minutes</p>
-                                                        <p className="text-sm font-semibold text-[#0f172a]">{closeoutDraft.actualMinutes || '0'}</p>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">{derivedActualMinutes}</p>
                                                     </div>
                                                     <div className="rounded border border-[#bbf7d0] bg-[#f0fdf4] p-3 text-xs">
                                                         <p className="text-[#166534]">Final Total</p>
-                                                        <p className="text-sm font-semibold text-[#166534]">${closeoutDraft.finalTotal || '0.00'}</p>
+                                                        <p className="text-sm font-semibold text-[#166534]">${derivedFinalTotal.toFixed(2)}</p>
                                                     </div>
                                                 </div>
+
+                                                {!ledgerPairValidation.isValid ? (
+                                                    <p className="rounded border border-[#fde68a] bg-[#fffbeb] px-2 py-1 text-[11px] text-[#92400e]">
+                                                        Closeout is disabled until every clock in has a paired clock out.
+                                                    </p>
+                                                ) : null}
 
                                                 <div className="grid gap-3 md:grid-cols-2">
                                                     <button
@@ -2200,7 +2515,7 @@ export function JobsCrudPanel({
                                                     </p>
                                                     <button
                                                         type="button"
-                                                        disabled={isPending || !canCloseOut(closeoutDraft)}
+                                                        disabled={isPending || !canCloseOut(closeoutDraft) || !ledgerPairValidation.isValid}
                                                         className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
                                                         onClick={async () => {
                                                             await runMutation(
@@ -2210,9 +2525,9 @@ export function JobsCrudPanel({
                                                                     body: JSON.stringify({
                                                                         id: selectedJob.id,
                                                                         actualPartCost: Number(closeoutDraft.actualPartCost),
-                                                                        actualLaborCost: Number(closeoutDraft.actualLaborCost),
-                                                                        actualMinutes: Number(closeoutDraft.actualMinutes),
-                                                                        finalTotal: Number(closeoutDraft.finalTotal),
+                                                                        actualLaborCost: derivedActualLaborCost,
+                                                                        actualMinutes: derivedActualMinutes,
+                                                                        finalTotal: derivedFinalTotal,
                                                                         resolutionNotes: closeoutDraft.resolutionNotes,
                                                                     }),
                                                                 },
@@ -2225,9 +2540,9 @@ export function JobsCrudPanel({
                                                                                 status: 'completed',
                                                                                 closeout: {
                                                                                     actualPartCost: Number(closeoutDraft.actualPartCost),
-                                                                                    actualLaborCost: Number(closeoutDraft.actualLaborCost),
-                                                                                    actualMinutes: Number(closeoutDraft.actualMinutes),
-                                                                                    finalTotal: Number(closeoutDraft.finalTotal),
+                                                                                    actualLaborCost: derivedActualLaborCost,
+                                                                                    actualMinutes: derivedActualMinutes,
+                                                                                    finalTotal: derivedFinalTotal,
                                                                                     closedOutAt: new Date().toISOString(),
                                                                                     resolutionNotes: closeoutDraft.resolutionNotes,
                                                                                 },
