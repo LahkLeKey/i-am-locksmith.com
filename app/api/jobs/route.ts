@@ -49,9 +49,12 @@ type UpdateJobRequest = {
     estimatedTotal?: number;
     notes?: string | null;
   };
-  timeClockAction?: 'clock_in' | 'clock_out' | 'set_notes';
+  timeClockAction?: 'clock_in' | 'clock_out' | 'set_notes' | 'set_time_clock';
   timeClockNotes?: string | null;
   timeClockActionNote?: string | null;
+  timeClockClockedInAt?: string | null;
+  timeClockClockedOutAt?: string | null;
+  timeClockBreakMinutes?: number | null;
   inventoryAction?: 'reserve' | 'create_inventory';
   inventorySku?: string;
   reserveQuantity?: number;
@@ -593,6 +596,70 @@ export async function PATCH(request: Request) {
         ok: true,
         message: `Updated time notes for ${updated.id}`,
         job: updated
+      });
+    }
+
+    if (body.timeClockAction === 'set_time_clock') {
+      if (body.timeClockClockedInAt !== undefined &&
+          body.timeClockClockedInAt !== null &&
+          Number.isNaN(Date.parse(body.timeClockClockedInAt))) {
+        return NextResponse.json(
+            {error: 'timeClockClockedInAt must be a valid date string'},
+            {status: 400});
+      }
+
+      if (body.timeClockClockedOutAt !== undefined &&
+          body.timeClockClockedOutAt !== null &&
+          Number.isNaN(Date.parse(body.timeClockClockedOutAt))) {
+        return NextResponse.json(
+            {error: 'timeClockClockedOutAt must be a valid date string'},
+            {status: 400});
+      }
+
+      if (body.timeClockBreakMinutes !== undefined &&
+          (body.timeClockBreakMinutes === null ||
+           !Number.isFinite(body.timeClockBreakMinutes) ||
+           body.timeClockBreakMinutes < 0)) {
+        return NextResponse.json(
+            {error: 'timeClockBreakMinutes must be a non-negative number'},
+            {status: 400});
+      }
+
+        const currentClock = current.timeClock ?? {
+        clockedInAt: null,
+        clockedOutAt: null,
+        breakMinutes: 0,
+        elapsedMinutes: 0,
+        notes: null,
+        ledger: [],
+        };
+
+        const nextClockedInAt = body.timeClockClockedInAt === undefined ?
+          currentClock.clockedInAt :
+          body.timeClockClockedInAt;
+        const nextClockedOutAt = body.timeClockClockedOutAt === undefined ?
+          currentClock.clockedOutAt :
+          body.timeClockClockedOutAt;
+        const nextBreakMinutes = body.timeClockBreakMinutes === undefined ?
+          currentClock.breakMinutes :
+          body.timeClockBreakMinutes;
+
+      const updated = await updateJobRecord(authResult.orgId, jobId, {
+        timeClock: {
+          clockedInAt: nextClockedInAt,
+          clockedOutAt: nextClockedOutAt,
+          breakMinutes: nextBreakMinutes,
+        },
+      });
+
+      if (!updated) {
+        return NextResponse.json({error: 'Job not found'}, {status: 404});
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: `Updated time clock for ${updated.id}`,
+        job: updated,
       });
     }
   }

@@ -528,4 +528,34 @@ describe('jobs api route', () => {
             }),
         );
   });
+
+  it('updates editable time clock fields', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: 'JOB-1',
+        timeClockAction: 'set_time_clock',
+        timeClockClockedInAt: '2026-07-22T10:00:00.000Z',
+        timeClockClockedOutAt: '2026-07-22T12:30:00.000Z',
+        timeClockBreakMinutes: 15,
+      }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1',
+            'JOB-1',
+            expect.objectContaining({
+              timeClock: expect.objectContaining({
+                clockedInAt: '2026-07-22T10:00:00.000Z',
+                clockedOutAt: '2026-07-22T12:30:00.000Z',
+                breakMinutes: 15,
+              }),
+            }),
+        );
+  });
 });

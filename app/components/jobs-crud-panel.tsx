@@ -169,6 +169,19 @@ function closeoutAsDraft(job: JobQueueItem): CloseoutDraft {
     };
 }
 
+function formatDateTime(value: string | null): string {
+    if (!value) {
+        return 'Not set';
+    }
+
+    const parsed = Date.parse(value);
+    if (!Number.isFinite(parsed)) {
+        return 'Not set';
+    }
+
+    return new Date(parsed).toLocaleString();
+}
+
 function timeClockAsDraft(job: JobQueueItem): TimeClockDraft {
     return {
         notes: job.timeClock?.notes ?? '',
@@ -465,6 +478,13 @@ export function JobsCrudPanel({
             draft.actualMinutes !== '' &&
             draft.finalTotal !== ''
         );
+    }
+
+    function syncCloseoutFromTimeClock(job: JobQueueItem) {
+        setCloseoutDrafts((current) => ({
+            ...current,
+            [job.id]: buildAutoCloseoutDraft(job),
+        }));
     }
 
     async function runMutation(request: RequestInit, endpoint = '/api/jobs', options?: JobsMutationOptions) {
@@ -1176,465 +1196,669 @@ export function JobsCrudPanel({
                                         ) : null}
 
                                         {activeJobWizardStep === 2 ? (
-                                            <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
-                                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Technician</span>
-                                                        <select
-                                                            multiple
-                                                            value={draft.assignedTechnicianIds}
-                                                            onChange={(event) => {
-                                                                const selectedIds = Array.from(event.currentTarget.selectedOptions).map((option) => option.value);
-                                                                setDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: {
-                                                                        ...draft,
-                                                                        assignedTechnicianIds: selectedIds,
-                                                                    },
-                                                                }));
-                                                            }}
-                                                            className="h-28 w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        >
-                                                            {selectableTechnicians.map((entry) => (
-                                                                <option key={entry.id} value={entry.id}>
-                                                                    {entry.fullName} (${entry.hourlyRate}/hr) · {entry.availabilityStatus}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        <p className="text-[11px] text-[#64748b]">Hold Ctrl/Command to select multiple technicians.</p>
-                                                    </label>
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Estimated Minutes</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            value={draft.quoteEstimatedMinutes}
-                                                            onChange={(event) =>
-                                                                setDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: {
-                                                                        ...draft,
-                                                                        quoteEstimatedMinutes: event.target.value,
-                                                                    },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs text-[#475569]">
-                                                        <p className="font-semibold text-[#0f172a]">Required Parts</p>
-                                                        <p className="mt-1 wrap-break-word">{draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected yet'}</p>
-                                                    </div>
-                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs text-[#475569]">
-                                                        <p className="font-semibold text-[#0f172a]">Selected Technicians</p>
-                                                        <p className="mt-1 wrap-break-word">{selectedWorkflowTechnicians.length > 0 ? selectedWorkflowTechnicians.map((entry) => entry.fullName).join(', ') : 'None selected yet'}</p>
-                                                    </div>
+                                            <div className="space-y-4 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
+                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] pb-3">
+                                                    <p className="text-sm font-semibold text-[#334155]">Quote + Inventory Workspace</p>
+                                                    <p className="text-xs text-[#64748b]">Set technicians and parts first, then run inventory actions.</p>
                                                 </div>
 
-                                                <div className="space-y-2 rounded border border-[#e2e8f0] bg-[#f8fafc] p-3">
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Parts Selector</span>
-                                                        <input
-                                                            value={lookupQuery[selectedJob.id] ?? ''}
-                                                            onChange={(event) => setLookupQuery((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                            placeholder="Search SKU, part name, or location"
-                                                            className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                        />
-                                                    </label>
-                                                    <div className="max-h-44 overflow-auto rounded border border-[#e5e7eb] bg-white">
-                                                        {(() => {
-                                                            const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
-                                                            const matches = sortedInventoryLookupParts
-                                                                .filter((part) => {
-                                                                    if (!query) {
-                                                                        return true;
-                                                                    }
-                                                                    return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
-                                                                })
-                                                                .slice(0, 30);
-
-                                                            if (matches.length === 0) {
-                                                                return <p className="px-3 py-2 text-xs text-[#64748b]">No parts found for this search.</p>;
-                                                            }
-
-                                                            return matches.map((part) => {
-                                                                const isSelected = draft.requiredSkus.includes(part.sku);
-                                                                return (
-                                                                    <label key={`${selectedJob.id}-draft-part-${part.id}`} className="flex cursor-pointer items-center justify-between border-b border-[#e5e7eb] px-3 py-2 text-xs last:border-b-0 hover:bg-[#f8fafc]">
-                                                                        <span className="flex items-center gap-2">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={isSelected}
-                                                                                onChange={(event) => {
-                                                                                    const nextSkus = event.target.checked
-                                                                                        ? (draft.requiredSkus.includes(part.sku) ? draft.requiredSkus : [...draft.requiredSkus, part.sku])
-                                                                                        : draft.requiredSkus.filter((sku) => sku !== part.sku);
-                                                                                    setDrafts((current) => ({
-                                                                                        ...current,
-                                                                                        [selectedJob.id]: {
-                                                                                            ...draft,
-                                                                                            requiredSkus: nextSkus,
-                                                                                        },
-                                                                                    }));
-                                                                                }}
-                                                                            />
-                                                                            <span className="font-semibold text-[#0f172a]">{part.sku}</span>
-                                                                            <span className="text-[#475569]">{part.itemName}</span>
-                                                                        </span>
-                                                                        <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
-                                                                    </label>
-                                                                );
-                                                            });
-                                                        })()}
-                                                    </div>
-                                                    <p className="text-[11px] text-[#475569]">Selected parts: {draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected'}</p>
-                                                </div>
-
-                                                <div className="grid gap-2 sm:grid-cols-3">
-                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
-                                                        <p className="text-[#475569]">Part Estimate (Auto)</p>
-                                                        <p className="text-sm font-semibold text-[#0f172a]">${quotePartEstimate.toFixed(2)}</p>
-                                                    </div>
-                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-2 text-xs">
-                                                        <p className="text-[#475569]">Labor Estimate (Auto)</p>
-                                                        <p className="text-sm font-semibold text-[#0f172a]">${quoteLaborEstimate.toFixed(2)}</p>
-                                                    </div>
-                                                    <div className="rounded border border-[#d1fae5] bg-[#f0fdf4] p-2 text-xs">
-                                                        <p className="text-[#166534]">Estimated Total (Auto)</p>
-                                                        <p className="text-sm font-semibold text-[#166534]">${quoteEstimatedTotal.toFixed(2)}</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid gap-3 md:grid-cols-2">
-                                                    <InventoryActionCard
-                                                        title="Reserve Existing Inventory"
-                                                        description="Search warehouse parts and reserve quantities directly for this job."
-                                                    >
-                                                        <label className="space-y-1.5">
-                                                            <span className="text-[11px] text-[#475569]">Lookup Warehoused Parts</span>
-                                                            <input
-                                                                value={lookupQuery[selectedJob.id] ?? ''}
-                                                                onChange={(event) => setLookupQuery((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                placeholder="Search SKU, item, or location"
-                                                                className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                            />
-                                                        </label>
-                                                        <div className="max-h-36 overflow-auto rounded border border-[#e5e7eb] bg-[#f8fafc]">
-                                                            {(() => {
-                                                                const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
-                                                                const matches = sortedInventoryLookupParts
-                                                                    .filter((part) => {
-                                                                        if (!query) {
-                                                                            return true;
-                                                                        }
-
-                                                                        return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
-                                                                    })
-                                                                    .slice(0, 8);
-
-                                                                if (matches.length === 0) {
-                                                                    return <p className="px-2 py-2 text-xs text-[#64748b]">No warehoused parts found for this search.</p>;
-                                                                }
-
-                                                                return matches.map((part) => (
-                                                                    <button
-                                                                        key={`${selectedJob.id}-${part.id}`}
-                                                                        type="button"
-                                                                        className="flex w-full items-center justify-between gap-2 border-b border-[#e5e7eb] px-3 py-2 text-left text-xs last:border-b-0 hover:bg-white"
-                                                                        onClick={() => {
-                                                                            setReserveSku((current) => ({ ...current, [selectedJob.id]: part.sku }));
-                                                                            setLookupQuery((current) => ({ ...current, [selectedJob.id]: part.sku }));
+                                                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+                                                    <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                                        <div className="rounded-lg border border-[#e2e8f0] bg-white p-3">
+                                                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                                                <p className="text-xs font-semibold text-[#334155]">Technician Assignment</p>
+                                                                <span className="rounded-full bg-[#ecfeff] px-2 py-0.5 text-[10px] font-semibold text-[#0f766e]">
+                                                                    {draft.assignedTechnicianIds.length} selected
+                                                                </span>
+                                                            </div>
+                                                            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
+                                                                <label className="space-y-1">
+                                                                    <span className="text-[11px] font-semibold text-[#475569]">Technicians</span>
+                                                                    <select
+                                                                        multiple
+                                                                        value={draft.assignedTechnicianIds}
+                                                                        onChange={(event) => {
+                                                                            const selectedIds = Array.from(event.currentTarget.selectedOptions).map((option) => option.value);
+                                                                            setDrafts((current) => ({
+                                                                                ...current,
+                                                                                [selectedJob.id]: {
+                                                                                    ...draft,
+                                                                                    assignedTechnicianIds: selectedIds,
+                                                                                },
+                                                                            }));
                                                                         }}
+                                                                        className="h-32 w-full rounded border border-[#d1d5db] bg-white px-2 py-1 text-xs"
                                                                     >
-                                                                        <span>
-                                                                            <span className="font-semibold text-[#0f172a]">{part.sku}</span>
-                                                                            <span className="ml-2 text-[#475569]">{part.itemName}</span>
-                                                                        </span>
-                                                                        <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
-                                                                    </button>
-                                                                ));
-                                                            })()}
+                                                                        {selectableTechnicians.map((entry) => (
+                                                                            <option key={entry.id} value={entry.id}>
+                                                                                {entry.fullName} (${entry.hourlyRate}/hr) · {entry.availabilityStatus}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <p className="text-[10px] leading-4 text-[#64748b]">Hold Ctrl/Command to select multiple technicians.</p>
+                                                                </label>
+                                                                <label className="space-y-1">
+                                                                    <span className="text-[11px] font-semibold text-[#475569]">Estimated Minutes</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        value={draft.quoteEstimatedMinutes}
+                                                                        onChange={(event) =>
+                                                                            setDrafts((current) => ({
+                                                                                ...current,
+                                                                                [selectedJob.id]: {
+                                                                                    ...draft,
+                                                                                    quoteEstimatedMinutes: event.target.value,
+                                                                                },
+                                                                            }))
+                                                                        }
+                                                                        className="w-full rounded border border-[#d1d5db] bg-white px-2 py-2 text-xs"
+                                                                    />
+                                                                </label>
+                                                            </div>
                                                         </div>
-                                                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-end">
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">SKU to Reserve</span>
+
+                                                        <div className="space-y-2 rounded border border-[#e2e8f0] bg-white p-3">
+                                                            <label className="space-y-1">
+                                                                <span className="text-[11px] font-semibold text-[#475569]">Parts Selector</span>
                                                                 <input
-                                                                    value={reserveSku[selectedJob.id] ?? ''}
-                                                                    onChange={(event) => setReserveSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                    placeholder="SKU to reserve"
+                                                                    value={lookupQuery[selectedJob.id] ?? ''}
+                                                                    onChange={(event) => setLookupQuery((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                    placeholder="Search SKU, part name, or location"
                                                                     className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
                                                                 />
                                                             </label>
-                                                            <label className="space-y-1.5">
-                                                                <span className="text-[11px] text-[#475569]">Reserve Quantity</span>
-                                                                <input
-                                                                    type="number"
-                                                                    min={1}
-                                                                    value={reserveQty[selectedJob.id] ?? 1}
-                                                                    onChange={(event) => setReserveQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                />
-                                                            </label>
-                                                            <button
-                                                                type="button"
-                                                                disabled={isPending}
-                                                                className="rounded border border-[#86efac] bg-[#f0fdf4] px-3 py-2 text-xs font-semibold text-[#166534]"
-                                                                onClick={async () => {
-                                                                    await runMutation({
-                                                                        method: 'PATCH',
-                                                                        headers: { 'content-type': 'application/json' },
-                                                                        body: JSON.stringify({
-                                                                            id: selectedJob.id,
-                                                                            inventoryAction: 'reserve',
-                                                                            inventorySku: reserveSku[selectedJob.id] ?? '',
-                                                                            reserveQuantity: reserveQty[selectedJob.id] ?? 1,
-                                                                        }),
-                                                                    }, '/api/jobs');
-                                                                }}
-                                                            >
-                                                                Reserve
-                                                            </button>
-                                                        </div>
-                                                    </InventoryActionCard>
-
-                                                    <InventoryActionCard
-                                                        title="Create Inventory Part"
-                                                        description="Add a missing catalog item and attach it to this job in one step."
-                                                    >
-                                                        {(() => {
-                                                            const currentServiceLines =
-                                                                createServiceLines[selectedJob.id] ?? ['mobile', 'shop'];
-
-                                                            const addServiceLineTag = () => {
-                                                                const nextTag = (createServiceLineInput[selectedJob.id] ?? '').trim().toLowerCase();
-                                                                if (!nextTag || currentServiceLines.includes(nextTag)) {
-                                                                    return;
-                                                                }
-
-                                                                setCreateServiceLines((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: [...currentServiceLines, nextTag],
-                                                                }));
-                                                                setCreateServiceLineInput((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: '',
-                                                                }));
-                                                            };
-
-                                                            const removeServiceLineTag = (tag: string) => {
-                                                                setCreateServiceLines((current) => {
-                                                                    const next = (current[selectedJob.id] ?? ['mobile', 'shop'])
-                                                                        .filter((entry) => entry !== tag);
-                                                                    return {
-                                                                        ...current,
-                                                                        [selectedJob.id]: next,
-                                                                    };
-                                                                });
-                                                            };
-
-                                                            return (
-                                                                <div className="grid gap-2.5 sm:grid-cols-2">
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">SKU</span>
-                                                                        <input
-                                                                            value={createSku[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="New SKU"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Item Name</span>
-                                                                        <input
-                                                                            value={createItemName[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateItemName((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="Item name"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Location</span>
-                                                                        <input
-                                                                            value={createLocation[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateLocation((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="Location"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Supplier</span>
-                                                                        <input
-                                                                            value={createSupplier[selectedJob.id] ?? ''}
-                                                                            onChange={(event) => setCreateSupplier((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            placeholder="Supplier"
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">On Hand</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            min={0}
-                                                                            value={createOnHand[selectedJob.id] ?? 0}
-                                                                            onChange={(event) => setCreateOnHand((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Reorder Point</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            min={0}
-                                                                            value={createReorderPoint[selectedJob.id] ?? 1}
-                                                                            onChange={(event) => setCreateReorderPoint((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Suggested Qty</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            min={0}
-                                                                            value={createSuggestedOrderQty[selectedJob.id] ?? 5}
-                                                                            onChange={(event) =>
-                                                                                setCreateSuggestedOrderQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))
+                                                            <div className="max-h-44 overflow-auto rounded border border-[#e5e7eb] bg-white">
+                                                                {(() => {
+                                                                    const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
+                                                                    const matches = sortedInventoryLookupParts
+                                                                        .filter((part) => {
+                                                                            if (!query) {
+                                                                                return true;
                                                                             }
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="flex flex-col gap-1.5">
-                                                                        <span className="block text-[11px] text-[#475569]">Severity</span>
-                                                                        <select
-                                                                            value={createSeverity[selectedJob.id] ?? 'medium'}
-                                                                            onChange={(event) => setCreateSeverity((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                            className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                        >
-                                                                            <option value="low">low</option>
-                                                                            <option value="medium">medium</option>
-                                                                            <option value="high">high</option>
-                                                                            <option value="critical">critical</option>
-                                                                        </select>
-                                                                    </label>
-                                                                    <label className="space-y-1.5 sm:col-span-2">
-                                                                        <span className="text-[11px] text-[#475569]">Service Lines</span>
-                                                                        <div className="space-y-2 rounded border border-[#d1d5db] bg-white p-2">
-                                                                            <div className="flex flex-wrap gap-2">
-                                                                                {currentServiceLines.length === 0 ? (
-                                                                                    <span className="text-xs text-[#64748b]">No service lines selected.</span>
-                                                                                ) : (
-                                                                                    currentServiceLines.map((line) => (
-                                                                                        <span key={`${selectedJob.id}-${line}`} className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#334155]">
-                                                                                            {line}
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                aria-label={`Remove ${line}`}
-                                                                                                className="rounded-full border border-[#cbd5e1] px-1 text-[9px] leading-none text-[#475569]"
-                                                                                                onClick={() => removeServiceLineTag(line)}
-                                                                                            >
-                                                                                                X
-                                                                                            </button>
-                                                                                        </span>
-                                                                                    ))
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-                                                                                <input
-                                                                                    value={createServiceLineInput[selectedJob.id] ?? ''}
-                                                                                    onChange={(event) =>
-                                                                                        setCreateServiceLineInput((current) => ({
-                                                                                            ...current,
-                                                                                            [selectedJob.id]: event.target.value,
-                                                                                        }))
-                                                                                    }
-                                                                                    placeholder="Add service line tag"
-                                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                                />
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="rounded border border-[#cbd5e1] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
-                                                                                    onClick={addServiceLineTag}
-                                                                                >
-                                                                                    Add Tag
-                                                                                </button>
-                                                                            </div>
-                                                                        </div>
-                                                                    </label>
-                                                                    <div className="sm:col-span-2">
-                                                                        <RichTextMarkdownField
-                                                                            label="Compatibility Note"
-                                                                            value={createNote[selectedJob.id] ?? ''}
-                                                                            onChange={(value) =>
-                                                                                setCreateNote((current) => ({
-                                                                                    ...current,
-                                                                                    [selectedJob.id]: value,
-                                                                                }))
-                                                                            }
-                                                                            placeholder="Compatibility details, fitment caveats, and technician guidance"
-                                                                            minRows={3}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                                                            <button
-                                                                type="button"
-                                                                disabled={isPending}
-                                                                className="ml-auto rounded border border-[#bae6fd] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#1d4ed8]"
-                                                                onClick={async () => {
-                                                                    await runMutation({
-                                                                        method: 'PATCH',
-                                                                        headers: { 'content-type': 'application/json' },
-                                                                        body: JSON.stringify({
-                                                                            id: selectedJob.id,
-                                                                            inventoryAction: 'create_inventory',
-                                                                            inventorySku: createSku[selectedJob.id] ?? '',
-                                                                            createInventory: {
-                                                                                itemName: createItemName[selectedJob.id] ?? '',
-                                                                                serviceLines:
-                                                                                    createServiceLines[selectedJob.id] && createServiceLines[selectedJob.id].length > 0 ?
-                                                                                        createServiceLines[selectedJob.id] :
-                                                                                        ['mobile', 'shop'],
-                                                                                location: createLocation[selectedJob.id] ?? '',
-                                                                                onHand: createOnHand[selectedJob.id] ?? 0,
-                                                                                reorderPoint: createReorderPoint[selectedJob.id] ?? 1,
-                                                                                suggestedOrderQty: createSuggestedOrderQty[selectedJob.id] ?? 5,
-                                                                                supplier: createSupplier[selectedJob.id] ?? '',
-                                                                                severity: createSeverity[selectedJob.id] ?? 'medium',
-                                                                                compatibilityNote: createNote[selectedJob.id] ?? '',
-                                                                            },
-                                                                        }),
-                                                                    }, '/api/jobs');
-                                                                }}
-                                                            >
-                                                                Create Part
-                                                            </button>
+                                                                            return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
+                                                                        })
+                                                                        .slice(0, 30);
+
+                                                                    if (matches.length === 0) {
+                                                                        return <p className="px-3 py-2 text-xs text-[#64748b]">No parts found for this search.</p>;
+                                                                    }
+
+                                                                    return matches.map((part) => {
+                                                                        const isSelected = draft.requiredSkus.includes(part.sku);
+                                                                        return (
+                                                                            <label key={`${selectedJob.id}-draft-part-${part.id}`} className="flex cursor-pointer items-center justify-between border-b border-[#e5e7eb] px-3 py-2 text-xs last:border-b-0 hover:bg-[#f8fafc]">
+                                                                                <span className="flex items-center gap-2">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={isSelected}
+                                                                                        onChange={(event) => {
+                                                                                            const nextSkus = event.target.checked
+                                                                                                ? (draft.requiredSkus.includes(part.sku) ? draft.requiredSkus : [...draft.requiredSkus, part.sku])
+                                                                                                : draft.requiredSkus.filter((sku) => sku !== part.sku);
+                                                                                            setDrafts((current) => ({
+                                                                                                ...current,
+                                                                                                [selectedJob.id]: {
+                                                                                                    ...draft,
+                                                                                                    requiredSkus: nextSkus,
+                                                                                                },
+                                                                                            }));
+                                                                                        }}
+                                                                                    />
+                                                                                    <span className="font-semibold text-[#0f172a]">{part.sku}</span>
+                                                                                    <span className="text-[#475569]">{part.itemName}</span>
+                                                                                </span>
+                                                                                <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                                                            </label>
+                                                                        );
+                                                                    });
+                                                                })()}
+                                                            </div>
+                                                            <p className="text-[11px] text-[#475569]">Selected parts: {draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected'}</p>
                                                         </div>
-                                                    </InventoryActionCard>
+                                                    </div>
+
+                                                    <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                                        <div className="rounded border border-[#e2e8f0] bg-white p-2 text-xs text-[#475569]">
+                                                            <p className="font-semibold text-[#0f172a]">Required Parts</p>
+                                                            <p className="mt-1 wrap-break-word">{draft.requiredSkus.length > 0 ? draft.requiredSkus.join(', ') : 'None selected yet'}</p>
+                                                        </div>
+                                                        <div className="rounded border border-[#e2e8f0] bg-white p-2 text-xs text-[#475569]">
+                                                            <p className="font-semibold text-[#0f172a]">Selected Technicians</p>
+                                                            <p className="mt-1 wrap-break-word">{selectedWorkflowTechnicians.length > 0 ? selectedWorkflowTechnicians.map((entry) => entry.fullName).join(', ') : 'None selected yet'}</p>
+                                                        </div>
+                                                        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                                                            <div className="rounded border border-[#e2e8f0] bg-white p-2 text-xs">
+                                                                <p className="text-[#475569]">Part Estimate (Auto)</p>
+                                                                <p className="text-sm font-semibold text-[#0f172a]">${quotePartEstimate.toFixed(2)}</p>
+                                                            </div>
+                                                            <div className="rounded border border-[#e2e8f0] bg-white p-2 text-xs">
+                                                                <p className="text-[#475569]">Labor Estimate (Auto)</p>
+                                                                <p className="text-sm font-semibold text-[#0f172a]">${quoteLaborEstimate.toFixed(2)}</p>
+                                                            </div>
+                                                            <div className="rounded border border-[#bbf7d0] bg-[#f0fdf4] p-2 text-xs">
+                                                                <p className="text-[#166534]">Estimated Total (Auto)</p>
+                                                                <p className="text-sm font-semibold text-[#166534]">${quoteEstimatedTotal.toFixed(2)}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <RichTextMarkdownField
-                                                    label="Quote Notes"
-                                                    value={draft.quoteNotes}
-                                                    onChange={(next) =>
-                                                        setDrafts((current) => ({
-                                                            ...current,
-                                                            [selectedJob.id]: {
-                                                                ...draft,
-                                                                quoteNotes: next,
-                                                            },
-                                                        }))
-                                                    }
-                                                />
+
+                                                <div className="space-y-2">
+                                                    <p className="text-xs font-semibold text-[#475569]">Inventory Actions</p>
+                                                    <div className="grid gap-3 xl:grid-cols-2">
+                                                        <InventoryActionCard
+                                                            title="Reserve Existing Inventory"
+                                                            description="Search warehouse parts and reserve quantities directly for this job."
+                                                        >
+                                                            <label className="space-y-1.5">
+                                                                <span className="text-[11px] text-[#475569]">Lookup Warehoused Parts</span>
+                                                                <input
+                                                                    value={lookupQuery[selectedJob.id] ?? ''}
+                                                                    onChange={(event) => setLookupQuery((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                    placeholder="Search SKU, item, or location"
+                                                                    className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                />
+                                                            </label>
+                                                            <div className="max-h-36 overflow-auto rounded border border-[#e5e7eb] bg-[#f8fafc]">
+                                                                {(() => {
+                                                                    const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
+                                                                    const matches = sortedInventoryLookupParts
+                                                                        .filter((part) => {
+                                                                            if (!query) {
+                                                                                return true;
+                                                                            }
+
+                                                                            return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
+                                                                        })
+                                                                        .slice(0, 8);
+
+                                                                    if (matches.length === 0) {
+                                                                        return <p className="px-2 py-2 text-xs text-[#64748b]">No warehoused parts found for this search.</p>;
+                                                                    }
+
+                                                                    return matches.map((part) => (
+                                                                        <button
+                                                                            key={`${selectedJob.id}-${part.id}`}
+                                                                            type="button"
+                                                                            className="flex w-full items-center justify-between gap-2 border-b border-[#e5e7eb] px-3 py-2 text-left text-xs last:border-b-0 hover:bg-white"
+                                                                            onClick={() => {
+                                                                                setReserveSku((current) => ({ ...current, [selectedJob.id]: part.sku }));
+                                                                                setLookupQuery((current) => ({ ...current, [selectedJob.id]: part.sku }));
+                                                                            }}
+                                                                        >
+                                                                            <span>
+                                                                                <span className="font-semibold text-[#0f172a]">{part.sku}</span>
+                                                                                <span className="ml-2 text-[#475569]">{part.itemName}</span>
+                                                                            </span>
+                                                                            <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                                                        </button>
+                                                                    ));
+                                                                })()}
+                                                            </div>
+                                                            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-end">
+                                                                <label className="space-y-1.5">
+                                                                    <span className="text-[11px] text-[#475569]">SKU to Reserve</span>
+                                                                    <input
+                                                                        value={reserveSku[selectedJob.id] ?? ''}
+                                                                        onChange={(event) => setReserveSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                        placeholder="SKU to reserve"
+                                                                        className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                    />
+                                                                </label>
+                                                                <label className="space-y-1.5">
+                                                                    <span className="text-[11px] text-[#475569]">Reserve Quantity</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        value={reserveQty[selectedJob.id] ?? 1}
+                                                                        onChange={(event) => setReserveQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                        className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                    />
+                                                                </label>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isPending}
+                                                                    className="rounded border border-[#86efac] bg-[#f0fdf4] px-3 py-2 text-xs font-semibold text-[#166534]"
+                                                                    onClick={async () => {
+                                                                        await runMutation({
+                                                                            method: 'PATCH',
+                                                                            headers: { 'content-type': 'application/json' },
+                                                                            body: JSON.stringify({
+                                                                                id: selectedJob.id,
+                                                                                inventoryAction: 'reserve',
+                                                                                inventorySku: reserveSku[selectedJob.id] ?? '',
+                                                                                reserveQuantity: reserveQty[selectedJob.id] ?? 1,
+                                                                            }),
+                                                                        }, '/api/jobs');
+                                                                    }}
+                                                                >
+                                                                    Reserve
+                                                                </button>
+                                                            </div>
+                                                        </InventoryActionCard>
+
+                                                        <InventoryActionCard
+                                                            title="Create Inventory Part"
+                                                            description="Add a missing catalog item and attach it to this job in one step."
+                                                        >
+                                                            {(() => {
+                                                                const currentServiceLines =
+                                                                    createServiceLines[selectedJob.id] ?? ['mobile', 'shop'];
+
+                                                                const addServiceLineTag = () => {
+                                                                    const nextTag = (createServiceLineInput[selectedJob.id] ?? '').trim().toLowerCase();
+                                                                    if (!nextTag || currentServiceLines.includes(nextTag)) {
+                                                                        return;
+                                                                    }
+
+                                                                    setCreateServiceLines((current) => ({
+                                                                        ...current,
+                                                                        [selectedJob.id]: [...currentServiceLines, nextTag],
+                                                                    }));
+                                                                    setCreateServiceLineInput((current) => ({
+                                                                        ...current,
+                                                                        [selectedJob.id]: '',
+                                                                    }));
+                                                                };
+
+                                                                const removeServiceLineTag = (tag: string) => {
+                                                                    setCreateServiceLines((current) => {
+                                                                        const next = (current[selectedJob.id] ?? ['mobile', 'shop'])
+                                                                            .filter((entry) => entry !== tag);
+                                                                        return {
+                                                                            ...current,
+                                                                            [selectedJob.id]: next,
+                                                                        };
+                                                                    });
+                                                                };
+
+                                                                return (
+                                                                    <div className="grid gap-2.5 sm:grid-cols-2">
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">SKU</span>
+                                                                            <input
+                                                                                value={createSku[selectedJob.id] ?? ''}
+                                                                                onChange={(event) => setCreateSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                                placeholder="New SKU"
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">Item Name</span>
+                                                                            <input
+                                                                                value={createItemName[selectedJob.id] ?? ''}
+                                                                                onChange={(event) => setCreateItemName((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                                placeholder="Item name"
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">Location</span>
+                                                                            <input
+                                                                                value={createLocation[selectedJob.id] ?? ''}
+                                                                                onChange={(event) => setCreateLocation((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                                placeholder="Location"
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">Supplier</span>
+                                                                            <input
+                                                                                value={createSupplier[selectedJob.id] ?? ''}
+                                                                                onChange={(event) => setCreateSupplier((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                                placeholder="Supplier"
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">On Hand</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                value={createOnHand[selectedJob.id] ?? 0}
+                                                                                onChange={(event) => setCreateOnHand((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">Reorder Point</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                value={createReorderPoint[selectedJob.id] ?? 1}
+                                                                                onChange={(event) => setCreateReorderPoint((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))}
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">Suggested Qty</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                value={createSuggestedOrderQty[selectedJob.id] ?? 5}
+                                                                                onChange={(event) =>
+                                                                                    setCreateSuggestedOrderQty((current) => ({ ...current, [selectedJob.id]: Number(event.target.value) }))
+                                                                                }
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                        <label className="flex flex-col gap-1.5">
+                                                                            <span className="block text-[11px] text-[#475569]">Severity</span>
+                                                                            <select
+                                                                                value={createSeverity[selectedJob.id] ?? 'medium'}
+                                                                                onChange={(event) => setCreateSeverity((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
+                                                                                className="rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                            >
+                                                                                <option value="low">low</option>
+                                                                                <option value="medium">medium</option>
+                                                                                <option value="high">high</option>
+                                                                                <option value="critical">critical</option>
+                                                                            </select>
+                                                                        </label>
+                                                                        <label className="space-y-1.5 sm:col-span-2">
+                                                                            <span className="text-[11px] text-[#475569]">Service Lines</span>
+                                                                            <div className="space-y-2 rounded border border-[#d1d5db] bg-white p-2">
+                                                                                <div className="flex flex-wrap gap-2">
+                                                                                    {currentServiceLines.length === 0 ? (
+                                                                                        <span className="text-xs text-[#64748b]">No service lines selected.</span>
+                                                                                    ) : (
+                                                                                        currentServiceLines.map((line) => (
+                                                                                            <span key={`${selectedJob.id}-${line}`} className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#334155]">
+                                                                                                {line}
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    aria-label={`Remove ${line}`}
+                                                                                                    className="rounded-full border border-[#cbd5e1] px-1 text-[9px] leading-none text-[#475569]"
+                                                                                                    onClick={() => removeServiceLineTag(line)}
+                                                                                                >
+                                                                                                    X
+                                                                                                </button>
+                                                                                            </span>
+                                                                                        ))
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                                                                                    <input
+                                                                                        value={createServiceLineInput[selectedJob.id] ?? ''}
+                                                                                        onChange={(event) =>
+                                                                                            setCreateServiceLineInput((current) => ({
+                                                                                                ...current,
+                                                                                                [selectedJob.id]: event.target.value,
+                                                                                            }))
+                                                                                        }
+                                                                                        placeholder="Add service line tag"
+                                                                                        className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
+                                                                                    />
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className="rounded border border-[#cbd5e1] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
+                                                                                        onClick={addServiceLineTag}
+                                                                                    >
+                                                                                        Add Tag
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </label>
+                                                                        <div className="sm:col-span-2">
+                                                                            <RichTextMarkdownField
+                                                                                label="Compatibility Note"
+                                                                                value={createNote[selectedJob.id] ?? ''}
+                                                                                onChange={(value) =>
+                                                                                    setCreateNote((current) => ({
+                                                                                        ...current,
+                                                                                        [selectedJob.id]: value,
+                                                                                    }))
+                                                                                }
+                                                                                placeholder="Compatibility details, fitment caveats, and technician guidance"
+                                                                                minRows={3}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isPending}
+                                                                    className="ml-auto rounded border border-[#bae6fd] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#1d4ed8]"
+                                                                    onClick={async () => {
+                                                                        await runMutation({
+                                                                            method: 'PATCH',
+                                                                            headers: { 'content-type': 'application/json' },
+                                                                            body: JSON.stringify({
+                                                                                id: selectedJob.id,
+                                                                                inventoryAction: 'create_inventory',
+                                                                                inventorySku: createSku[selectedJob.id] ?? '',
+                                                                                createInventory: {
+                                                                                    itemName: createItemName[selectedJob.id] ?? '',
+                                                                                    serviceLines:
+                                                                                        createServiceLines[selectedJob.id] && createServiceLines[selectedJob.id].length > 0 ?
+                                                                                            createServiceLines[selectedJob.id] :
+                                                                                            ['mobile', 'shop'],
+                                                                                    location: createLocation[selectedJob.id] ?? '',
+                                                                                    onHand: createOnHand[selectedJob.id] ?? 0,
+                                                                                    reorderPoint: createReorderPoint[selectedJob.id] ?? 1,
+                                                                                    suggestedOrderQty: createSuggestedOrderQty[selectedJob.id] ?? 5,
+                                                                                    supplier: createSupplier[selectedJob.id] ?? '',
+                                                                                    severity: createSeverity[selectedJob.id] ?? 'medium',
+                                                                                    compatibilityNote: createNote[selectedJob.id] ?? '',
+                                                                                },
+                                                                            }),
+                                                                        }, '/api/jobs');
+                                                                    }}
+                                                                >
+                                                                    Create Part
+                                                                </button>
+                                                            </div>
+                                                        </InventoryActionCard>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3">
+                                                    <RichTextMarkdownField
+                                                        label="Quote Notes"
+                                                        value={draft.quoteNotes}
+                                                        onChange={(next) =>
+                                                            setDrafts((current) => ({
+                                                                ...current,
+                                                                [selectedJob.id]: {
+                                                                    ...draft,
+                                                                    quoteNotes: next,
+                                                                },
+                                                            }))
+                                                        }
+                                                    />
+                                                </div>
                                             </div>
                                         ) : null}
 
                                         {activeJobWizardStep === 3 ? (
-                                            <div className="space-y-3 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
-                                                <div className="grid gap-2 sm:grid-cols-2">
-                                                    <p className="text-xs text-[#475569]">Clock In: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.clockedInAt ? new Date(selectedJob.timeClock.clockedInAt).toLocaleString() : 'Not started'}</span></p>
-                                                    <p className="text-xs text-[#475569]">Clock Out: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.clockedOutAt ? new Date(selectedJob.timeClock.clockedOutAt).toLocaleString() : 'In progress'}</span></p>
-                                                    <p className="text-xs text-[#475569]">Tracked Minutes: <span className="font-semibold text-[#0f172a]">{selectedJob.timeClock?.elapsedMinutes ?? 0}</span></p>
+                                            <div className="space-y-4 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
+                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] pb-3">
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">Time Clock Review</p>
+                                                        <p className="text-xs text-[#64748b]">Adjust the clock before reviewing closeout.</p>
+                                                    </div>
+                                                    <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">
+                                                        {selectedJob.timeClock?.elapsedMinutes ?? 0} minutes tracked
+                                                    </span>
                                                 </div>
+
+                                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                                    <label className="space-y-1">
+                                                        <span className="text-[11px] text-[#475569]">Clock In</span>
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={toLocalDateTime(selectedJob.timeClock?.clockedInAt ?? null)}
+                                                            onChange={(event) => {
+                                                                const nextClockedInAt = event.target.value ? new Date(event.target.value).toISOString() : null;
+                                                                const currentClockedOutAt = selectedJob.timeClock?.clockedOutAt ?? null;
+                                                                const nextElapsed = nextClockedInAt && currentClockedOutAt ?
+                                                                    computeElapsedMinutesFromLedger([
+                                                                        {action: 'clock_in', at: nextClockedInAt},
+                                                                        {action: 'clock_out', at: currentClockedOutAt},
+                                                                    ], selectedJob.timeClock?.breakMinutes ?? 0) :
+                                                                    selectedJob.timeClock?.elapsedMinutes ?? 0;
+                                                                const nextTimeClockJob: JobQueueItem = {
+                                                                    ...selectedJob,
+                                                                    timeClock: {
+                                                                        ...(selectedJob.timeClock ?? {
+                                                                            clockedInAt: null,
+                                                                            clockedOutAt: null,
+                                                                            breakMinutes: 0,
+                                                                            elapsedMinutes: 0,
+                                                                            notes: null,
+                                                                            ledger: [],
+                                                                        }),
+                                                                        clockedInAt: nextClockedInAt,
+                                                                        elapsedMinutes: nextElapsed,
+                                                                    },
+                                                                };
+
+                                                                setTimeClockDrafts((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: {
+                                                                        ...timeClockDraft,
+                                                                        actionNote: timeClockDraft.actionNote,
+                                                                    },
+                                                                }));
+
+                                                                runMutation({
+                                                                    method: 'PATCH',
+                                                                    headers: { 'content-type': 'application/json' },
+                                                                    body: JSON.stringify({
+                                                                        id: selectedJob.id,
+                                                                        timeClockAction: 'set_time_clock',
+                                                                        timeClockClockedInAt: nextClockedInAt,
+                                                                    }),
+                                                                }, '/api/jobs', {
+                                                                    optimisticJobs: (current) => current.map((entry) => entry.id === selectedJob.id ? {
+                                                                        ...entry,
+                                                                        timeClock: {
+                                                                            ...(entry.timeClock ?? { clockedInAt: null, clockedOutAt: null, breakMinutes: 0, elapsedMinutes: 0, notes: null, ledger: [] }),
+                                                                            clockedInAt: nextClockedInAt,
+                                                                            elapsedMinutes: nextElapsed,
+                                                                        },
+                                                                    } : entry),
+                                                                });
+                                                                syncCloseoutFromTimeClock(nextTimeClockJob);
+                                                            }}
+                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                        />
+                                                    </label>
+                                                    <label className="space-y-1">
+                                                        <span className="text-[11px] text-[#475569]">Clock Out</span>
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={toLocalDateTime(selectedJob.timeClock?.clockedOutAt ?? null)}
+                                                            onChange={(event) => {
+                                                                const nextClockedOutAt = event.target.value ? new Date(event.target.value).toISOString() : null;
+                                                                const nextElapsed = selectedJob.timeClock?.clockedInAt && nextClockedOutAt ?
+                                                                    computeElapsedMinutesFromLedger([
+                                                                        {action: 'clock_in', at: selectedJob.timeClock.clockedInAt},
+                                                                        {action: 'clock_out', at: nextClockedOutAt},
+                                                                    ], selectedJob.timeClock?.breakMinutes ?? 0) :
+                                                                    selectedJob.timeClock?.elapsedMinutes ?? 0;
+                                                                const nextTimeClockJob: JobQueueItem = {
+                                                                    ...selectedJob,
+                                                                    timeClock: {
+                                                                        ...(selectedJob.timeClock ?? {
+                                                                            clockedInAt: null,
+                                                                            clockedOutAt: null,
+                                                                            breakMinutes: 0,
+                                                                            elapsedMinutes: 0,
+                                                                            notes: null,
+                                                                            ledger: [],
+                                                                        }),
+                                                                        clockedOutAt: nextClockedOutAt,
+                                                                        elapsedMinutes: nextElapsed,
+                                                                    },
+                                                                };
+                                                                setTimeClockDrafts((current) => ({
+                                                                    ...current,
+                                                                    [selectedJob.id]: {
+                                                                        ...timeClockDraft,
+                                                                        actionNote: timeClockDraft.actionNote,
+                                                                    },
+                                                                }));
+                                                                runMutation({
+                                                                    method: 'PATCH',
+                                                                    headers: { 'content-type': 'application/json' },
+                                                                    body: JSON.stringify({
+                                                                        id: selectedJob.id,
+                                                                        timeClockAction: 'set_time_clock',
+                                                                        timeClockClockedOutAt: nextClockedOutAt,
+                                                                    }),
+                                                                }, '/api/jobs', {
+                                                                    optimisticJobs: (current) => current.map((entry) => entry.id === selectedJob.id ? {
+                                                                        ...entry,
+                                                                        timeClock: {
+                                                                            ...(entry.timeClock ?? { clockedInAt: null, clockedOutAt: null, breakMinutes: 0, elapsedMinutes: 0, notes: null, ledger: [] }),
+                                                                            clockedOutAt: nextClockedOutAt,
+                                                                            elapsedMinutes: computeElapsedMinutesFromLedger(
+                                                                                [
+                                                                                    ...(entry.timeClock?.ledger ?? []).filter((ledgerEntry) => ledgerEntry.action !== 'clock_in' && ledgerEntry.action !== 'clock_out'),
+                                                                                    ...(nextClockedOutAt ? [{ action: 'clock_out' as const, at: nextClockedOutAt }] : []),
+                                                                                ],
+                                                                                entry.timeClock?.breakMinutes ?? 0,
+                                                                            ),
+                                                                        },
+                                                                    } : entry),
+                                                                });
+                                                                syncCloseoutFromTimeClock(nextTimeClockJob);
+                                                            }}
+                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                        />
+                                                    </label>
+                                                    <label className="space-y-1">
+                                                        <span className="text-[11px] text-[#475569]">Break Minutes</span>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={selectedJob.timeClock?.breakMinutes ?? 0}
+                                                            onChange={(event) => {
+                                                                const nextBreakMinutes = Number(event.target.value);
+                                                                const nextTimeClockJob: JobQueueItem = {
+                                                                    ...selectedJob,
+                                                                    timeClock: {
+                                                                        ...(selectedJob.timeClock ?? {
+                                                                            clockedInAt: null,
+                                                                            clockedOutAt: null,
+                                                                            breakMinutes: 0,
+                                                                            elapsedMinutes: 0,
+                                                                            notes: null,
+                                                                            ledger: [],
+                                                                        }),
+                                                                        breakMinutes: nextBreakMinutes,
+                                                                        elapsedMinutes: computeElapsedMinutesFromLedger(selectedJob.timeClock?.ledger ?? [], nextBreakMinutes),
+                                                                    },
+                                                                };
+                                                                runMutation({
+                                                                    method: 'PATCH',
+                                                                    headers: { 'content-type': 'application/json' },
+                                                                    body: JSON.stringify({
+                                                                        id: selectedJob.id,
+                                                                        timeClockAction: 'set_time_clock',
+                                                                        timeClockBreakMinutes: nextBreakMinutes,
+                                                                    }),
+                                                                }, '/api/jobs', {
+                                                                    optimisticJobs: (current) => current.map((entry) => entry.id === selectedJob.id ? {
+                                                                        ...entry,
+                                                                        timeClock: {
+                                                                            ...(entry.timeClock ?? { clockedInAt: null, clockedOutAt: null, breakMinutes: 0, elapsedMinutes: 0, notes: null, ledger: [] }),
+                                                                            breakMinutes: nextBreakMinutes,
+                                                                            elapsedMinutes: computeElapsedMinutesFromLedger(entry.timeClock?.ledger ?? [], nextBreakMinutes),
+                                                                        },
+                                                                    } : entry),
+                                                                });
+                                                                syncCloseoutFromTimeClock(nextTimeClockJob);
+                                                            }}
+                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
+                                                        />
+                                                    </label>
+                                                </div>
+
                                                 <label className="space-y-1">
                                                     <span className="text-[11px] text-[#475569]">Clock Action Note</span>
                                                     <input
@@ -1652,6 +1876,7 @@ export function JobsCrudPanel({
                                                         className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
                                                     />
                                                 </label>
+
                                                 <RichTextMarkdownField
                                                     label="Time Clock Notes"
                                                     value={timeClockDraft.notes}
@@ -1665,6 +1890,7 @@ export function JobsCrudPanel({
                                                         }))
                                                     }
                                                 />
+
                                                 <div className="flex flex-wrap gap-2">
                                                     <button
                                                         type="button"
@@ -1813,7 +2039,7 @@ export function JobsCrudPanel({
                                                     </button>
                                                 </div>
                                                 <div className="rounded border border-[#dbe3f0] bg-white p-3">
-                                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Time Clock Ledger</p>
+                                                    <p className="text-[11px] font-semibold text-[#475569]">Time Clock Ledger</p>
                                                     <div className="mt-2 max-h-44 space-y-1 overflow-auto">
                                                         {(selectedJob.timeClock?.ledger ?? []).length === 0 ? (
                                                             <p className="text-xs text-[#64748b]">No ledger events yet.</p>
@@ -1908,86 +2134,67 @@ export function JobsCrudPanel({
                                         ) : null}
 
                                         {activeJobWizardStep === 4 ? (
-                                            <div className="border-y border-[#dbe3f0] py-5">
-                                                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[#334155]">Job Closeout</h4>
-                                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] text-[#475569]">Actual Part Cost</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            step="0.01"
-                                                            value={closeoutDraft.actualPartCost}
-                                                            onChange={(event) =>
-                                                                setCloseoutDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: { ...closeoutDraft, actualPartCost: event.target.value },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] text-[#475569]">Actual Labor Cost</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            step="0.01"
-                                                            value={closeoutDraft.actualLaborCost}
-                                                            onChange={(event) =>
-                                                                setCloseoutDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: { ...closeoutDraft, actualLaborCost: event.target.value },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] text-[#475569]">Actual Minutes</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            value={closeoutDraft.actualMinutes}
-                                                            onChange={(event) =>
-                                                                setCloseoutDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: { ...closeoutDraft, actualMinutes: event.target.value },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <label className="space-y-1">
-                                                        <span className="text-[11px] text-[#475569]">Final Total</span>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            step="0.01"
-                                                            value={closeoutDraft.finalTotal}
-                                                            onChange={(event) =>
-                                                                setCloseoutDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: { ...closeoutDraft, finalTotal: event.target.value },
-                                                                }))
-                                                            }
-                                                            className="w-full rounded border border-[#d1d5db] px-2 py-1 text-xs"
-                                                        />
-                                                    </label>
-                                                    <div className="sm:col-span-2">
-                                                        <RichTextMarkdownField
-                                                            label="Resolution Notes"
-                                                            value={closeoutDraft.resolutionNotes}
-                                                            onChange={(next) =>
-                                                                setCloseoutDrafts((current) => ({
-                                                                    ...current,
-                                                                    [selectedJob.id]: { ...closeoutDraft, resolutionNotes: next },
-                                                                }))
-                                                            }
-                                                        />
+                                            <div className="space-y-4 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
+                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] pb-3">
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-[#0f172a]">Closeout Review</h4>
+                                                        <p className="text-xs text-[#64748b]">Review the auto-filled totals and jump back to edit the related step if needed.</p>
+                                                    </div>
+                                                    <span className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] font-semibold text-[#475569]">
+                                                        Final review only
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-3 text-xs">
+                                                        <p className="text-[#475569]">Actual Part Cost</p>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">${closeoutDraft.actualPartCost || '0.00'}</p>
+                                                    </div>
+                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-3 text-xs">
+                                                        <p className="text-[#475569]">Actual Labor Cost</p>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">${closeoutDraft.actualLaborCost || '0.00'}</p>
+                                                    </div>
+                                                    <div className="rounded border border-[#e2e8f0] bg-[#f8fafc] p-3 text-xs">
+                                                        <p className="text-[#475569]">Actual Minutes</p>
+                                                        <p className="text-sm font-semibold text-[#0f172a]">{closeoutDraft.actualMinutes || '0'}</p>
+                                                    </div>
+                                                    <div className="rounded border border-[#bbf7d0] bg-[#f0fdf4] p-3 text-xs">
+                                                        <p className="text-[#166534]">Final Total</p>
+                                                        <p className="text-sm font-semibold text-[#166534]">${closeoutDraft.finalTotal || '0.00'}</p>
                                                     </div>
                                                 </div>
-                                                <div className="mt-2 flex items-center justify-between">
+
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-lg border border-[#dbe3f0] bg-[#f8fafc] p-3 text-left hover:bg-white"
+                                                        onClick={() => setActiveJobWizardStep(3)}
+                                                    >
+                                                        <p className="text-[11px] font-semibold text-[#334155]">Go back to Time Clock</p>
+                                                        <p className="mt-1 text-xs text-[#64748b]">Adjust clock in/out, break minutes, or notes before closing out.</p>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-lg border border-[#dbe3f0] bg-[#f8fafc] p-3 text-left hover:bg-white"
+                                                        onClick={() => setActiveJobWizardStep(2)}
+                                                    >
+                                                        <p className="text-[11px] font-semibold text-[#334155]">Go back to Quote + Inventory</p>
+                                                        <p className="mt-1 text-xs text-[#64748b]">Revise parts, technician assignment, or estimates if the closeout looks off.</p>
+                                                    </button>
+                                                </div>
+
+                                                <RichTextMarkdownField
+                                                    label="Resolution Notes"
+                                                    value={closeoutDraft.resolutionNotes}
+                                                    onChange={(next) =>
+                                                        setCloseoutDrafts((current) => ({
+                                                            ...current,
+                                                            [selectedJob.id]: { ...closeoutDraft, resolutionNotes: next },
+                                                        }))
+                                                    }
+                                                />
+
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
                                                     <p className="text-[11px] text-[#475569]">
                                                         {selectedJob.closeout?.closedOutAt ? `Closed out at ${new Date(selectedJob.closeout.closedOutAt).toLocaleString()}` : 'Not closed out yet'}
                                                     </p>
