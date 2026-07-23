@@ -120,7 +120,7 @@ type JobRecordClient = {
 
 function asStatus(value: string): JobQueueStatus {
   if (value === 'queued' || value === 'scheduled' || value === 'in_progress' ||
-      value === 'blocked' || value === 'completed') {
+      value === 'blocked' || value === 'closed' || value === 'completed') {
     return value;
   }
 
@@ -435,7 +435,7 @@ export async function closeOutJobRecord(
   const row = await client.jobRecord.update({
     where: {id: existing.id},
     data: {
-      status: 'completed',
+      status: 'closed',
       actualPartCost: input.actualPartCost,
       actualLaborCost: input.actualLaborCost,
       actualMinutes: input.actualMinutes,

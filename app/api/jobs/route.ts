@@ -82,7 +82,7 @@ type DeleteJobRequest = {
 const ALLOWED_PRIORITIES: JobQueuePriority[] =
     ['low', 'normal', 'high', 'urgent'];
 const ALLOWED_STATUSES: JobQueueStatus[] =
-    ['queued', 'scheduled', 'in_progress', 'blocked', 'completed'];
+  ['queued', 'scheduled', 'in_progress', 'blocked', 'closed', 'completed'];
 
 function computePartEstimateFromSkus(
     requiredSkus: string[],

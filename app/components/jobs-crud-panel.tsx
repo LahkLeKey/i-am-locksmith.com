@@ -12,7 +12,7 @@ import 'react-quill-new/dist/quill.snow.css';
 
 import type { JobQueueItem, JobQueuePriority, JobQueueStatus } from '@/lib/dashboard/types';
 
-const STATUSES: JobQueueStatus[] = ['queued', 'scheduled', 'in_progress', 'blocked'];
+const STATUSES: JobQueueStatus[] = ['queued', 'scheduled', 'in_progress', 'blocked', 'closed'];
 const PRIORITIES: JobQueuePriority[] = ['low', 'normal', 'high', 'urgent'];
 
 type InventoryLookupPart = {
@@ -2518,7 +2518,7 @@ export function JobsCrudPanel({
                                                         disabled={isPending || !canCloseOut(closeoutDraft) || !ledgerPairValidation.isValid}
                                                         className="rounded border border-[#86efac] bg-[#f0fdf4] px-2 py-1 text-xs font-semibold text-[#166534] disabled:opacity-50"
                                                         onClick={async () => {
-                                                            await runMutation(
+                                                            const ok = await runMutation(
                                                                 {
                                                                     method: 'POST',
                                                                     headers: { 'content-type': 'application/json' },
@@ -2537,7 +2537,7 @@ export function JobsCrudPanel({
                                                                         current.map((entry) =>
                                                                             entry.id === selectedJob.id ? {
                                                                                 ...entry,
-                                                                                status: 'completed',
+                                                                                status: 'closed',
                                                                                 closeout: {
                                                                                     actualPartCost: Number(closeoutDraft.actualPartCost),
                                                                                     actualLaborCost: derivedActualLaborCost,
@@ -2550,6 +2550,11 @@ export function JobsCrudPanel({
                                                                         ),
                                                                 },
                                                             );
+
+                                                            if (ok) {
+                                                                setIsActiveWorkflowOpen(false);
+                                                                setFeedback(`Job ${selectedJob.id} closed successfully.`);
+                                                            }
                                                         }}
                                                     >
                                                         Close Out Job

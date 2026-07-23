@@ -12,7 +12,7 @@ export type KpiCard = {
 };
 
 export type JobQueueStatus =
-    'queued'|'scheduled'|'in_progress'|'blocked'|'completed';
+  'queued'|'scheduled'|'in_progress'|'blocked'|'closed'|'completed';
 
 export type JobQueuePriority = 'low'|'normal'|'high'|'urgent';
 
