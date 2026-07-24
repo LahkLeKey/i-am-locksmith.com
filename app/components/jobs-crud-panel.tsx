@@ -7,6 +7,8 @@ import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { InventoryActionCard } from '@/app/components/inventory-shared';
+import { WizardProgressBar, WizardNavigation } from '@/app/components/wizard-controller';
+import { WizardStep as WizardStepComponent, type WizardStepConfig } from '@/app/components/wizard-step';
 
 import 'react-quill-new/dist/quill.snow.css';
 
@@ -757,23 +759,39 @@ export function JobsCrudPanel({
                             <div className="flex items-center justify-between gap-3 border-b border-[#dbe3f0] pb-4">
                                 <div>
                                     <p className="text-xs font-semibold uppercase tracking-wide text-[#334155]">Add Job Wizard</p>
-                                    <p className="mt-1 text-[11px] text-[#64748b]">Step {wizardStep} of 4</p>
+                                    <p className="mt-1 text-[11px] text-[#64748b]">Complete each step to create your job</p>
                                 </div>
                             </div>
 
+                            <WizardProgressBar
+                                currentStep={wizardStep}
+                                totalSteps={4}
+                                completedSteps={new Set()}
+                            />
+
                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                                <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 1 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
-                                    1. Customer Details
-                                </div>
-                                <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 2 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
-                                    2. Schedule + Parts
-                                </div>
-                                <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 3 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
-                                    3. Technician + Labor
-                                </div>
-                                <div className={`rounded border px-2 py-1 text-[11px] ${wizardStep === 4 ? 'border-[#0f766e] bg-white text-[#0f766e]' : 'border-[#cbd5e1] bg-[#f1f5f9] text-[#475569]'}`}>
-                                    4. Review + Submit
-                                </div>
+                                {[
+                                    { step: 1 as const, title: 'Customer Details', desc: 'Name and location' },
+                                    { step: 2 as const, title: 'Schedule + Parts', desc: 'Date and inventory' },
+                                    { step: 3 as const, title: 'Technician + Labor', desc: 'Assign and estimate' },
+                                    { step: 4 as const, title: 'Review + Submit', desc: 'Verify and create' },
+                                ].map((s) => {
+                                    const config: WizardStepConfig = {
+                                        stepNumber: s.step,
+                                        title: s.title,
+                                        description: s.desc,
+                                        isComplete: wizardStep > s.step,
+                                        hasError: false,
+                                    };
+                                    return (
+                                        <WizardStepComponent
+                                            key={s.step}
+                                            step={config}
+                                            isCurrent={wizardStep === s.step}
+                                            onClick={() => setWizardStep(s.step)}
+                                        />
+                                    );
+                                })}
                             </div>
 
                             {wizardStep === 1 ? (
@@ -931,69 +949,71 @@ export function JobsCrudPanel({
                                 </div>
                             ) : null}
 
-                            <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-[#dbe3f0] pt-4">
-                                <button
-                                    type="button"
-                                    className="rounded border border-[#cbd5e1] bg-white px-3 py-2 text-xs"
-                                    disabled={wizardStep === 1 || isPending}
-                                    onClick={() => setWizardStep((current) => (current > 1 ? ((current - 1) as AddJobWizardStep) : current))}
-                                >
-                                    Back
-                                </button>
-
-                                <div className="flex gap-2">
+                            <div className="mt-auto border-t border-[#dbe3f0] pt-4 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
                                     <button
                                         type="button"
-                                        className="rounded border border-[#cbd5e1] bg-white px-3 py-2 text-xs"
-                                        disabled={isPending}
-                                        onClick={resetWizard}
+                                        className="rounded border border-[#cbd5e1] bg-white px-4 py-2 text-xs font-semibold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-50 disabled:cursor-not-allowed"
+                                        disabled={wizardStep === 1 || isPending}
+                                        onClick={() => setWizardStep((current) => (current > 1 ? ((current - 1) as AddJobWizardStep) : current))}
                                     >
-                                        Reset
+                                        ← Back
                                     </button>
-                                    {wizardStep < 4 ? (
-                                        <button
-                                            type="button"
-                                            disabled={isPending || !canAdvanceFromStep(wizardStep)}
-                                            className="rounded border border-[#0f766e] bg-[#ecfeff] px-3 py-2 text-xs font-semibold text-[#0f766e] disabled:opacity-70"
-                                            onClick={() => setWizardStep((current) => (current < 4 ? ((current + 1) as AddJobWizardStep) : current))}
-                                        >
-                                            Next
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            disabled={isPending}
-                                            className="rounded-md bg-[#0f766e] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70"
-                                            onClick={async () => {
-                                                const ok = await runMutation({
-                                                    method: 'POST',
-                                                    headers: { 'content-type': 'application/json' },
-                                                    body: JSON.stringify({
-                                                        customerName,
-                                                        site,
-                                                        priority,
-                                                        scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
-                                                        requiredSkus,
-                                                        followUpNote,
-                                                        assignedTechnicianId: selectedTechnician?.id ?? null,
-                                                        quote: {
-                                                            partEstimate: quotePartEstimate,
-                                                            laborEstimate: 0,
-                                                            estimatedMinutes: toNumber(estimatedMinutes),
-                                                            estimatedTotal: 0,
-                                                            notes: quoteNotes,
-                                                        },
-                                                    }),
-                                                });
 
-                                                if (ok) {
-                                                    resetWizard();
-                                                }
-                                            }}
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            className="rounded border border-[#cbd5e1] bg-white px-4 py-2 text-xs font-semibold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={isPending}
+                                            onClick={resetWizard}
                                         >
-                                            Create Job
+                                            Reset
                                         </button>
-                                    )}
+                                        {wizardStep < 4 ? (
+                                            <button
+                                                type="button"
+                                                disabled={isPending || !canAdvanceFromStep(wizardStep)}
+                                                className="rounded-md bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0d5d5a] disabled:opacity-50 disabled:cursor-not-allowed"
+                                                onClick={() => setWizardStep((current) => (current < 4 ? ((current + 1) as AddJobWizardStep) : current))}
+                                            >
+                                                Next →
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                disabled={isPending}
+                                                className="rounded-md bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0d5d5a] disabled:opacity-50 disabled:cursor-not-allowed"
+                                                onClick={async () => {
+                                                    const ok = await runMutation({
+                                                        method: 'POST',
+                                                        headers: { 'content-type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            customerName,
+                                                            site,
+                                                            priority,
+                                                            scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
+                                                            requiredSkus,
+                                                            followUpNote,
+                                                            assignedTechnicianId: selectedTechnician?.id ?? null,
+                                                            quote: {
+                                                                partEstimate: quotePartEstimate,
+                                                                laborEstimate: 0,
+                                                                estimatedMinutes: toNumber(estimatedMinutes),
+                                                                estimatedTotal: 0,
+                                                                notes: quoteNotes,
+                                                            },
+                                                        }),
+                                                    });
+
+                                                    if (ok) {
+                                                        resetWizard();
+                                                    }
+                                                }}
+                                            >
+                                                {isPending ? 'Creating...' : 'Create Job'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
