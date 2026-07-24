@@ -51,6 +51,12 @@ export default async function InventoryPage() {
           >
             Transfers
           </Link>
+          <Link
+            href="/inventory/purchase-orders"
+            className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d5f56]"
+          >
+            Purchase Orders
+          </Link>
         </div>
       </div>
 
