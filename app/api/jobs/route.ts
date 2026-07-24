@@ -435,15 +435,16 @@ export async function PATCH(request: Request) {
           {error: `No part found for SKU ${inventorySku}`}, {status: 404});
     }
 
-    const skuLocationBalances = await listInventorySkuLocationBalances(authResult.orgId);
+    const skuLocationBalances =
+        await listInventorySkuLocationBalances(authResult.orgId);
     const balance = skuLocationBalances.find(
-      (entry) => entry.sku.toLowerCase() === part.sku.toLowerCase() &&
-        entry.location.toLowerCase() === part.location.toLowerCase());
+        (entry) => entry.sku.toLowerCase() === part.sku.toLowerCase() &&
+            entry.location.toLowerCase() === part.location.toLowerCase());
     const availableQuantity = balance ? balance.available : part.onHand;
 
     if (availableQuantity < reserveQuantity) {
       return NextResponse.json(
-        {error: `Only ${availableQuantity} available for ${part.sku}`},
+          {error: `Only ${availableQuantity} available for ${part.sku}`},
           {status: 400});
     }
 

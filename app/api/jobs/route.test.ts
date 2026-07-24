@@ -12,9 +12,10 @@ vi.mock('@/lib/inventory/parts-repository', () => ({
                                             }));
 
 vi.mock('@/lib/inventory/ledger-repository', () => ({
-                                              listInventorySkuLocationBalances: vi.fn(),
-                                              reserveInventoryForJob: vi.fn(),
-                                            }));
+                                               listInventorySkuLocationBalances:
+                                                   vi.fn(),
+                                               reserveInventoryForJob: vi.fn(),
+                                             }));
 
 vi.mock('@/lib/jobs/repository', () => ({
                                    createJobRecord: vi.fn(),
@@ -42,7 +43,8 @@ const mockedGetAuthorizationContext = vi.mocked(getAuthorizationContext);
 const mockedListInventoryParts = vi.mocked(listInventoryParts);
 const mockedCreateInventoryPart = vi.mocked(createInventoryPart);
 const mockedUpdateInventoryPart = vi.mocked(updateInventoryPart);
-const mockedListInventorySkuLocationBalances = vi.mocked(listInventorySkuLocationBalances);
+const mockedListInventorySkuLocationBalances =
+    vi.mocked(listInventorySkuLocationBalances);
 const mockedReserveInventoryForJob = vi.mocked(reserveInventoryForJob);
 
 const mockedCreateJobRecord = vi.mocked(createJobRecord);
@@ -354,36 +356,37 @@ describe('jobs api route', () => {
     expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
   });
 
-  it('rejects reserve requests when available quantity is exhausted', async () => {
-    mockedListInventorySkuLocationBalances.mockResolvedValue([
-      {
-        orgId: 'org_1',
-        sku: 'SKU-1',
-        location: 'Van 1',
-        onHand: 8,
-        reserved: 8,
-        available: 0,
-        entryCount: 1,
-        lastUpdatedAt: '2026-07-20T10:00:00.000Z',
-      },
-    ] as never);
+  it('rejects reserve requests when available quantity is exhausted',
+     async () => {
+       mockedListInventorySkuLocationBalances.mockResolvedValue([
+         {
+           orgId: 'org_1',
+           sku: 'SKU-1',
+           location: 'Van 1',
+           onHand: 8,
+           reserved: 8,
+           available: 0,
+           entryCount: 1,
+           lastUpdatedAt: '2026-07-20T10:00:00.000Z',
+         },
+       ] as never);
 
-    const request = new Request('http://localhost/api/jobs', {
-      method: 'PATCH',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({
-        id: 'JOB-1',
-        inventoryAction: 'reserve',
-        inventorySku: 'SKU-1',
-        reserveQuantity: 1,
-      }),
-    });
+       const request = new Request('http://localhost/api/jobs', {
+         method: 'PATCH',
+         headers: {'content-type': 'application/json'},
+         body: JSON.stringify({
+           id: 'JOB-1',
+           inventoryAction: 'reserve',
+           inventorySku: 'SKU-1',
+           reserveQuantity: 1,
+         }),
+       });
 
-    const response = await PATCH(request);
+       const response = await PATCH(request);
 
-    expect(response?.status).toBe(400);
-    expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
-  });
+       expect(response?.status).toBe(400);
+       expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
+     });
 
   it('returns 400 when reserve quantity is invalid', async () => {
     const request = new Request('http://localhost/api/jobs', {

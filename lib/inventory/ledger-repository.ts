@@ -1,11 +1,7 @@
 import {prisma} from '@/lib/db/prisma';
 
 export type InventoryLedgerEntryRecord = {
-  id: string;
-  orgId: string;
-  sku: string;
-  location: string;
-  delta: number;
+  id: string; orgId: string; sku: string; location: string; delta: number;
   kind: string;
   note: string | null;
   referenceId: string | null;
@@ -15,20 +11,14 @@ export type InventoryLedgerEntryRecord = {
 };
 
 export type InventoryLedgerEntryInput = {
-  sku: string;
-  location: string;
-  delta: number;
-  kind: string;
+  sku: string; location: string; delta: number; kind: string;
   note?: string | null;
   referenceId?: string | null;
   referenceType?: string | null;
 };
 
 export type InventorySkuLocationBalance = {
-  orgId: string;
-  sku: string;
-  location: string;
-  onHand: number;
+  orgId: string; sku: string; location: string; onHand: number;
   entryCount: number;
   reserved: number;
   available: number;
@@ -37,23 +27,27 @@ export type InventorySkuLocationBalance = {
 
 export type InventoryLedgerReservationInput = {
   jobId: string;
-  jobNumber?: string | null;
-  quantity: number;
+  jobNumber?: string | null; quantity: number;
   note?: string | null;
 };
 
 type InventoryLedgerEntryClient = {
   inventoryLedgerEntry: {
-    create: (args: {
-      data: InventoryLedgerEntryInput&{orgId: string};
-    }) => Promise<InventoryLedgerEntryRow>;
+    create: (args: {data: InventoryLedgerEntryInput&{orgId: string};}) =>
+        Promise<InventoryLedgerEntryRow>;
     findMany: (args: {
       where: {orgId: string; sku?: string; location?: string};
-      orderBy: Array<{createdAt: 'asc'|'desc'}>;
+      orderBy: Array<{createdAt: 'asc' | 'desc'}>;
     }) => Promise<InventoryLedgerEntryRow[]>;
     groupBy: (args: {
-      by: ['sku', 'location'];
-      where: {orgId: string; kind?: string | {in?: string[]; notIn?: string[]}};
+      by: ['sku', 'location']; where: {
+        orgId: string;
+        kind?: string |
+            {
+              in ?: string[];
+              notIn?: string[]
+            }
+      };
       _sum: {delta: true};
       _count: {id: true};
       _max: {updatedAt: true};
@@ -61,16 +55,15 @@ type InventoryLedgerEntryClient = {
   };
 };
 
-type InventoryLedgerEntryRow = Omit<InventoryLedgerEntryRecord, 'createdAt'|'updatedAt'>&{
+type InventoryLedgerEntryRow =
+    Omit<InventoryLedgerEntryRecord, 'createdAt'|'updatedAt'>&{
   createdAt: Date;
   updatedAt: Date;
   delta: unknown;
 };
 
 type InventoryLedgerAggregationRow = {
-  sku: string;
-  location: string;
-  _sum: {delta: number | null};
+  sku: string; location: string; _sum: {delta: number | null};
   _count: {id: number};
   _max: {updatedAt: Date | null};
 };
@@ -80,8 +73,8 @@ function toFiniteNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function toInventoryLedgerEntryRecord(
-    row: InventoryLedgerEntryRow): InventoryLedgerEntryRecord {
+function toInventoryLedgerEntryRecord(row: InventoryLedgerEntryRow):
+    InventoryLedgerEntryRecord {
   return {
     id: row.id,
     orgId: row.orgId,
@@ -98,8 +91,7 @@ function toInventoryLedgerEntryRecord(
 }
 
 function toInventorySkuLocationBalance(
-    orgId: string,
-    row: InventoryLedgerAggregationRow,
+    orgId: string, row: InventoryLedgerAggregationRow,
     reserved = 0): InventorySkuLocationBalance {
   const onHand = toFiniteNumber(row._sum.delta);
   return {
@@ -141,8 +133,8 @@ export async function appendInventoryLedgerEntry(
 }
 
 export async function listInventoryLedgerEntries(
-    orgId: string,
-    filters: {sku?: string; location?: string} = {}): Promise<InventoryLedgerEntryRecord[]> {
+    orgId: string, filters: {sku?: string; location?: string} = {}):
+    Promise<InventoryLedgerEntryRecord[]> {
   const client = await getClient();
 
   const rows = await client.inventoryLedgerEntry.findMany({
@@ -157,8 +149,8 @@ export async function listInventoryLedgerEntries(
   return rows.map((row) => toInventoryLedgerEntryRecord(row));
 }
 
-export async function listInventorySkuLocationBalances(
-    orgId: string): Promise<InventorySkuLocationBalance[]> {
+export async function listInventorySkuLocationBalances(orgId: string):
+    Promise<InventorySkuLocationBalance[]> {
   const client = await getClient();
   const [onHandRows, reservedRows] = await Promise.all([
     client.inventoryLedgerEntry.groupBy({
@@ -175,7 +167,7 @@ export async function listInventorySkuLocationBalances(
       by: ['sku', 'location'],
       where: {
         orgId,
-        kind: {in: ['reservation', 'reservation_release']},
+        kind: {in : ['reservation', 'reservation_release']},
       },
       _sum: {delta: true},
       _count: {id: true},
@@ -183,22 +175,18 @@ export async function listInventorySkuLocationBalances(
     }),
   ]);
 
-  const reservedByLocation = new Map(
-      reservedRows.map((row) => [toReservationKey(row), Math.abs(toFiniteNumber(row._sum.delta))]));
+  const reservedByLocation = new Map(reservedRows.map(
+      (row) =>
+          [toReservationKey(row), Math.abs(toFiniteNumber(row._sum.delta))]));
 
-  return onHandRows.map((row) =>
-      toInventorySkuLocationBalance(
-          orgId,
-          row,
-          reservedByLocation.get(toReservationKey(row)) ?? 0));
+  return onHandRows.map(
+      (row) => toInventorySkuLocationBalance(
+          orgId, row, reservedByLocation.get(toReservationKey(row)) ?? 0));
 }
 
 export async function recordInventoryOpeningBalance(
-    orgId: string,
-    sku: string,
-    location: string,
-    quantity: number,
-    note?: string | null): Promise<InventoryLedgerEntryRecord> {
+    orgId: string, sku: string, location: string, quantity: number,
+    note?: string|null): Promise<InventoryLedgerEntryRecord> {
   return appendInventoryLedgerEntry(orgId, {
     sku,
     location,
@@ -209,10 +197,9 @@ export async function recordInventoryOpeningBalance(
 }
 
 export async function reserveInventoryForJob(
-    orgId: string,
-    sku: string,
-    location: string,
-    reservation: InventoryLedgerReservationInput): Promise<InventoryLedgerEntryRecord> {
+    orgId: string, sku: string, location: string,
+    reservation: InventoryLedgerReservationInput):
+    Promise<InventoryLedgerEntryRecord> {
   return appendInventoryLedgerEntry(orgId, {
     sku,
     location,
@@ -225,10 +212,9 @@ export async function reserveInventoryForJob(
 }
 
 export async function releaseInventoryReservationForJob(
-    orgId: string,
-    sku: string,
-    location: string,
-    reservation: InventoryLedgerReservationInput): Promise<InventoryLedgerEntryRecord> {
+    orgId: string, sku: string, location: string,
+    reservation: InventoryLedgerReservationInput):
+    Promise<InventoryLedgerEntryRecord> {
   return appendInventoryLedgerEntry(orgId, {
     sku,
     location,
@@ -241,8 +227,7 @@ export async function releaseInventoryReservationForJob(
 }
 
 export async function listInventoryLedgerTimeline(
-    orgId: string,
-    sku: string,
+    orgId: string, sku: string,
     location: string): Promise<InventoryLedgerEntryRecord[]> {
   return listInventoryLedgerEntries(orgId, {sku, location});
 }

@@ -1,27 +1,23 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 vi.mock('@/lib/db/prisma', () => ({
-  prisma: {
-    inventoryLedgerEntry: {
-      create: vi.fn(),
-      findMany: vi.fn(),
-      groupBy: vi.fn(),
-    },
-  },
-}));
+                             prisma: {
+                               inventoryLedgerEntry: {
+                                 create: vi.fn(),
+                                 findMany: vi.fn(),
+                                 groupBy: vi.fn(),
+                               },
+                             },
+                           }));
 
 import {prisma} from '@/lib/db/prisma';
 
-import {
-  appendInventoryLedgerEntry,
-  listInventoryLedgerEntries,
-  listInventoryLedgerTimeline,
-  listInventorySkuLocationBalances,
-} from './ledger-repository';
+import {appendInventoryLedgerEntry, listInventoryLedgerEntries, listInventoryLedgerTimeline, listInventorySkuLocationBalances,} from './ledger-repository';
 
-const mockedLedgerEntry = vi.mocked(
-    (prisma as unknown as {inventoryLedgerEntry: Record<string, unknown>})
-        .inventoryLedgerEntry as {
+const mockedLedgerEntry =
+    vi.mocked((prisma as unknown as {
+                inventoryLedgerEntry: Record<string, unknown>
+              }).inventoryLedgerEntry as {
       create: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
       groupBy: ReturnType<typeof vi.fn>;
@@ -154,14 +150,18 @@ describe('inventory ledger repository', () => {
 
     expect(mockedLedgerEntry.groupBy).toHaveBeenNthCalledWith(1, {
       by: ['sku', 'location'],
-      where: {orgId: 'org_1', kind: {notIn: ['reservation', 'reservation_release']}},
+      where: {
+        orgId: 'org_1',
+        kind: {notIn: ['reservation', 'reservation_release']}
+      },
       _sum: {delta: true},
       _count: {id: true},
       _max: {updatedAt: true},
     });
     expect(mockedLedgerEntry.groupBy).toHaveBeenNthCalledWith(2, {
       by: ['sku', 'location'],
-      where: {orgId: 'org_1', kind: {in: ['reservation', 'reservation_release']}},
+      where:
+          {orgId: 'org_1', kind: {in : ['reservation', 'reservation_release']}},
       _sum: {delta: true},
       _count: {id: true},
       _max: {updatedAt: true},

@@ -6,9 +6,7 @@ export type InventoryPartSource = {
   location: string;
   onHand: number;
   reserved?: number;
-  available?: number;
-  reorderPoint: number;
-  suggestedOrderQty: number;
+  available?: number; reorderPoint: number; suggestedOrderQty: number;
   supplier: string;
   severity: ReplenishmentAlert['severity'];
   compatibilityNote: string;
@@ -98,13 +96,14 @@ function buildCatalogRows(parts: Array<ReplenishmentAlert|InventoryPartSource>):
       location: part.location,
       onHand: part.onHand,
       reserved: 'reserved' in part && typeof part.reserved === 'number' ?
-        part.reserved :
-        0,
+          part.reserved :
+          0,
       available: 'available' in part && typeof part.available === 'number' ?
-        part.available :
-        part.onHand - ('reserved' in part && typeof part.reserved === 'number' ?
-                 part.reserved :
-                 0),
+          part.available :
+          part.onHand -
+              ('reserved' in part && typeof part.reserved === 'number' ?
+                   part.reserved :
+                   0),
       reorderPoint: part.reorderPoint,
       suggestedOrderQty: part.suggestedOrderQty,
       supplier: part.supplier,
