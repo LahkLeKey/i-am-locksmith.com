@@ -32,7 +32,7 @@ type SelectedInventoryLookup = {
     location: string;
 };
 
-type TechnicianOption = {
+export type TechnicianOption = {
     id: string;
     fullName: string;
     hourlyRate: number;
