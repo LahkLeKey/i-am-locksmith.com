@@ -2,6 +2,7 @@ import { requireRouteContext } from '@/lib/rbac/guard';
 import { formatSchedule } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';
 import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-repository';
+import {listInventoryExceptions} from '@/lib/inventory/exceptions-repository';
 import {
   listIncomingQuantitiesBySkuLocation,
   listOpenReplenishmentRequests,
@@ -9,6 +10,7 @@ import {
 import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
 import { InventoryReplenishmentPanel } from '@/app/components/inventory-replenishment-panel';
+import {InventoryExceptionPanel} from '@/app/components/inventory-exception-panel';
 
 import { InventoryAlertsCrudPanel } from '@/app/components/inventory-alerts-crud-panel';
 import { InventoryPartsPanel } from '@/app/components/inventory-parts-panel';
@@ -52,6 +54,7 @@ export default async function InventoryPage() {
   const dashboardData = await getDashboardData({ orgId });
   const inventoryParts = await listInventoryParts(orgId);
   const inventoryBalances = await listInventorySkuLocationBalances(orgId);
+  const inventoryExceptions = await listInventoryExceptions(orgId);
   const openRequests = await listOpenReplenishmentRequests(orgId);
   const incomingBySkuLocation = await listIncomingQuantitiesBySkuLocation(orgId);
   const inventoryBalanceLookup = new Map(
@@ -167,6 +170,8 @@ export default async function InventoryPage() {
         queue={inventory.lowStockQueue}
         openRequests={openRequests}
       />
+
+      <InventoryExceptionPanel exceptions={inventoryExceptions} />
 
       <InventoryPartsPanel initialParts={inventory.catalogRows} />
 
