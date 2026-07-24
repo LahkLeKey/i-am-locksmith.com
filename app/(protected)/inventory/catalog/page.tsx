@@ -58,10 +58,26 @@ export default async function InventoryCatalogPage() {
 
   return (
     <section className="space-y-6">
-      <h1 className="text-2xl font-semibold">Parts Catalog</h1>
-      <p className="text-sm text-[#4b5563]">
-        Search, add, and maintain locksmith parts for automotive, mobile, and shop workflows.
-      </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Parts Catalog</h1>
+          <p className="mt-1 text-sm text-[#4b5563]">
+            Search, filter, and manage inventory parts.
+          </p>
+        </div>
+        <button
+          className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d5f56]"
+          onClick={() => {
+            const form = document.querySelector('form[data-add-part-form]') as HTMLFormElement;
+            if (form) {
+              form.scrollIntoView({ behavior: 'smooth' });
+              (form.querySelector('input[name="sku"]') as HTMLInputElement)?.focus();
+            }
+          }}
+        >
+          + Add Part
+        </button>
+      </div>
 
       <InventoryCatalogPanel initialParts={inventory.catalogRows} />
     </section>
