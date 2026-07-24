@@ -67,121 +67,121 @@ export function InventoryCatalogPanel({ initialParts }: { initialParts: Inventor
 
     return (
         <section className="space-y-4 rounded-md border border-[#e5e7eb] bg-white p-4">
-      <div>
-        <h2 className="text-sm font-semibold">Inventory Lookup</h2>
-        <p className="mt-1 text-xs text-[#475569]">Search and manage current inventory.</p>
-      </div>
+            <div>
+                <h2 className="text-sm font-semibold">Inventory Lookup</h2>
+                <p className="mt-1 text-xs text-[#475569]">Search and manage current inventory.</p>
+            </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search part, SKU, supplier, or location"
-          className="flex-1 min-w-70 rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-        />
-      </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search part, SKU, supplier, or location"
+                    className="flex-1 min-w-70 rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                />
+            </div>
 
-      <div className="overflow-hidden rounded-md border border-[#e5e7eb]">
-        <table className="min-w-full divide-y divide-[#e5e7eb] text-left text-xs">
-          <thead className="bg-[#f8fafc] text-[#475569]">
-            <tr>
-              <th className="px-3 py-2 font-semibold">Part</th>
-              <th className="px-3 py-2 font-semibold">Coverage</th>
-              <th className="px-3 py-2 font-semibold">Stock</th>
-              <th className="px-3 py-2 font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#e5e7eb] bg-white">
-            {filteredParts.map((part) => (
-              <tr key={part.id} className="align-top text-[#334155]">
-                <td className="px-3 py-3">
-                  <p className="font-semibold text-[#0f172a]">{part.itemName}</p>
-                  <p className="text-[11px] text-[#64748b]">{part.sku} · {part.location}</p>
-                  <p className="mt-1 text-[11px] text-[#64748b]">{part.supplier}</p>
-                  <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${Number(part.estimatedUnitCost).toFixed(2)}</p>
-                </td>
-                <td className="px-3 py-3">
-                  <ServiceLineBadgeRow lines={part.serviceLines} className="flex flex-wrap gap-2" />
-                  <p className="mt-2 text-[11px] text-[#475569]">{part.compatibilityNote}</p>
-                </td>
-                <td className="px-3 py-3">
-                  <p className="font-semibold text-[#0f172a]">Available {part.available} / On hand {part.onHand}</p>
-                  <p className="text-[11px] text-[#64748b]">Reserved {part.reserved} · Reorder {part.reorderPoint} · Order {part.suggestedOrderQty}</p>
-                  <p className="text-[11px] text-[#64748b]">{part.severity}</p>
-                </td>
-                <td className="px-3 py-3">
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs"
-                    onClick={async () => {
-                      await runMutation({
-                        method: 'PATCH',
+            <div className="overflow-hidden rounded-md border border-[#e5e7eb]">
+                <table className="min-w-full divide-y divide-[#e5e7eb] text-left text-xs">
+                    <thead className="bg-[#f8fafc] text-[#475569]">
+                        <tr>
+                            <th className="px-3 py-2 font-semibold">Part</th>
+                            <th className="px-3 py-2 font-semibold">Coverage</th>
+                            <th className="px-3 py-2 font-semibold">Stock</th>
+                            <th className="px-3 py-2 font-semibold">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#e5e7eb] bg-white">
+                        {filteredParts.map((part) => (
+                            <tr key={part.id} className="align-top text-[#334155]">
+                                <td className="px-3 py-3">
+                                    <p className="font-semibold text-[#0f172a]">{part.itemName}</p>
+                                    <p className="text-[11px] text-[#64748b]">{part.sku} · {part.location}</p>
+                                    <p className="mt-1 text-[11px] text-[#64748b]">{part.supplier}</p>
+                                    <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${Number(part.estimatedUnitCost).toFixed(2)}</p>
+                                </td>
+                                <td className="px-3 py-3">
+                                    <ServiceLineBadgeRow lines={part.serviceLines} className="flex flex-wrap gap-2" />
+                                    <p className="mt-2 text-[11px] text-[#475569]">{part.compatibilityNote}</p>
+                                </td>
+                                <td className="px-3 py-3">
+                                    <p className="font-semibold text-[#0f172a]">Available {part.available} / On hand {part.onHand}</p>
+                                    <p className="text-[11px] text-[#64748b]">Reserved {part.reserved} · Reorder {part.reorderPoint} · Order {part.suggestedOrderQty}</p>
+                                    <p className="text-[11px] text-[#64748b]">{part.severity}</p>
+                                </td>
+                                <td className="px-3 py-3">
+                                    <button
+                                        type="button"
+                                        disabled={isPending}
+                                        className="rounded border border-[#cbd5e1] bg-white px-2 py-1 text-xs"
+                                        onClick={async () => {
+                                            await runMutation({
+                                                method: 'PATCH',
+                                                headers: { 'content-type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    id: part.id,
+                                                    onHand: Math.max(0, part.onHand - 1),
+                                                }),
+                                            });
+                                        }}
+                                    >
+                                        Consume 1
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={isPending}
+                                        className="ml-2 rounded border border-[#fecaca] bg-[#fef2f2] px-2 py-1 text-xs text-[#991b1b]"
+                                        onClick={async () => {
+                                            await runMutation({
+                                                method: 'DELETE',
+                                                headers: { 'content-type': 'application/json' },
+                                                body: JSON.stringify({ id: part.id }),
+                                            });
+                                        }}
+                                    >
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="border-t border-[#e5e7eb] pt-4">
+                <h3 className="text-sm font-semibold">Add New Part</h3>
+                <p className="mt-1 text-xs text-[#475569]">Create a new part record to track in inventory.</p>
+            </div>
+
+            <form
+                data-add-part-form
+                className="grid gap-2 md:grid-cols-3 xl:grid-cols-4"
+                onSubmit={async (event) => {
+                    event.preventDefault();
+                    const form = event.currentTarget;
+                    const formData = new FormData(form);
+
+                    await runMutation({
+                        method: 'POST',
                         headers: { 'content-type': 'application/json' },
                         body: JSON.stringify({
-                          id: part.id,
-                          onHand: Math.max(0, part.onHand - 1),
+                            sku: String(formData.get('sku') ?? ''),
+                            itemName: String(formData.get('itemName') ?? ''),
+                            estimatedUnitCost: Number(formData.get('estimatedUnitCost') ?? 0),
+                            location: String(formData.get('location') ?? ''),
+                            supplier: String(formData.get('supplier') ?? ''),
+                            compatibilityNote: String(formData.get('compatibilityNote') ?? ''),
+                            serviceLines: splitServiceLines(String(formData.get('serviceLines') ?? '')),
+                            onHand: Number(formData.get('onHand') ?? 0),
+                            reorderPoint: Number(formData.get('reorderPoint') ?? 0),
+                            suggestedOrderQty: Number(formData.get('suggestedOrderQty') ?? 0),
+                            severity: String(formData.get('severity') ?? 'medium'),
                         }),
-                      });
-                    }}
-                  >
-                    Consume 1
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    className="ml-2 rounded border border-[#fecaca] bg-[#fef2f2] px-2 py-1 text-xs text-[#991b1b]"
-                    onClick={async () => {
-                      await runMutation({
-                        method: 'DELETE',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({ id: part.id }),
-                      });
-                    }}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    });
 
-      <div className="border-t border-[#e5e7eb] pt-4">
-        <h3 className="text-sm font-semibold">Add New Part</h3>
-        <p className="mt-1 text-xs text-[#475569]">Create a new part record to track in inventory.</p>
-      </div>
-
-      <form
-        data-add-part-form
-        className="grid gap-2 md:grid-cols-3 xl:grid-cols-4"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          const form = event.currentTarget;
-          const formData = new FormData(form);
-
-          await runMutation({
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              sku: String(formData.get('sku') ?? ''),
-              itemName: String(formData.get('itemName') ?? ''),
-              estimatedUnitCost: Number(formData.get('estimatedUnitCost') ?? 0),
-              location: String(formData.get('location') ?? ''),
-              supplier: String(formData.get('supplier') ?? ''),
-              compatibilityNote: String(formData.get('compatibilityNote') ?? ''),
-              serviceLines: splitServiceLines(String(formData.get('serviceLines') ?? '')),
-              onHand: Number(formData.get('onHand') ?? 0),
-              reorderPoint: Number(formData.get('reorderPoint') ?? 0),
-              suggestedOrderQty: Number(formData.get('suggestedOrderQty') ?? 0),
-              severity: String(formData.get('severity') ?? 'medium'),
-            }),
-          });
-
-          form.reset();
-        }}
-      >
+                    form.reset();
+                }}
+            >
                 <label className="space-y-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">SKU</span>
                     <input name="sku" placeholder="SKU" required className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs" />
