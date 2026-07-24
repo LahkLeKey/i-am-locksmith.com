@@ -41,11 +41,11 @@ export default function TransfersPage() {
 
   async function loadInventory() {
     try {
-      const response = await fetch('/api/dashboard');
-      const dashboardData = await response.json();
+      const response = await fetch('/api/inventory-parts');
+      const data = await response.json();
       
-      if (dashboardData.replenishmentAlerts) {
-        setInventory(dashboardData.replenishmentAlerts.map((part: any) => ({
+      if (data.parts) {
+        setInventory(data.parts.map((part: any) => ({
           id: part.id,
           sku: part.sku,
           itemName: part.itemName,
