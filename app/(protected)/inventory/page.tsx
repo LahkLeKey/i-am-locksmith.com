@@ -2,7 +2,10 @@ import { requireRouteContext } from '@/lib/rbac/guard';
 import { formatSchedule } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';
 import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-repository';
-import { listIncomingQuantitiesBySkuLocation } from '@/lib/inventory/replenishment-repository';
+import {
+  listIncomingQuantitiesBySkuLocation,
+  listOpenReplenishmentRequests,
+} from '@/lib/inventory/replenishment-repository';
 import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
 import { InventoryReplenishmentPanel } from '@/app/components/inventory-replenishment-panel';
@@ -49,6 +52,7 @@ export default async function InventoryPage() {
   const dashboardData = await getDashboardData({ orgId });
   const inventoryParts = await listInventoryParts(orgId);
   const inventoryBalances = await listInventorySkuLocationBalances(orgId);
+  const openRequests = await listOpenReplenishmentRequests(orgId);
   const incomingBySkuLocation = await listIncomingQuantitiesBySkuLocation(orgId);
   const inventoryBalanceLookup = new Map(
     inventoryBalances.map((entry) => [`${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`, entry]),
@@ -62,8 +66,9 @@ export default async function InventoryPage() {
 
       return {
         ...toInventoryPartSource(part),
+        onHand: balance?.onHand ?? part.onHand,
         reserved: balance?.reserved ?? 0,
-        available: balance ? part.onHand - balance.reserved : part.onHand,
+        available: balance?.available ?? part.onHand,
       };
     }),
     { incomingBySkuLocation },
@@ -160,6 +165,7 @@ export default async function InventoryPage() {
 
       <InventoryReplenishmentPanel
         queue={inventory.lowStockQueue}
+        openRequests={openRequests}
       />
 
       <InventoryPartsPanel initialParts={inventory.catalogRows} />
