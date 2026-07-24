@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
 import { INVENTORY_SERVICE_LINE_OPTIONS, ServiceLineBadgeRow } from '@/app/components/inventory-shared';
@@ -93,12 +94,14 @@ export function InventoryCatalogPanel({ initialParts }: { initialParts: Inventor
                     </thead>
                     <tbody className="divide-y divide-[#e5e7eb] bg-white">
                         {filteredParts.map((part) => (
-                            <tr key={part.id} className="align-top text-[#334155]">
+                            <tr key={part.id} className="align-top text-[#334155] hover:bg-[#f9fafb]">
                                 <td className="px-3 py-3">
-                                    <p className="font-semibold text-[#0f172a]">{part.itemName}</p>
-                                    <p className="text-[11px] text-[#64748b]">{part.sku} · {part.location}</p>
-                                    <p className="mt-1 text-[11px] text-[#64748b]">{part.supplier}</p>
-                                    <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${Number(part.estimatedUnitCost).toFixed(2)}</p>
+                                    <Link href={`/inventory/parts/${part.id}`} className="block hover:underline">
+                                        <p className="font-semibold text-[#0f766e]">{part.itemName}</p>
+                                        <p className="text-[11px] text-[#64748b]">{part.sku} · {part.location}</p>
+                                        <p className="mt-1 text-[11px] text-[#64748b]">{part.supplier}</p>
+                                        <p className="mt-1 text-[11px] text-[#64748b]">Est unit ${Number(part.estimatedUnitCost).toFixed(2)}</p>
+                                    </Link>
                                 </td>
                                 <td className="px-3 py-3">
                                     <ServiceLineBadgeRow lines={part.serviceLines} className="flex flex-wrap gap-2" />

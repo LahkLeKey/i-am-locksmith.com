@@ -73,6 +73,22 @@ export async function listInventoryParts(orgId: string):
   return rows.map((row) => toInventoryPartRecord(row as InventoryPartRow));
 }
 
+export async function getInventoryPartById(id: string):
+    Promise<InventoryPartRecord | null> {
+  const client = await getClient();
+
+  try {
+    const row = await (prisma.inventoryPart.findUnique as any)({
+      where: {id},
+    });
+
+    if (!row) return null;
+    return toInventoryPartRecord(row as InventoryPartRow);
+  } catch {
+    return null;
+  }
+}
+
 export async function createInventoryPart(
     orgId: string, data: InventoryPartInput): Promise<InventoryPartRecord> {
   const client = await getClient();
