@@ -1,3 +1,17 @@
+/**
+ * Tests for wizard step logic and utilities
+ * 
+ * TDD Approach: These tests validate the business logic and helper functions
+ * that power the WizardStep component. Tests are written as pure function
+ * assertions to ensure the step progression, validation, and status logic
+ * work correctly before being integrated into React components.
+ * 
+ * Tests cover:
+ * - Step progression (forward/back, boundary conditions)
+ * - Completion tracking and status determination
+ * - Required field validation
+ * - Field value validation
+ */
 import { describe, it, expect } from 'vitest';
 
 describe('WizardStep', () => {

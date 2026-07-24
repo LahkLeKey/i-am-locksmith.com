@@ -11,7 +11,25 @@ interface AddJobWizardEnhancedProps {
 
 /**
  * Enhanced Add Job Wizard using the new wizard framework
- * Provides better UX with clear step progression, validation, and error handling
+ * 
+ * Provides better UX with:
+ * - Clear step progression with visual indicators
+ * - Per-step validation with error feedback
+ * - Progress tracking and completion status
+ * - Guided data entry with descriptions
+ * - Review step before final submission
+ * 
+ * NOTE: This example uses hardcoded technician/parts data for template purposes.
+ * In production, connect to API for dynamic technician list and parts catalog:
+ * - Replace `['John Smith', 'Jane Doe']` with `fetchTechnicians()` call
+ * - Replace hardcoded part checkboxes with `parts.map(...)` from inventory API
+ * 
+ * Accessibility: This implementation includes:
+ * - Semantic HTML (proper label/input associations)
+ * - ARIA attributes on progress bar
+ * - Proper error announcements
+ * 
+ * Future improvement: Add keyboard navigation (Tab, Arrow Keys) for jumping between steps
  */
 export function AddJobWizardEnhanced({
   onSubmit,
@@ -172,7 +190,7 @@ export function AddJobWizardEnhanced({
               key={step.stepNumber}
               step={step}
               isCurrent={wizard.state.currentStep === step.stepNumber}
-              onClick={() => wizard.goToStep(step.stepNumber as any)}
+              onClick={() => wizard.goToStep(step.stepNumber as 1 | 2 | 3 | 4)}
             />
           ))}
         </div>
@@ -223,7 +241,7 @@ export function AddJobWizardEnhanced({
                 </label>
                 <select
                   value={priority}
-                  onChange={(e) => setPriority(e.target.value as any)}
+                  onChange={(e) => setPriority(e.target.value as 'low' | 'normal' | 'high' | 'urgent')}
                   className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-sm"
                 >
                   <option value="low">Low</option>
