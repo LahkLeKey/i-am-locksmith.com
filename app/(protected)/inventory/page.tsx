@@ -2,8 +2,10 @@ import { requireRouteContext } from '@/lib/rbac/guard';
 import { formatSchedule } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';
 import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-repository';
+import { listIncomingQuantitiesBySkuLocation } from '@/lib/inventory/replenishment-repository';
 import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
+import { InventoryReplenishmentPanel } from '@/app/components/inventory-replenishment-panel';
 
 import { InventoryAlertsCrudPanel } from '@/app/components/inventory-alerts-crud-panel';
 import { InventoryPartsPanel } from '@/app/components/inventory-parts-panel';
@@ -47,6 +49,7 @@ export default async function InventoryPage() {
   const dashboardData = await getDashboardData({ orgId });
   const inventoryParts = await listInventoryParts(orgId);
   const inventoryBalances = await listInventorySkuLocationBalances(orgId);
+  const incomingBySkuLocation = await listIncomingQuantitiesBySkuLocation(orgId);
   const inventoryBalanceLookup = new Map(
     inventoryBalances.map((entry) => [`${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`, entry]),
   );
@@ -62,7 +65,9 @@ export default async function InventoryPage() {
         reserved: balance?.reserved ?? 0,
         available: balance ? part.onHand - balance.reserved : part.onHand,
       };
-    }));
+    }),
+    { incomingBySkuLocation },
+  );
 
   const serviceLineBadgeClasses = {
     automotive: 'bg-[#ecfeff] text-[#155e75]',
@@ -122,12 +127,13 @@ export default async function InventoryPage() {
                 </div>
                 <p>{alert.itemName} ({alert.location})</p>
                 <p>
-                  On hand {alert.onHand} / Min {alert.reorderPoint} / Reorder {alert.suggestedOrderQty}
+                  Available {alert.available} + Incoming {alert.incomingQuantity} / Min {alert.reorderPoint}
                 </p>
                 <p>
-                  Supplier {alert.supplier} / ETA {
-                    alert.etaDays === null ? 'Unknown' : `${alert.etaDays} day(s)`
-                  }
+                  Shortage {alert.shortage} / Reorder {alert.suggestedOrderQty}
+                </p>
+                <p>
+                  Supplier {alert.supplier} / Incoming requests open
                 </p>
               </li>
             ))}
@@ -151,6 +157,10 @@ export default async function InventoryPage() {
           </ul>
         </article>
       </div>
+
+      <InventoryReplenishmentPanel
+        queue={inventory.lowStockQueue}
+      />
 
       <InventoryPartsPanel initialParts={inventory.catalogRows} />
 
