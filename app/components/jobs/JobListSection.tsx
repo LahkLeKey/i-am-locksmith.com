@@ -74,7 +74,7 @@ export function JobListSection({
                     <p className="text-sm text-[#64748b]">No jobs yet. Create one to get started.</p>
                 </div>
             ) : (
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                <div className="space-y-2 max-h-125 overflow-y-auto">
                     {sortedJobs.map((job) => (
                         <div
                             key={job.id}

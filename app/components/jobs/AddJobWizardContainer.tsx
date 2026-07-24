@@ -138,7 +138,7 @@ export function AddJobWizardContainer({
                 />
 
                 {/* Step content would be rendered here based on step */}
-                <div className="my-6 min-h-[300px]">
+                <div className="my-6 min-h-75">
                     <p className="text-sm text-[#475569]">Step {step} content would render here</p>
                 </div>
 

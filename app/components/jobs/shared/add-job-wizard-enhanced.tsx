@@ -208,7 +208,7 @@ export function AddJobWizardEnhanced({
                 )}
 
                 {/* Step Content */}
-                <div className="mb-6 min-h-[200px]">
+                <div className="mb-6 min-h-50">
                     {wizard.state.currentStep === 1 && (
                         <div className="space-y-4">
                             <div>
@@ -282,7 +282,7 @@ export function AddJobWizardEnhanced({
                                 <label className="block text-sm font-medium text-[#475569] mb-2">
                                     Select Parts <span className="text-red-500">*</span>
                                 </label>
-                                <div className="rounded-md border border-[#d1d5db] p-3 space-y-2 max-h-[150px] overflow-auto">
+                                <div className="rounded-md border border-[#d1d5db] p-3 space-y-2 max-h-37.5 overflow-auto">
                                     <label className="flex items-center gap-2">
                                         <input
                                             type="checkbox"
