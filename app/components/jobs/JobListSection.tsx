@@ -80,8 +80,8 @@ export function JobListSection({
                             key={job.id}
                             onClick={() => onSelectJob(job.id)}
                             className={`cursor-pointer rounded-lg border-2 p-3 transition-colors ${selectedJobId === job.id
-                                    ? 'border-[#0f766e] bg-[#ecfeff]'
-                                    : `border-[#e2e8f0] ${PRIORITY_COLORS[job.priority]}`
+                                ? 'border-[#0f766e] bg-[#ecfeff]'
+                                : `border-[#e2e8f0] ${PRIORITY_COLORS[job.priority]}`
                                 }`}
                         >
                             <div className="flex items-start justify-between">
