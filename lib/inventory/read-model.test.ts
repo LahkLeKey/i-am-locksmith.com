@@ -196,4 +196,69 @@ describe('buildInventoryReadModel', () => {
     expect(model.serviceLineSummary[1]?.count).toBe(3);
     expect(model.serviceLineSummary[2]?.count).toBe(1);
   });
+
+  it('derives low-stock queue from available and incoming quantities', () => {
+    const model = buildInventoryReadModel(
+        BASE_DATA,
+        [
+          {
+            id: 'PART-1',
+            sku: 'SKU-QUEUE-1',
+            itemName: 'Queue Part 1',
+            serviceLines: ['shop'],
+            estimatedUnitCost: 12,
+            location: 'Warehouse A',
+            onHand: 10,
+            reserved: 7,
+            available: 3,
+            reorderPoint: 12,
+            suggestedOrderQty: 10,
+            supplier: 'Supplier A',
+            severity: 'medium',
+            compatibilityNote: 'Queue test',
+          },
+          {
+            id: 'PART-2',
+            sku: 'SKU-QUEUE-2',
+            itemName: 'Queue Part 2',
+            serviceLines: ['mobile'],
+            estimatedUnitCost: 10,
+            location: 'Van 2',
+            onHand: 8,
+            reserved: 0,
+            available: 8,
+            reorderPoint: 10,
+            suggestedOrderQty: 8,
+            supplier: 'Supplier B',
+            severity: 'low',
+            compatibilityNote: 'Queue test',
+          },
+        ],
+        {
+          incomingBySkuLocation: [
+            {
+              sku: 'SKU-QUEUE-1',
+              location: 'Warehouse A',
+              incomingQuantity: 4,
+            },
+          ],
+        },
+    );
+
+    expect(model.lowStockQueue.map((entry) => entry.sku)).toEqual([
+      'SKU-QUEUE-1',
+      'SKU-QUEUE-2',
+    ]);
+
+    const queueOne =
+        model.lowStockQueue.find((entry) => entry.sku === 'SKU-QUEUE-1');
+    expect(queueOne?.available).toBe(3);
+    expect(queueOne?.incomingQuantity).toBe(4);
+    expect(queueOne?.shortage).toBe(5);
+
+    const queueTwo =
+        model.lowStockQueue.find((entry) => entry.sku === 'SKU-QUEUE-2');
+    expect(queueTwo?.incomingQuantity).toBe(0);
+    expect(queueTwo?.shortage).toBe(2);
+  });
 });

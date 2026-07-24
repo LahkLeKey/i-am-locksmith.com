@@ -5,6 +5,7 @@ export type InventoryPartSource = {
   estimatedUnitCost: number;
   location: string;
   onHand: number;
+  createdAt?: string;
   reserved?: number;
   available?: number; reorderPoint: number; suggestedOrderQty: number;
   supplier: string;
@@ -19,6 +20,7 @@ export type InventoryCatalogRow = {
   serviceLines: InventoryServiceLine[];
   estimatedUnitCost: number;
   location: string;
+  createdAt: string;
   onHand: number;
   reserved: number;
   available: number;
@@ -40,8 +42,33 @@ export type InventoryTimelineEvent = {
   location: string;
 };
 
+export type InventoryIncomingQuantity = {
+  sku: string;
+  location: string;
+  incomingQuantity: number;
+};
+
+export type InventoryReadModelBuildOptions = {
+  incomingBySkuLocation?: InventoryIncomingQuantity[];
+};
+
+export type InventoryQueueEntry = {
+  id: string;
+  sku: string;
+  itemName: string;
+  location: string;
+  supplier: string;
+  severity: ReplenishmentAlert['severity'];
+  available: number;
+  incomingQuantity: number;
+  reorderPoint: number;
+  shortage: number;
+  suggestedOrderQty: number;
+  createdAt: string;
+};
+
 export type InventoryReadModel = {
-  updatedAt: string; lowStockQueue: ReplenishmentAlert[];
+  updatedAt: string; lowStockQueue: InventoryQueueEntry[];
   timeline: InventoryTimelineEvent[];
   criticalCount: number;
   catalogRows: InventoryCatalogRow[];
@@ -57,11 +84,14 @@ const SEVERITY_PRIORITY: Record<ReplenishmentAlert['severity'], number> = {
 
 export function buildInventoryReadModel(
     dashboardData: DashboardData,
-    inventoryParts: InventoryPartSource[] = []): InventoryReadModel {
-  const queue = sortAlertsForQueue(dashboardData.replenishmentAlerts);
+    inventoryParts: InventoryPartSource[] = [],
+    options: InventoryReadModelBuildOptions = {}): InventoryReadModel {
   const timeline = buildTimelineEvents(dashboardData.replenishmentAlerts);
   const catalogRows =
-      buildCatalogRows(inventoryParts.length > 0 ? inventoryParts : queue);
+      buildCatalogRows(inventoryParts.length > 0 ? inventoryParts :
+                                                     dashboardData.replenishmentAlerts);
+  const queue =
+      buildQueueFromCatalogRows(catalogRows, options.incomingBySkuLocation);
   const serviceLineSummary = buildServiceLineSummary(catalogRows);
 
   return {
@@ -94,6 +124,9 @@ function buildCatalogRows(parts: Array<ReplenishmentAlert|InventoryPartSource>):
       estimatedUnitCost: 'estimatedUnitCost' in part ? part.estimatedUnitCost :
                                                        35,
       location: part.location,
+      createdAt: 'createdAt' in part && typeof part.createdAt === 'string' ?
+          part.createdAt :
+          new Date(0).toISOString(),
       onHand: part.onHand,
       reserved: 'reserved' in part && typeof part.reserved === 'number' ?
           part.reserved :
@@ -110,6 +143,66 @@ function buildCatalogRows(parts: Array<ReplenishmentAlert|InventoryPartSource>):
       severity: part.severity,
       compatibilityNote,
     };
+  });
+}
+
+function buildQueueFromCatalogRows(
+    catalogRows: InventoryCatalogRow[],
+    incomingBySkuLocation: InventoryIncomingQuantity[] = []):
+    InventoryQueueEntry[] {
+  const incomingLookup = new Map(incomingBySkuLocation.map((entry) => [
+    `${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`,
+    entry.incomingQuantity,
+  ]));
+
+  const queue = catalogRows
+                    .map((row): InventoryQueueEntry => {
+                      const lookupKey =
+                          `${row.sku.toLowerCase()}::${row.location.toLowerCase()}`;
+                      const incomingQuantity =
+                          incomingLookup.get(lookupKey) ?? 0;
+                      const shortage = Math.max(
+                          0, row.reorderPoint - (row.available + incomingQuantity));
+
+                      return {
+                        id: row.id,
+                        sku: row.sku,
+                        itemName: row.itemName,
+                        location: row.location,
+                        supplier: row.supplier,
+                        severity: row.severity,
+                        available: row.available,
+                        incomingQuantity,
+                        reorderPoint: row.reorderPoint,
+                        shortage,
+                        suggestedOrderQty: row.suggestedOrderQty,
+                        createdAt: row.createdAt,
+                      };
+                    })
+                    .filter((row) => row.shortage > 0);
+
+  return [...queue].sort((left, right) => {
+    const severityComparison =
+        SEVERITY_PRIORITY[left.severity] - SEVERITY_PRIORITY[right.severity];
+
+    if (severityComparison !== 0) {
+      return severityComparison;
+    }
+
+    const shortageComparison = right.shortage - left.shortage;
+
+    if (shortageComparison !== 0) {
+      return shortageComparison;
+    }
+
+    const createdAtComparison =
+        toTimestamp(right.createdAt) - toTimestamp(left.createdAt);
+
+    if (createdAtComparison !== 0) {
+      return createdAtComparison;
+    }
+
+    return left.sku.localeCompare(right.sku);
   });
 }
 
@@ -204,27 +297,6 @@ function buildCompatibilityNote(
   }
 
   return 'Bench and counter stock suited to shop workflows.';
-}
-
-function sortAlertsForQueue(alerts: ReplenishmentAlert[]):
-    ReplenishmentAlert[] {
-  return [...alerts].sort((left, right) => {
-    const severityComparison =
-        SEVERITY_PRIORITY[left.severity] - SEVERITY_PRIORITY[right.severity];
-
-    if (severityComparison !== 0) {
-      return severityComparison;
-    }
-
-    const deficitComparison =
-        (right.reorderPoint - right.onHand) - (left.reorderPoint - left.onHand);
-
-    if (deficitComparison !== 0) {
-      return deficitComparison;
-    }
-
-    return toTimestamp(right.createdAt) - toTimestamp(left.createdAt);
-  });
 }
 
 function buildTimelineEvents(alerts: ReplenishmentAlert[]):

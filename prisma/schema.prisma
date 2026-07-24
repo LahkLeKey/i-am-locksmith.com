@@ -65,6 +65,23 @@ model InventoryLedgerEntry {
     @@index([orgId, kind, createdAt])
 }
 
+model ReplenishmentRequest {
+    id                String   @id @default(cuid())
+    orgId             String
+    sku               String
+    location          String
+    supplier          String
+    requestedQuantity Int
+    status            String   @default("open")
+    requestedByUserId String
+    orderingNotes     String?
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+
+    @@index([orgId, status, createdAt])
+    @@index([orgId, sku, location, status])
+}
+
 model JobRecord {
     id                     String    @id @default(cuid())
     jobNumber              String
