@@ -211,11 +211,10 @@ export function AddJobWizardRefactored({
                 {feedback && (
                     <div className="border-t border-[#dbe3f0] px-6 py-3">
                         <p
-                            className={`text-sm ${
-                                feedback.includes('Error')
+                            className={`text-sm ${feedback.includes('Error')
                                     ? 'text-[#dc2626]'
                                     : 'text-[#166534]'
-                            }`}
+                                }`}
                         >
                             {feedback}
                         </p>

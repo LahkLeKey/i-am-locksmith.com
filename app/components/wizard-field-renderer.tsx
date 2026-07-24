@@ -49,11 +49,10 @@ function TextField({
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={onBlur}
                 placeholder={config.placeholder}
-                className={`w-full rounded-md border px-3 py-2 text-xs ${
-                    error
+                className={`w-full rounded-md border px-3 py-2 text-xs ${error
                         ? 'border-[#dc2626] bg-[#fee2e2] text-[#dc2626]'
                         : 'border-[#d1d5db] text-[#0f172a]'
-                }`}
+                    }`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${config.name}-error` : undefined}
             />
@@ -92,11 +91,10 @@ function EmailField({
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={onBlur}
                 placeholder={config.placeholder}
-                className={`w-full rounded-md border px-3 py-2 text-xs ${
-                    error
+                className={`w-full rounded-md border px-3 py-2 text-xs ${error
                         ? 'border-[#dc2626] bg-[#fee2e2] text-[#dc2626]'
                         : 'border-[#d1d5db] text-[#0f172a]'
-                }`}
+                    }`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${config.name}-error` : undefined}
             />
@@ -135,11 +133,10 @@ function NumberField({
                 onChange={(e) => onChange(e.target.valueAsNumber)}
                 onBlur={onBlur}
                 placeholder={config.placeholder}
-                className={`w-full rounded-md border px-3 py-2 text-xs ${
-                    error
+                className={`w-full rounded-md border px-3 py-2 text-xs ${error
                         ? 'border-[#dc2626] bg-[#fee2e2] text-[#dc2626]'
                         : 'border-[#d1d5db] text-[#0f172a]'
-                }`}
+                    }`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${config.name}-error` : undefined}
             />
@@ -177,11 +174,10 @@ function DateField({
                 value={value || ''}
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={onBlur}
-                className={`w-full rounded-md border px-3 py-2 text-xs ${
-                    error
+                className={`w-full rounded-md border px-3 py-2 text-xs ${error
                         ? 'border-[#dc2626] bg-[#fee2e2] text-[#dc2626]'
                         : 'border-[#d1d5db] text-[#0f172a]'
-                }`}
+                    }`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${config.name}-error` : undefined}
             />
@@ -218,11 +214,10 @@ function SelectField({
                 value={value || ''}
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={onBlur}
-                className={`w-full rounded-md border px-3 py-2 text-xs ${
-                    error
+                className={`w-full rounded-md border px-3 py-2 text-xs ${error
                         ? 'border-[#dc2626] bg-[#fee2e2] text-[#dc2626]'
                         : 'border-[#d1d5db] text-[#0f172a]'
-                }`}
+                    }`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${config.name}-error` : undefined}
             >
@@ -311,11 +306,10 @@ function TextareaField({
                 onBlur={onBlur}
                 placeholder={config.placeholder}
                 rows={4}
-                className={`w-full rounded-md border px-3 py-2 text-xs ${
-                    error
+                className={`w-full rounded-md border px-3 py-2 text-xs ${error
                         ? 'border-[#dc2626] bg-[#fee2e2] text-[#dc2626]'
                         : 'border-[#d1d5db] text-[#0f172a]'
-                }`}
+                    }`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${config.name}-error` : undefined}
             />
