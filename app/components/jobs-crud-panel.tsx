@@ -9,6 +9,8 @@ import { gfm } from 'turndown-plugin-gfm';
 import { InventoryActionCard } from '@/app/components/inventory-shared';
 import { WizardProgressBar, WizardNavigation } from '@/app/components/wizard-controller';
 import { WizardStep as WizardStepComponent, type WizardStepConfig } from '@/app/components/wizard-step';
+import type { TechnicianOption, InventoryPart, SelectedInventoryLookup } from '@/lib/domains/shared/types';
+import type { JobDraft, CloseoutDraft } from '@/lib/domains/jobs/types';
 
 import 'react-quill-new/dist/quill.snow.css';
 
@@ -17,53 +19,8 @@ import type { JobQueueItem, JobQueuePriority, JobQueueStatus } from '@/lib/dashb
 const STATUSES: JobQueueStatus[] = ['queued', 'scheduled', 'in_progress', 'blocked', 'closed'];
 const PRIORITIES: JobQueuePriority[] = ['low', 'normal', 'high', 'urgent'];
 
-type InventoryLookupPart = {
-    id: string;
-    sku: string;
-    itemName: string;
-    estimatedUnitCost: number;
-    location: string;
-    onHand: number;
-    available: number;
-};
-
-type SelectedInventoryLookup = {
-    sku: string;
-    location: string;
-};
-
-export type TechnicianOption = {
-    id: string;
-    fullName: string;
-    hourlyRate: number;
-    availabilityStatus: 'available' | 'busy' | 'off_shift';
-    isActive: boolean;
-};
-
-type JobDraft = {
-    customerName: string;
-    site: string;
-    priority: JobQueuePriority;
-    status: JobQueueStatus;
-    scheduledFor: string;
-    etaMinutes: string;
-    followUpNote: string;
-    requiredSkus: string[];
-    assignedTechnicianIds: string[];
-    quotePartEstimate: string;
-    quoteLaborEstimate: string;
-    quoteEstimatedMinutes: string;
-    quoteEstimatedTotal: string;
-    quoteNotes: string;
-};
-
-type CloseoutDraft = {
-    actualPartCost: string;
-    actualLaborCost: string;
-    actualMinutes: string;
-    finalTotal: string;
-    resolutionNotes: string;
-};
+// Re-export for backward compatibility
+export type { TechnicianOption } from '@/lib/domains/shared/types';
 
 type AddJobWizardStep = 1 | 2 | 3 | 4;
 type ActiveJobWizardStep = 1 | 2 | 3 | 4;
@@ -160,7 +117,7 @@ function quoteAsStrings(job: JobQueueItem) {
     };
 }
 
-function computePartEstimateFromSkus(requiredSkus: string[], parts: InventoryLookupPart[]): number {
+function computePartEstimateFromSkus(requiredSkus: string[], parts: InventoryPart[]): number {
     const normalized = requiredSkus.map((sku) => sku.toLowerCase());
     return Number(
         parts
@@ -435,7 +392,7 @@ export function JobsCrudPanel({
     technicians,
 }: {
     initialJobs: JobQueueItem[];
-    inventoryLookupParts: InventoryLookupPart[];
+    inventoryLookupParts: InventoryPart[];
     technicians: TechnicianOption[];
 }) {
     const router = useRouter();
@@ -492,7 +449,7 @@ export function JobsCrudPanel({
     }, [initialJobs]);
 
     const jobs = useMemo(() => [...jobsState].sort((left, right) => right.id.localeCompare(left.id)), [jobsState]);
-    const sortedInventoryLookupParts = useMemo(
+    const sortedInventoryParts = useMemo(
         () =>
             [...inventoryLookupParts].sort((left, right) => {
                 if (right.available !== left.available) {
@@ -520,22 +477,22 @@ export function JobsCrudPanel({
         return Number(((minutes / 60) * selectedTechnician.hourlyRate).toFixed(2));
     }, [estimatedMinutes, selectedTechnician]);
     const quotePartEstimate = useMemo(
-        () => computePartEstimateFromSkus(requiredSkus, sortedInventoryLookupParts),
-        [requiredSkus, sortedInventoryLookupParts],
+        () => computePartEstimateFromSkus(requiredSkus, sortedInventoryParts),
+        [requiredSkus, sortedInventoryParts],
     );
     const quoteEstimatedTotal = useMemo(() => {
         return Number((quotePartEstimate + quoteLaborEstimate).toFixed(2));
     }, [quotePartEstimate, quoteLaborEstimate]);
     const filteredPartsForWizard = useMemo(() => {
         const query = partsLookupQuery.trim().toLowerCase();
-        return sortedInventoryLookupParts.filter((part) => {
+        return sortedInventoryParts.filter((part) => {
             if (!query) {
                 return true;
             }
 
             return [part.sku, part.itemName, part.location].join(' ').toLowerCase().includes(query);
         });
-    }, [partsLookupQuery, sortedInventoryLookupParts]);
+    }, [partsLookupQuery, sortedInventoryParts]);
 
     useEffect(() => {
         if (jobs.length === 0) {
@@ -1150,7 +1107,7 @@ export function JobsCrudPanel({
                                 const isEditingTableAction = timeClockTableActionDraft?.jobId === selectedJob.id;
                                 const selectedWorkflowTechnicians = selectableTechnicians.filter((entry) => draft.assignedTechnicianIds.includes(entry.id));
                                 const quoteMinutes = Math.max(0, Number(draft.quoteEstimatedMinutes || '0'));
-                                const quotePartEstimate = computePartEstimateFromSkus(draft.requiredSkus, sortedInventoryLookupParts);
+                                const quotePartEstimate = computePartEstimateFromSkus(draft.requiredSkus, sortedInventoryParts);
                                 const quoteLaborEstimate = Number(
                                     selectedWorkflowTechnicians
                                         .reduce((total, technician) => total + ((quoteMinutes / 60) * technician.hourlyRate), 0)
@@ -1411,7 +1368,7 @@ export function JobsCrudPanel({
                                                             <div className="max-h-44 overflow-auto rounded border border-[#e5e7eb] bg-white">
                                                                 {(() => {
                                                                     const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
-                                                                    const matches = sortedInventoryLookupParts
+                                                                    const matches = sortedInventoryParts
                                                                         .filter((part) => {
                                                                             if (!query) {
                                                                                 return true;
@@ -1503,7 +1460,7 @@ export function JobsCrudPanel({
                                                             <div className="max-h-36 overflow-auto rounded border border-[#e5e7eb] bg-[#f8fafc]">
                                                                 {(() => {
                                                                     const query = (lookupQuery[selectedJob.id] ?? '').trim().toLowerCase();
-                                                                    const matches = sortedInventoryLookupParts
+                                                                    const matches = sortedInventoryParts
                                                                         .filter((part) => {
                                                                             if (!query) {
                                                                                 return true;

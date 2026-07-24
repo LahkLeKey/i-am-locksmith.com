@@ -33,9 +33,12 @@ export class JobService {
             etaMinutes: '',
             followUpNote: '',
             requiredSkus: [],
-            assignedTechnicianId: '',
+            assignedTechnicianIds: [],
             estimatedMinutes: '',
             quotePartEstimate: '',
+            quoteLaborEstimate: '',
+            quoteEstimatedMinutes: '',
+            quoteEstimatedTotal: '',
             quoteNotes: '',
             ...overrides,
         };
@@ -59,7 +62,7 @@ export class JobService {
         if (!draft.customerName?.trim()) errors.push('Customer name is required');
         if (!draft.site?.trim()) errors.push('Site/Location is required');
         if (!draft.scheduledFor?.trim()) errors.push('Scheduled date is required');
-        if (!draft.assignedTechnicianId?.trim()) errors.push('Technician assignment is required');
+        if (!draft.assignedTechnicianIds?.length) errors.push('Technician assignment is required');
         if (!draft.estimatedMinutes || Number(draft.estimatedMinutes) <= 0) {
             errors.push('Estimated minutes must be greater than 0');
         }
@@ -187,7 +190,7 @@ export class JobWorkflowService {
             draft.quotePartEstimate &&
             Number(draft.quotePartEstimate) > 0 &&
             draft.scheduledFor &&
-            draft.assignedTechnicianId
+            draft.assignedTechnicianIds?.length
         );
     }
 
@@ -229,7 +232,7 @@ export class JobWorkflowService {
                 break;
 
             case 3: // Technician and estimates
-                if (!draft.assignedTechnicianId) errors.push('Technician assignment required');
+                if (!draft.assignedTechnicianIds?.length) errors.push('Technician assignment required');
                 if (!draft.estimatedMinutes || Number(draft.estimatedMinutes) <= 0) {
                     errors.push('Estimated minutes required');
                 }

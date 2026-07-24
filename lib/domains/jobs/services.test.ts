@@ -61,9 +61,12 @@ describe('Jobs Domain Services', () => {
                     etaMinutes: '120',
                     followUpNote: '',
                     requiredSkus: ['SKU-001'],
-                    assignedTechnicianId: 'tech-001',
+                    assignedTechnicianIds: ['tech-001'],
                     estimatedMinutes: '90',
                     quotePartEstimate: '100',
+                    quoteLaborEstimate: '50',
+                    quoteEstimatedMinutes: '30',
+                    quoteEstimatedTotal: '150',
                     quoteNotes: '',
                 };
                 const errors = JobService.validateJobDraft(draft);
@@ -203,9 +206,12 @@ describe('Jobs Domain Services', () => {
                     scheduledFor: '',
                     etaMinutes: '',
                     followUpNote: '',
-                    assignedTechnicianId: '',
+                    assignedTechnicianIds: [],
                     estimatedMinutes: '',
                     quotePartEstimate: '',
+                    quoteLaborEstimate: '',
+                    quoteEstimatedMinutes: '',
+                    quoteEstimatedTotal: '',
                     quoteNotes: '',
                 };
                 expect(JobWorkflowService.canBeQuoted(draft)).toBe(true);
@@ -228,12 +234,15 @@ describe('Jobs Domain Services', () => {
                     requiredSkus: ['SKU-001'],
                     quotePartEstimate: '100',
                     scheduledFor: '2024-01-20',
-                    assignedTechnicianId: 'tech-001',
+                    assignedTechnicianIds: ['tech-001'],
                     priority: 'normal',
                     status: 'queued',
                     etaMinutes: '',
                     followUpNote: '',
                     estimatedMinutes: '',
+                    quoteLaborEstimate: '',
+                    quoteEstimatedMinutes: '',
+                    quoteEstimatedTotal: '',
                     quoteNotes: '',
                 };
                 expect(JobWorkflowService.canBeScheduled(draft)).toBe(true);

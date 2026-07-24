@@ -35,6 +35,14 @@ export type ActiveJobWizardStep = 1 | 2 | 3 | 4;
 /**
  * Job draft represents the form state while creating or editing a job
  * before it's persisted to the database.
+ * 
+ * Note: assignedTechnicianIds is stored as an array in form state to support
+ * multi-select UI patterns, even though the persisted JobQueueItem stores only
+ * a single assigned technician. Components handle the mapping between form state
+ * and persisted data through conversion during load/save cycles.
+ * 
+ * This is the canonical form state type used across all job-related components
+ * and wizards. Keep this type in sync with the actual form fields in components.
  */
 export type JobDraft = {
     customerName: string;
@@ -45,9 +53,12 @@ export type JobDraft = {
     etaMinutes: string;
     followUpNote: string;
     requiredSkus: string[];
-    assignedTechnicianId: string;
+    assignedTechnicianIds: string[];
     estimatedMinutes: string;
     quotePartEstimate: string;
+    quoteLaborEstimate: string;
+    quoteEstimatedMinutes: string;
+    quoteEstimatedTotal: string;
     quoteNotes: string;
 };
 
@@ -160,11 +171,11 @@ export type LedgerPairRow = {
  * including actual costs and completion status.
  */
 export type CloseoutDraft = {
-    jobId: string;
-    closureStatus: string;
-    actualPartsCost: string;
+    actualPartCost: string;
     actualLaborCost: string;
-    closureNotes: string;
+    actualMinutes: string;
+    finalTotal: string;
+    resolutionNotes: string;
 };
 
 /**
