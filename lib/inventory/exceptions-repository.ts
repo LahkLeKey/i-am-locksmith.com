@@ -1,5 +1,6 @@
 import {
   appendInventoryLedgerEntry,
+  type InventoryLedgerEntryRecord,
   listInventoryLedgerEntries,
   listInventorySkuLocationBalances,
 } from './ledger-repository';
@@ -72,6 +73,49 @@ function buildReconcileError(message: string): ReconcileInventoryExceptionError 
   return error;
 }
 
+function resolveCausativeEntry(
+    entries: InventoryLedgerEntryRecord[],
+    cause: InventoryExceptionCause): InventoryLedgerEntryRecord | null {
+  const orderedEntries = [...entries].sort((left, right) => {
+    const createdAtComparison = Date.parse(left.createdAt) - Date.parse(right.createdAt);
+
+    if (createdAtComparison !== 0) {
+      return createdAtComparison;
+    }
+
+    const updatedAtComparison = Date.parse(left.updatedAt) - Date.parse(right.updatedAt);
+
+    if (updatedAtComparison !== 0) {
+      return updatedAtComparison;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+  let onHand = 0;
+  let reserved = 0;
+  let latestTransition: InventoryLedgerEntryRecord | null = null;
+
+  for (const entry of orderedEntries) {
+    const wasNegative =
+        cause === 'negative_on_hand' ? onHand < 0 : onHand - reserved < 0;
+
+    if (entry.kind === 'reservation' || entry.kind === 'reservation_release') {
+      reserved += Math.abs(entry.delta) * (entry.kind === 'reservation' ? 1 : -1);
+    } else {
+      onHand += entry.delta;
+    }
+
+    const isNegative =
+        cause === 'negative_on_hand' ? onHand < 0 : onHand - reserved < 0;
+
+    if (!wasNegative && isNegative) {
+      latestTransition = entry;
+    }
+  }
+
+  return latestTransition ?? orderedEntries[orderedEntries.length - 1] ?? null;
+}
+
 export async function listInventoryExceptions(
     orgId: string): Promise<InventoryExceptionEntry[]> {
   const balances = await listInventorySkuLocationBalances(orgId);
@@ -88,9 +132,12 @@ export async function listInventoryExceptions(
           sku: balance.sku,
           location: balance.location,
         });
+        const cause: InventoryExceptionCause =
+            balance.onHand < 0 ? 'negative_on_hand' : 'negative_available';
+
         return {
           key: toKey(balance.sku, balance.location),
-          latest: entries[entries.length - 1] ?? null,
+          latest: resolveCausativeEntry(entries, cause),
         };
       }));
 
