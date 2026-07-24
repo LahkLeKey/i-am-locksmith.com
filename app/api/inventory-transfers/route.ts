@@ -1,6 +1,6 @@
-import { requireRouteContext } from '@/lib/rbac/guard';
-import { appendInventoryLedgerEntry, listInventorySkuLocationBalances } from '@/lib/inventory/ledger-repository';
-import { getInventoryPartById } from '@/lib/inventory/parts-repository';
+import {appendInventoryLedgerEntry, listInventorySkuLocationBalances} from '@/lib/inventory/ledger-repository';
+import {getInventoryPartById} from '@/lib/inventory/parts-repository';
+import {requireRouteContext} from '@/lib/rbac/guard';
 
 export async function POST(request: Request) {
   try {
@@ -8,54 +8,42 @@ export async function POST(request: Request) {
     const orgId = context.orgId;
 
     if (!orgId) {
-      return Response.json(
-        { error: 'Organization required' },
-        { status: 403 }
-      );
+      return Response.json({error: 'Organization required'}, {status: 403});
     }
 
-    const { sourceLocation, targetLocation, parts } = await request.json();
+    const {sourceLocation, targetLocation, parts} = await request.json();
 
     if (!sourceLocation || !targetLocation || !parts || !Array.isArray(parts)) {
-      return Response.json(
-        { error: 'Invalid request body' },
-        { status: 400 }
-      );
+      return Response.json({error: 'Invalid request body'}, {status: 400});
     }
 
     if (sourceLocation === targetLocation) {
       return Response.json(
-        { error: 'Source and target locations must be different' },
-        { status: 400 }
-      );
+          {error: 'Source and target locations must be different'},
+          {status: 400});
     }
 
     // Verify all parts exist and have sufficient stock
     const balances = await listInventorySkuLocationBalances(orgId);
-    for (const { id, quantity } of parts) {
+    for (const {id, quantity} of parts) {
       const part = await getInventoryPartById(id);
       if (!part) {
-        return Response.json(
-          { error: `Part ${id} not found` },
-          { status: 404 }
-        );
+        return Response.json({error: `Part ${id} not found`}, {status: 404});
       }
 
       const balance = balances.find(
-        b => b.sku.toLowerCase() === part.sku.toLowerCase() &&
-             b.location.toLowerCase() === sourceLocation.toLowerCase()
-      );
+          b => b.sku.toLowerCase() === part.sku.toLowerCase() &&
+              b.location.toLowerCase() === sourceLocation.toLowerCase());
 
       if (!balance || balance.available < quantity) {
         return Response.json(
-          { error: `Insufficient stock of ${part.sku} in ${sourceLocation}` },
-          { status: 400 }
-        );
+            {error: `Insufficient stock of ${part.sku} in ${sourceLocation}`},
+            {status: 400});
       }
     }
 
     // Execute transfers
-    for (const { id, quantity } of parts) {
+    for (const {id, quantity} of parts) {
       const part = await getInventoryPartById(id);
       if (!part) continue;
 
@@ -85,17 +73,13 @@ export async function POST(request: Request) {
     }
 
     return Response.json(
-      {
-        success: true,
-        message: `Transferred ${parts.length} part(s) successfully`,
-      },
-      { status: 200 }
-    );
+        {
+          success: true,
+          message: `Transferred ${parts.length} part(s) successfully`,
+        },
+        {status: 200});
   } catch (error) {
     console.error('Transfer error:', error);
-    return Response.json(
-      { error: 'Transfer failed' },
-      { status: 500 }
-    );
+    return Response.json({error: 'Transfer failed'}, {status: 500});
   }
 }

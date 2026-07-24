@@ -186,7 +186,7 @@ export default function ActivityClient({ initialTimeline }: ActivityClientProps)
                         Inventory Timeline ({filteredTimeline.length} events)
                     </h2>
                 </div>
-                
+
                 {filteredTimeline.length > 0 ? (
                     <ul className="divide-y divide-[#e5e7eb]">
                         {filteredTimeline.map((event) => (
@@ -195,12 +195,11 @@ export default function ActivityClient({ initialTimeline }: ActivityClientProps)
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="font-semibold text-[#0f766e]">{event.sku}</span>
-                                            <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                                                event.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                                                event.severity === 'high' ? 'bg-orange-100 text-orange-800' :
-                                                event.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-green-100 text-green-800'
-                                            }`}>
+                                            <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${event.severity === 'critical' ? 'bg-red-100 text-red-800' :
+                                                    event.severity === 'high' ? 'bg-orange-100 text-orange-800' :
+                                                        event.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                                            'bg-green-100 text-green-800'
+                                                }`}>
                                                 {event.severity}
                                             </span>
                                         </div>

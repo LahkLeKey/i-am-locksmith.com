@@ -1,18 +1,18 @@
 /**
  * Tests for wizard step logic and utilities
- * 
+ *
  * TDD Approach: These tests validate the business logic and helper functions
  * that power the WizardStep component. Tests are written as pure function
  * assertions to ensure the step progression, validation, and status logic
  * work correctly before being integrated into React components.
- * 
+ *
  * Tests cover:
  * - Step progression (forward/back, boundary conditions)
  * - Completion tracking and status determination
  * - Required field validation
  * - Field value validation
  */
-import { describe, it, expect } from 'vitest';
+import {describe, expect, it} from 'vitest';
 
 describe('WizardStep', () => {
   describe('step progression validation', () => {
@@ -65,7 +65,7 @@ describe('WizardStep', () => {
         if (isComplete) return 'complete';
         return 'incomplete';
       };
-      
+
       expect(getStatus(false, false)).toBe('incomplete');
     });
 
@@ -75,7 +75,7 @@ describe('WizardStep', () => {
         if (isComplete) return 'complete';
         return 'incomplete';
       };
-      
+
       expect(getStatus(true, false)).toBe('complete');
     });
 
@@ -85,7 +85,7 @@ describe('WizardStep', () => {
         if (isComplete) return 'complete';
         return 'incomplete';
       };
-      
+
       expect(getStatus(true, true)).toBe('error');
     });
   });
@@ -94,34 +94,34 @@ describe('WizardStep', () => {
     it('should track which fields are required', () => {
       const step = {
         fields: [
-          { name: 'customerName', required: true },
-          { name: 'site', required: true },
-          { name: 'notes', required: false },
+          {name: 'customerName', required: true},
+          {name: 'site', required: true},
+          {name: 'notes', required: false},
         ],
       };
-      
+
       const requiredFields = step.fields.filter(f => f.required);
       expect(requiredFields).toHaveLength(2);
     });
 
     it('should validate all required fields are filled', () => {
       const fields = [
-        { name: 'customerName', required: true, value: 'John' },
-        { name: 'site', required: true, value: '' },
-        { name: 'notes', required: false, value: '' },
+        {name: 'customerName', required: true, value: 'John'},
+        {name: 'site', required: true, value: ''},
+        {name: 'notes', required: false, value: ''},
       ];
-      
+
       const isValid = fields.every(f => !f.required || f.value);
       expect(isValid).toBe(false);
     });
 
     it('should pass validation when all required fields are filled', () => {
       const fields = [
-        { name: 'customerName', required: true, value: 'John' },
-        { name: 'site', required: true, value: '123 Main St' },
-        { name: 'notes', required: false, value: '' },
+        {name: 'customerName', required: true, value: 'John'},
+        {name: 'site', required: true, value: '123 Main St'},
+        {name: 'notes', required: false, value: ''},
       ];
-      
+
       const isValid = fields.every(f => !f.required || f.value);
       expect(isValid).toBe(true);
     });

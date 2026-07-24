@@ -74,7 +74,7 @@ export async function listInventoryParts(orgId: string):
 }
 
 export async function getInventoryPartById(id: string):
-    Promise<InventoryPartRecord | null> {
+    Promise<InventoryPartRecord|null> {
   const client = await getClient();
 
   try {

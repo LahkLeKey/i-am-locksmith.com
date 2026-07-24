@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import {describe, expect, it} from 'vitest';
 
 describe('WizardController', () => {
   describe('step navigation', () => {
@@ -11,8 +11,10 @@ describe('WizardController', () => {
       const currentStep = 1;
       const totalSteps = 4;
       const isCurrentStepValid = true;
-      
-      const nextStep = isCurrentStepValid && currentStep < totalSteps ? currentStep + 1 : currentStep;
+
+      const nextStep = isCurrentStepValid && currentStep < totalSteps ?
+          currentStep + 1 :
+          currentStep;
       expect(nextStep).toBe(2);
     });
 
@@ -20,8 +22,10 @@ describe('WizardController', () => {
       const currentStep = 4;
       const totalSteps = 4;
       const isCurrentStepValid = true;
-      
-      const nextStep = isCurrentStepValid && currentStep < totalSteps ? currentStep + 1 : currentStep;
+
+      const nextStep = isCurrentStepValid && currentStep < totalSteps ?
+          currentStep + 1 :
+          currentStep;
       expect(nextStep).toBe(4);
     });
 
@@ -47,12 +51,12 @@ describe('WizardController', () => {
     it('should prevent advancing with invalid step', () => {
       const currentStep = 1;
       const stepValidations: Record<number, boolean> = {
-        1: false, // Invalid
+        1: false,  // Invalid
         2: true,
         3: true,
         4: true,
       };
-      
+
       const isCurrentStepValid = stepValidations[currentStep];
       const canAdvance = isCurrentStepValid;
       expect(canAdvance).toBe(false);
@@ -61,12 +65,12 @@ describe('WizardController', () => {
     it('should allow advancing with valid step', () => {
       const currentStep = 1;
       const stepValidations: Record<number, boolean> = {
-        1: true, // Valid
+        1: true,  // Valid
         2: true,
         3: true,
         4: true,
       };
-      
+
       const isCurrentStepValid = stepValidations[currentStep];
       const canAdvance = isCurrentStepValid;
       expect(canAdvance).toBe(true);
@@ -74,13 +78,15 @@ describe('WizardController', () => {
 
     it('should track completion status for each step', () => {
       const completionStatus = {
-        1: { complete: true, hasError: false },
-        2: { complete: true, hasError: false },
-        3: { complete: false, hasError: false },
-        4: { complete: false, hasError: false },
+        1: {complete: true, hasError: false},
+        2: {complete: true, hasError: false},
+        3: {complete: false, hasError: false},
+        4: {complete: false, hasError: false},
       };
-      
-      const completedSteps = Object.values(completionStatus).filter(s => s.complete && !s.hasError).length;
+
+      const completedSteps = Object.values(completionStatus)
+                                 .filter(s => s.complete && !s.hasError)
+                                 .length;
       expect(completedSteps).toBe(2);
     });
   });
@@ -121,11 +127,11 @@ describe('WizardController', () => {
         3: [],
         4: [],
       };
-      
+
       const stepWithErrors = Object.entries(stepErrors)
-        .filter(([_, errors]) => errors.length > 0)
-        .map(([step, _]) => parseInt(step));
-        
+                                 .filter(([_, errors]) => errors.length > 0)
+                                 .map(([step, _]) => parseInt(step));
+
       expect(stepWithErrors).toContain(2);
       expect(stepErrors[2].length).toBe(2);
     });
