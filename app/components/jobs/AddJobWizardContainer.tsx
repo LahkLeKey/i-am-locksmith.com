@@ -5,8 +5,8 @@ import { type JobQueueItem, type JobQueuePriority } from '@/lib/dashboard/types'
 import type { JobDraft, AddJobWizardStep } from '@/lib/domains/jobs/types';
 import type { TechnicianOption, InventoryPart, SelectedInventoryLookup } from '@/lib/domains/shared/types';
 import { JobService, JobWorkflowService } from '@/lib/domains/jobs';
-import { WizardProgressBar, WizardNavigation } from '@/app/components/wizard-controller';
-import { WizardStep as WizardStepComponent, type WizardStepConfig } from '@/app/components/wizard-step';
+import { WizardProgressBar, WizardNavigation } from '@/app/components/shared/ui';
+import { WizardStep as WizardStepComponent, type WizardStepConfig } from '@/app/components/shared/ui';
 
 interface AddJobWizardContainerProps {
     isOpen: boolean;
@@ -91,19 +91,19 @@ export function AddJobWizardContainer({
                 requiredSkus: draft.requiredSkus,
                 assignedTechnician: draft.assignedTechnicianIds[0]
                     ? {
-                          id: draft.assignedTechnicianIds[0],
-                          fullName: technicians.find((t) => t.id === draft.assignedTechnicianIds[0])?.fullName || '',
-                          laborRate: technicians.find((t) => t.id === draft.assignedTechnicianIds[0])?.hourlyRate || 0,
-                      }
+                        id: draft.assignedTechnicianIds[0],
+                        fullName: technicians.find((t) => t.id === draft.assignedTechnicianIds[0])?.fullName || '',
+                        laborRate: technicians.find((t) => t.id === draft.assignedTechnicianIds[0])?.hourlyRate || 0,
+                    }
                     : null,
                 quote: draft.quotePartEstimate
                     ? {
-                          partEstimate: Number(draft.quotePartEstimate) || 0,
-                          laborEstimate: Number(draft.quoteLaborEstimate) || 0,
-                          estimatedMinutes: Number(draft.quoteEstimatedMinutes) || 0,
-                          estimatedTotal: Number(draft.quoteEstimatedTotal) || 0,
-                          notes: draft.quoteNotes,
-                      }
+                        partEstimate: Number(draft.quotePartEstimate) || 0,
+                        laborEstimate: Number(draft.quoteLaborEstimate) || 0,
+                        estimatedMinutes: Number(draft.quoteEstimatedMinutes) || 0,
+                        estimatedTotal: Number(draft.quoteEstimatedTotal) || 0,
+                        notes: draft.quoteNotes,
+                    }
                     : undefined,
             };
 

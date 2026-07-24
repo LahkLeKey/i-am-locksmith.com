@@ -23,16 +23,14 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useFormWizard } from '@/app/components/wizard-form';
-import { StepRenderer } from '@/app/components/wizard-field-renderer';
 import {
+    useFormWizard,
+    StepRenderer,
     WizardProgressBar,
     WizardNavigation,
-} from '@/app/components/wizard-controller';
-import {
     WizardStep as WizardStepComponent,
     type WizardStepConfig,
-} from '@/app/components/wizard-step';
+} from '@/app/components/shared/ui';
 import { ADD_JOB_WIZARD_CONFIG } from '@/app/components/wizard-configs';
 import type { TechnicianOption } from './jobs-crud-panel';
 

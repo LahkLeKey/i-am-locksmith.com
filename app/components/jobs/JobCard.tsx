@@ -16,9 +16,8 @@ export function JobCard({ job, isSelected, onSelect, onDelete }: JobCardProps) {
     return (
         <div
             onClick={onSelect}
-            className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
-                isSelected ? 'border-[#0f766e] bg-[#ecfeff]' : 'border-[#e2e8f0] bg-white hover:border-[#0f766e]'
-            }`}
+            className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${isSelected ? 'border-[#0f766e] bg-[#ecfeff]' : 'border-[#e2e8f0] bg-white hover:border-[#0f766e]'
+                }`}
         >
             <div className="flex items-start justify-between">
                 <div className="flex-1">

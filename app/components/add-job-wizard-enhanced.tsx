@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { WizardStep as WizardStepComponent, getWizardStepStatus, validateWizardStepFields } from '@/app/components/wizard-step';
-import { useWizardController, WizardProgressBar, WizardNavigation } from '@/app/components/wizard-controller';
-import type { WizardStepConfig } from '@/app/components/wizard-step';
+import { WizardStep as WizardStepComponent, getWizardStepStatus, validateWizardStepFields } from '@/app/components/shared/ui';
+import { useWizardController, WizardProgressBar, WizardNavigation } from '@/app/components/shared/ui';
+import type { WizardStepConfig } from '@/app/components/shared/ui';
 
 interface AddJobWizardEnhancedProps {
     onSubmit: (jobData: any) => Promise<void>;
