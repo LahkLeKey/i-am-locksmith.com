@@ -1,4 +1,4 @@
-import { UnscopedOnboardingPanel } from '@/app/components/unscoped-onboarding-panel';
+import { UnscopedOnboardingPanel } from '@/app/components/shared/unscoped-onboarding-panel';
 import { requireAuthenticatedContext } from '@/lib/rbac/guard';
 import { formatPercent, formatSchedule, formatTimeLabel, formatUsd } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';

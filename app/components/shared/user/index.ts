@@ -2,4 +2,4 @@
  * Shared user-related components
  */
 
-export { UserDetails } from './user-details';
+export {UserDetails} from './user-details';

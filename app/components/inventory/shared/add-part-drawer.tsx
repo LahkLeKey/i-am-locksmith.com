@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { INVENTORY_SERVICE_LINE_OPTIONS, ServiceLineBadgeRow } from '@/app/components/inventory-shared';
+import { INVENTORY_SERVICE_LINE_OPTIONS, ServiceLineBadgeRow } from './inventory-shared';
 
 const SEVERITY_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
 

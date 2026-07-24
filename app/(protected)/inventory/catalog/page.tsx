@@ -4,7 +4,7 @@ import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-reposit
 import { listIncomingQuantitiesBySkuLocation } from '@/lib/inventory/replenishment-repository';
 import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
-import { InventoryCatalogPanel } from '@/app/components/inventory-catalog-panel';
+import { InventoryCatalogPanel } from '@/app/components/inventory/shared/inventory-catalog-panel';
 
 const INVENTORY_SERVICE_LINES = ['automotive', 'mobile', 'shop'] as const;
 

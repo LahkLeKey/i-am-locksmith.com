@@ -12,9 +12,9 @@ import { listInventoryParts } from '@/lib/inventory/parts-repository';
 import { listJobRecords } from '@/lib/jobs/repository';
 import { listTechnicians } from '@/lib/technicians/repository';
 
-import { InventoryExceptionPanel } from '@/app/components/inventory-exception-panel';
-import { InventoryReplenishmentPanel } from '@/app/components/inventory-replenishment-panel';
-import { JobsCrudPanel } from '@/app/components/jobs-crud-panel';
+import { InventoryExceptionPanel } from '@/app/components/inventory/shared/inventory-exception-panel';
+import { InventoryReplenishmentPanel } from '@/app/components/inventory/shared/inventory-replenishment-panel';
+import { JobsCrudPanel } from '@/app/components/jobs/shared/jobs-crud-panel';
 
 const INVENTORY_SERVICE_LINES = ['automotive', 'mobile', 'shop'] as const;
 

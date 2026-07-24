@@ -30,8 +30,8 @@ import {
     WizardNavigation,
     WizardStep as WizardStepComponent,
     type WizardStepConfig,
+    ADD_JOB_WIZARD_CONFIG,
 } from '@/app/components/shared/ui';
-import { ADD_JOB_WIZARD_CONFIG } from '@/app/components/wizard-configs';
 import type { TechnicianOption } from './jobs-crud-panel';
 
 interface AddJobWizardRefactoredProps {
@@ -210,8 +210,8 @@ export function AddJobWizardRefactored({
                     <div className="border-t border-[#dbe3f0] px-6 py-3">
                         <p
                             className={`text-sm ${feedback.includes('Error')
-                                    ? 'text-[#dc2626]'
-                                    : 'text-[#166534]'
+                                ? 'text-[#dc2626]'
+                                : 'text-[#166534]'
                                 }`}
                         >
                             {feedback}

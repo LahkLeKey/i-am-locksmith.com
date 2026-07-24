@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
-import { InventoryActionCard } from '@/app/components/inventory-shared';
+import { InventoryActionCard } from '@/app/components/inventory/shared/inventory-shared';
 import { WizardProgressBar, WizardNavigation } from '@/app/components/shared/ui';
 import { WizardStep as WizardStepComponent, type WizardStepConfig } from '@/app/components/shared/ui';
 import type { TechnicianOption, InventoryPart, SelectedInventoryLookup } from '@/lib/domains/shared/types';

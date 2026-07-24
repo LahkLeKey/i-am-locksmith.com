@@ -1,4 +1,4 @@
-import { TechniciansAdminPanel } from '@/app/components/technicians-admin-panel';
+import { TechniciansAdminPanel } from '@/app/components/jobs/shared/technicians-admin-panel';
 import { requireRouteContext } from '@/lib/rbac/guard';
 import { listTechnicians } from '@/lib/technicians/repository';
 
