@@ -38,12 +38,20 @@ export default async function InventoryPage() {
             Warehouse balances, low-stock status, and operational overview.
           </p>
         </div>
-        <Link
-          href="/inventory/catalog"
-          className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d5f56]"
-        >
-          View Catalog
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/inventory/catalog"
+            className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d5f56]"
+          >
+            Catalog
+          </Link>
+          <Link
+            href="/inventory/transfers"
+            className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d5f56]"
+          >
+            Transfers
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
