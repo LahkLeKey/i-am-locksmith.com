@@ -1,4 +1,5 @@
 import type {JobQueuePriority, JobQueueStatus} from '@/lib/dashboard/types';
+import {listInventorySkuLocationBalances, reserveInventoryForJob} from '@/lib/inventory/ledger-repository';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
 import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
@@ -82,7 +83,7 @@ type DeleteJobRequest = {
 const ALLOWED_PRIORITIES: JobQueuePriority[] =
     ['low', 'normal', 'high', 'urgent'];
 const ALLOWED_STATUSES: JobQueueStatus[] =
-  ['queued', 'scheduled', 'in_progress', 'blocked', 'closed', 'completed'];
+    ['queued', 'scheduled', 'in_progress', 'blocked', 'closed', 'completed'];
 
 function computePartEstimateFromSkus(
     requiredSkus: string[],
@@ -434,13 +435,23 @@ export async function PATCH(request: Request) {
           {error: `No part found for SKU ${inventorySku}`}, {status: 404});
     }
 
-    if (part.onHand < reserveQuantity) {
+    const skuLocationBalances = await listInventorySkuLocationBalances(authResult.orgId);
+    const balance = skuLocationBalances.find(
+      (entry) => entry.sku.toLowerCase() === part.sku.toLowerCase() &&
+        entry.location.toLowerCase() === part.location.toLowerCase());
+    const availableQuantity = balance ? balance.available : part.onHand;
+
+    if (availableQuantity < reserveQuantity) {
       return NextResponse.json(
-          {error: `Only ${part.onHand} on hand for ${part.sku}`},
+        {error: `Only ${availableQuantity} available for ${part.sku}`},
           {status: 400});
     }
 
-    await updateInventoryPart(part.id, {onHand: part.onHand - reserveQuantity});
+    await reserveInventoryForJob(authResult.orgId, part.sku, part.location, {
+      jobId,
+      quantity: reserveQuantity,
+      note: `Reserved for job ${jobId}`,
+    });
 
     const nextRequiredSkus = current.requiredSkus.includes(part.sku) ?
         current.requiredSkus :

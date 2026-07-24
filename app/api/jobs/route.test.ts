@@ -11,6 +11,11 @@ vi.mock('@/lib/inventory/parts-repository', () => ({
                                               updateInventoryPart: vi.fn(),
                                             }));
 
+vi.mock('@/lib/inventory/ledger-repository', () => ({
+                                              listInventorySkuLocationBalances: vi.fn(),
+                                              reserveInventoryForJob: vi.fn(),
+                                            }));
+
 vi.mock('@/lib/jobs/repository', () => ({
                                    createJobRecord: vi.fn(),
                                    deleteJobRecord: vi.fn(),
@@ -25,6 +30,7 @@ vi.mock('@/lib/technicians/repository', () => ({
 
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
+import {listInventorySkuLocationBalances, reserveInventoryForJob} from '@/lib/inventory/ledger-repository';
 import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
 import {getTechnicianById} from '@/lib/technicians/repository';
 
@@ -36,6 +42,8 @@ const mockedGetAuthorizationContext = vi.mocked(getAuthorizationContext);
 const mockedListInventoryParts = vi.mocked(listInventoryParts);
 const mockedCreateInventoryPart = vi.mocked(createInventoryPart);
 const mockedUpdateInventoryPart = vi.mocked(updateInventoryPart);
+const mockedListInventorySkuLocationBalances = vi.mocked(listInventorySkuLocationBalances);
+const mockedReserveInventoryForJob = vi.mocked(reserveInventoryForJob);
 
 const mockedCreateJobRecord = vi.mocked(createJobRecord);
 const mockedDeleteJobRecord = vi.mocked(deleteJobRecord);
@@ -88,12 +96,14 @@ describe('jobs api route', () => {
     mockedListInventoryParts.mockReset();
     mockedCreateInventoryPart.mockReset();
     mockedUpdateInventoryPart.mockReset();
+    mockedListInventorySkuLocationBalances.mockReset();
 
     mockedCreateJobRecord.mockReset();
     mockedDeleteJobRecord.mockReset();
     mockedGetJobRecord.mockReset();
     mockedListJobRecords.mockReset();
     mockedUpdateJobRecord.mockReset();
+    mockedReserveInventoryForJob.mockReset();
 
     mockedGetAuthorizationContext.mockResolvedValue({
       userId: 'user_1',
@@ -143,6 +153,19 @@ describe('jobs api route', () => {
     mockedUpdateInventoryPart.mockResolvedValue({id: 'part_1'} as never);
     mockedCreateInventoryPart.mockResolvedValue(
         {id: 'part_2', sku: 'SKU-NEW'} as never);
+    mockedListInventorySkuLocationBalances.mockResolvedValue([
+      {
+        orgId: 'org_1',
+        sku: 'SKU-1',
+        location: 'Van 1',
+        onHand: 8,
+        reserved: 0,
+        available: 8,
+        entryCount: 0,
+        lastUpdatedAt: '2026-07-20T10:00:00.000Z',
+      },
+    ] as never);
+    mockedReserveInventoryForJob.mockResolvedValue({id: 'ledger_1'} as never);
   });
 
   it('creates a job with quote fields', async () => {
@@ -295,7 +318,8 @@ describe('jobs api route', () => {
     const response = await PATCH(request);
 
     expect(response?.status).toBe(200);
-    expect(mockedUpdateInventoryPart).toHaveBeenCalledOnce();
+    expect(mockedReserveInventoryForJob).toHaveBeenCalledOnce();
+    expect(mockedUpdateInventoryPart).not.toHaveBeenCalled();
     expect(mockedUpdateJobRecord)
         .toHaveBeenCalledWith(
             'org_1',
@@ -327,7 +351,38 @@ describe('jobs api route', () => {
     const response = await PATCH(request);
 
     expect(response?.status).toBe(404);
-    expect(mockedUpdateInventoryPart).not.toHaveBeenCalled();
+    expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects reserve requests when available quantity is exhausted', async () => {
+    mockedListInventorySkuLocationBalances.mockResolvedValue([
+      {
+        orgId: 'org_1',
+        sku: 'SKU-1',
+        location: 'Van 1',
+        onHand: 8,
+        reserved: 8,
+        available: 0,
+        entryCount: 1,
+        lastUpdatedAt: '2026-07-20T10:00:00.000Z',
+      },
+    ] as never);
+
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: 'JOB-1',
+        inventoryAction: 'reserve',
+        inventorySku: 'SKU-1',
+        reserveQuantity: 1,
+      }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(400);
+    expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
   });
 
   it('returns 400 when reserve quantity is invalid', async () => {
@@ -345,7 +400,7 @@ describe('jobs api route', () => {
     const response = await PATCH(request);
 
     expect(response?.status).toBe(400);
-    expect(mockedUpdateInventoryPart).not.toHaveBeenCalled();
+    expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
   });
 
   it('rejects completed status in generic update route', async () => {

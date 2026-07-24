@@ -48,6 +48,23 @@ model InventoryPart {
     @@index([orgId, location])
 }
 
+model InventoryLedgerEntry {
+    id            String   @id @default(cuid())
+    orgId         String
+    sku           String
+    location      String
+    delta         Int
+    kind          String
+    note          String?
+    referenceId   String?
+    referenceType String?
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    @@index([orgId, sku, location, createdAt])
+    @@index([orgId, kind, createdAt])
+}
+
 model JobRecord {
     id                     String    @id @default(cuid())
     jobNumber              String

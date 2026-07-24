@@ -193,8 +193,9 @@ export function InventoryPartsPanel({ initialParts }: { initialParts: InventoryC
                                     <p className="mt-2 text-[11px] text-[#475569]">{part.compatibilityNote}</p>
                                 </td>
                                 <td className="px-3 py-3">
-                                    <p className="font-semibold text-[#0f172a]">{part.onHand} / {part.reorderPoint}</p>
-                                    <p className="text-[11px] text-[#64748b]">Order {part.suggestedOrderQty} · {part.severity}</p>
+                                    <p className="font-semibold text-[#0f172a]">Available {part.available} / On hand {part.onHand}</p>
+                                    <p className="text-[11px] text-[#64748b]">Reserved {part.reserved} · Reorder {part.reorderPoint} · Order {part.suggestedOrderQty}</p>
+                                    <p className="text-[11px] text-[#64748b]">{part.severity}</p>
                                 </td>
                                 <td className="px-3 py-3">
                                     <button

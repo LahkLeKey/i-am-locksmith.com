@@ -1,6 +1,7 @@
 import { requireRouteContext } from '@/lib/rbac/guard';
 import { formatSchedule } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';
+import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-repository';
 import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
 
@@ -45,9 +46,23 @@ export default async function InventoryPage() {
 
   const dashboardData = await getDashboardData({ orgId });
   const inventoryParts = await listInventoryParts(orgId);
+  const inventoryBalances = await listInventorySkuLocationBalances(orgId);
+  const inventoryBalanceLookup = new Map(
+    inventoryBalances.map((entry) => [`${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`, entry]),
+  );
   const inventory = buildInventoryReadModel(
     dashboardData,
-    inventoryParts.map(toInventoryPartSource));
+    inventoryParts.map((part) => {
+      const balance = inventoryBalanceLookup.get(
+        `${part.sku.toLowerCase()}::${part.location.toLowerCase()}`,
+      );
+
+      return {
+        ...toInventoryPartSource(part),
+        reserved: balance?.reserved ?? 0,
+        available: balance ? part.onHand - balance.reserved : part.onHand,
+      };
+    }));
 
   const serviceLineBadgeClasses = {
     automotive: 'bg-[#ecfeff] text-[#155e75]',
