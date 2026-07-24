@@ -2,17 +2,12 @@ import { requireRouteContext } from '@/lib/rbac/guard';
 import { formatSchedule } from '@/lib/dashboard/format';
 import { getDashboardData } from '@/lib/dashboard/repository';
 import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-repository';
-import {listInventoryExceptions} from '@/lib/inventory/exceptions-repository';
 import {
   listIncomingQuantitiesBySkuLocation,
-  listOpenReplenishmentRequests,
 } from '@/lib/inventory/replenishment-repository';
 import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
-import { InventoryReplenishmentPanel } from '@/app/components/inventory-replenishment-panel';
-import {InventoryExceptionPanel} from '@/app/components/inventory-exception-panel';
 
-import { InventoryAlertsCrudPanel } from '@/app/components/inventory-alerts-crud-panel';
 import { InventoryPartsPanel } from '@/app/components/inventory-parts-panel';
 
 const INVENTORY_SERVICE_LINES = ['automotive', 'mobile', 'shop'] as const;
@@ -54,8 +49,6 @@ export default async function InventoryPage() {
   const dashboardData = await getDashboardData({ orgId });
   const inventoryParts = await listInventoryParts(orgId);
   const inventoryBalances = await listInventorySkuLocationBalances(orgId);
-  const inventoryExceptions = await listInventoryExceptions(orgId);
-  const openRequests = await listOpenReplenishmentRequests(orgId);
   const incomingBySkuLocation = await listIncomingQuantitiesBySkuLocation(orgId);
   const inventoryBalanceLookup = new Map(
     inventoryBalances.map((entry) => [`${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`, entry]),
@@ -87,7 +80,7 @@ export default async function InventoryPage() {
     <section className="space-y-6">
       <h1 className="text-2xl font-semibold">Inventory</h1>
       <p className="text-sm text-[#4b5563]">
-        Low-stock queue, workflow coverage, and catalog management sourced from persisted inventory signals.
+        Warehouse balances, low-stock status, and catalog management sourced from persisted inventory signals.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -166,16 +159,7 @@ export default async function InventoryPage() {
         </article>
       </div>
 
-      <InventoryReplenishmentPanel
-        queue={inventory.lowStockQueue}
-        openRequests={openRequests}
-      />
-
-      <InventoryExceptionPanel exceptions={inventoryExceptions} />
-
       <InventoryPartsPanel initialParts={inventory.catalogRows} />
-
-      <InventoryAlertsCrudPanel initialAlerts={dashboardData.replenishmentAlerts} />
     </section>
   );
 }

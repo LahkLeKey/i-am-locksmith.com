@@ -102,6 +102,86 @@ describe('inventory exceptions repository', () => {
     expect(mockedListInventoryLedgerEntries).not.toHaveBeenCalled();
   });
 
+  it('attributes the exception to the entry that pushed the balance negative',
+     async () => {
+       mockedListInventorySkuLocationBalances.mockResolvedValue([
+         {
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           onHand: 1,
+           reserved: 4,
+           available: -3,
+           entryCount: 5,
+           lastUpdatedAt: '2026-07-24T01:10:00.000Z',
+         },
+       ] as never);
+
+       mockedListInventoryLedgerEntries.mockResolvedValue([
+         {
+           id: 'entry_1',
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           delta: 1,
+           kind: 'opening_balance',
+           note: 'Seeded by user_1',
+           referenceId: null,
+           referenceType: null,
+           createdAt: '2026-07-24T00:00:00.000Z',
+           updatedAt: '2026-07-24T00:00:00.000Z',
+         },
+         {
+           id: 'entry_2',
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           delta: 2,
+           kind: 'reservation',
+           note: 'Reserved for job JOB-1 by user_2',
+           referenceId: 'JOB-1',
+           referenceType: 'job',
+           createdAt: '2026-07-24T00:05:00.000Z',
+           updatedAt: '2026-07-24T00:05:00.000Z',
+         },
+         {
+           id: 'entry_3',
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           delta: 1,
+           kind: 'reservation',
+           note: 'Reserved for job JOB-2 by user_3',
+           referenceId: 'JOB-2',
+           referenceType: 'job',
+           createdAt: '2026-07-24T00:06:00.000Z',
+           updatedAt: '2026-07-24T00:06:00.000Z',
+         },
+         {
+           id: 'entry_4',
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           delta: -1,
+           kind: 'reservation_release',
+           note: 'Released hold for job JOB-3 by user_4',
+           referenceId: 'JOB-3',
+           referenceType: 'job',
+           createdAt: '2026-07-24T00:10:00.000Z',
+           updatedAt: '2026-07-24T00:10:00.000Z',
+         },
+       ] as never);
+
+       const exceptions = await listInventoryExceptions('org_1');
+
+       expect(exceptions[0]).toMatchObject({
+         sourceKind: 'reservation',
+         sourceReferenceId: 'JOB-1',
+         sourceReferenceType: 'job',
+         actor: 'user_2',
+       });
+     });
+
   it('reconciles by adjustment with append-only ledger write', async () => {
     await reconcileInventoryException('org_1', {
       actionType: 'adjustment',
@@ -124,6 +204,71 @@ describe('inventory exceptions repository', () => {
       referenceType: 'inventory_exception',
     });
   });
+
+  it('orders replay by timestamps before deriving the causative entry',
+     async () => {
+       mockedListInventorySkuLocationBalances.mockResolvedValue([
+         {
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           onHand: 1,
+           reserved: 3,
+           available: -2,
+           entryCount: 3,
+           lastUpdatedAt: '2026-07-24T01:00:00.000Z',
+         },
+       ] as never);
+
+       mockedListInventoryLedgerEntries.mockResolvedValue([
+         {
+           id: 'entry_3',
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           delta: 1,
+           kind: 'reservation',
+           note: 'Reserved for job JOB-2 by user_3',
+           referenceId: 'JOB-2',
+           referenceType: 'job',
+           createdAt: '2026-07-24T00:06:00.000Z',
+           updatedAt: '2026-07-24T00:06:00.000Z',
+         },
+         {
+           id: 'entry_1',
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           delta: 1,
+           kind: 'opening_balance',
+           note: 'Seeded by user_1',
+           referenceId: null,
+           referenceType: null,
+           createdAt: '2026-07-24T00:00:00.000Z',
+           updatedAt: '2026-07-24T00:00:00.000Z',
+         },
+         {
+           id: 'entry_2',
+           orgId: 'org_1',
+           sku: 'SKU-NEG',
+           location: 'Warehouse A',
+           delta: 2,
+           kind: 'reservation',
+           note: 'Reserved for job JOB-1 by user_2',
+           referenceId: 'JOB-1',
+           referenceType: 'job',
+           createdAt: '2026-07-24T00:05:00.000Z',
+           updatedAt: '2026-07-24T00:05:00.000Z',
+         },
+       ] as never);
+
+       const exceptions = await listInventoryExceptions('org_1');
+
+       expect(exceptions[0]).toMatchObject({
+         sourceReferenceId: 'JOB-1',
+         actor: 'user_2',
+       });
+     });
 
   it('reconciles by reservation correction using release event', async () => {
     await reconcileInventoryException('org_1', {

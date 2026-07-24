@@ -62,6 +62,7 @@ type UpdateJobRequest = {
   }>;
   inventoryAction?: 'reserve' | 'create_inventory';
   inventorySku?: string;
+  inventoryLocation?: string;
   reserveQuantity?: number;
   createInventory?: {
     itemName?: string;
@@ -407,11 +408,13 @@ export async function PATCH(request: Request) {
     }
 
     const inventorySku = body.inventorySku?.trim();
+        const inventoryLocation = body.inventoryLocation?.trim();
     const reserveQuantity = body.reserveQuantity;
 
-    if (!inventorySku) {
+        if (!inventorySku || !inventoryLocation) {
       return NextResponse.json(
-          {error: 'inventorySku is required'}, {status: 400});
+          {error: 'inventorySku and inventoryLocation are required'},
+          {status: 400});
     }
 
     if (!Number.isFinite(reserveQuantity) || !reserveQuantity ||
@@ -428,11 +431,16 @@ export async function PATCH(request: Request) {
 
     const parts = await listInventoryParts(authResult.orgId);
     const part = parts.find(
-        (entry) => entry.sku.toLowerCase() === inventorySku.toLowerCase());
+        (entry) => entry.sku.toLowerCase() === inventorySku.toLowerCase() &&
+            entry.location.toLowerCase() === inventoryLocation.toLowerCase());
 
     if (!part) {
       return NextResponse.json(
-          {error: `No part found for SKU ${inventorySku}`}, {status: 404});
+          {
+            error:
+                `No part found for SKU ${inventorySku} at ${inventoryLocation}`
+          },
+          {status: 404});
     }
 
     const skuLocationBalances =

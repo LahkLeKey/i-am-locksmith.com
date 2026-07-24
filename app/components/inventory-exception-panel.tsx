@@ -72,7 +72,7 @@ export function InventoryExceptionPanel(
           </p>
         </div>
 
-        <div className="overflow-hidden rounded-md border border-[#e5e7eb]">
+        <div className="overflow-x-auto rounded-md border border-[#e5e7eb]">
           <table className="min-w-full divide-y divide-[#e5e7eb] text-left text-xs">
             <thead className="bg-[#f8fafc] text-[#475569]">
               <tr>

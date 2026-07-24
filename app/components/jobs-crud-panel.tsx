@@ -22,6 +22,12 @@ type InventoryLookupPart = {
     estimatedUnitCost: number;
     location: string;
     onHand: number;
+    available: number;
+};
+
+type SelectedInventoryLookup = {
+    sku: string;
+    location: string;
 };
 
 type TechnicianOption = {
@@ -452,6 +458,7 @@ export function JobsCrudPanel({
     const [isActiveWorkflowOpen, setIsActiveWorkflowOpen] = useState(false);
 
     const [reserveSku, setReserveSku] = useState<Record<string, string>>({});
+    const [reserveSelection, setReserveSelection] = useState<Record<string, SelectedInventoryLookup>>({});
     const [reserveQty, setReserveQty] = useState<Record<string, number>>({});
     const [createSku, setCreateSku] = useState<Record<string, string>>({});
     const [createItemName, setCreateItemName] = useState<Record<string, string>>({});
@@ -486,8 +493,8 @@ export function JobsCrudPanel({
     const sortedInventoryLookupParts = useMemo(
         () =>
             [...inventoryLookupParts].sort((left, right) => {
-                if (right.onHand !== left.onHand) {
-                    return right.onHand - left.onHand;
+                if (right.available !== left.available) {
+                    return right.available - left.available;
                 }
 
                 return left.sku.localeCompare(right.sku);
@@ -863,7 +870,7 @@ export function JobsCrudPanel({
                                                                 <span className="font-semibold text-[#0f172a]">{part.sku}</span>
                                                                 <span className="text-[#475569]">{part.itemName}</span>
                                                             </span>
-                                                            <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                                            <span className="text-[11px] text-[#64748b]">{part.location} · Available {part.available} / On hand {part.onHand}</span>
                                                         </label>
                                                     );
                                                 })
@@ -1421,7 +1428,7 @@ export function JobsCrudPanel({
                                                                                     <span className="font-semibold text-[#0f172a]">{part.sku}</span>
                                                                                     <span className="text-[#475569]">{part.itemName}</span>
                                                                                 </span>
-                                                                                <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                                                                <span className="text-[11px] text-[#64748b]">{part.location} · Available {part.available} / On hand {part.onHand}</span>
                                                                             </label>
                                                                         );
                                                                     });
@@ -1497,6 +1504,13 @@ export function JobsCrudPanel({
                                                                             className="flex w-full items-center justify-between gap-2 border-b border-[#e5e7eb] px-3 py-2 text-left text-xs last:border-b-0 hover:bg-white"
                                                                             onClick={() => {
                                                                                 setReserveSku((current) => ({ ...current, [selectedJob.id]: part.sku }));
+                                                                                setReserveSelection((current) => ({
+                                                                                    ...current,
+                                                                                    [selectedJob.id]: {
+                                                                                        sku: part.sku,
+                                                                                        location: part.location,
+                                                                                    },
+                                                                                }));
                                                                                 setLookupQuery((current) => ({ ...current, [selectedJob.id]: part.sku }));
                                                                             }}
                                                                         >
@@ -1504,21 +1518,20 @@ export function JobsCrudPanel({
                                                                                 <span className="font-semibold text-[#0f172a]">{part.sku}</span>
                                                                                 <span className="ml-2 text-[#475569]">{part.itemName}</span>
                                                                             </span>
-                                                                            <span className="text-[11px] text-[#64748b]">{part.location} · On hand {part.onHand}</span>
+                                                                            <span className="text-[11px] text-[#64748b]">{part.location} · Available {part.available} / On hand {part.onHand}</span>
                                                                         </button>
                                                                     ));
                                                                 })()}
                                                             </div>
                                                             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-end">
-                                                                <label className="space-y-1.5">
-                                                                    <span className="text-[11px] text-[#475569]">SKU to Reserve</span>
-                                                                    <input
-                                                                        value={reserveSku[selectedJob.id] ?? ''}
-                                                                        onChange={(event) => setReserveSku((current) => ({ ...current, [selectedJob.id]: event.target.value }))}
-                                                                        placeholder="SKU to reserve"
-                                                                        className="w-full rounded border border-[#d1d5db] px-3 py-2 text-xs"
-                                                                    />
-                                                                </label>
+                                                                <div className="space-y-1.5">
+                                                                    <span className="text-[11px] text-[#475569]">Selected Inventory</span>
+                                                                    <div className="rounded border border-[#d1d5db] bg-[#f8fafc] px-3 py-2 text-xs text-[#334155]">
+                                                                        {reserveSelection[selectedJob.id] ?
+                                                                            `${reserveSelection[selectedJob.id]?.sku} at ${reserveSelection[selectedJob.id]?.location}` :
+                                                                            'Choose a row above'}
+                                                                    </div>
+                                                                </div>
                                                                 <label className="space-y-1.5">
                                                                     <span className="text-[11px] text-[#475569]">Reserve Quantity</span>
                                                                     <input
@@ -1531,7 +1544,7 @@ export function JobsCrudPanel({
                                                                 </label>
                                                                 <button
                                                                     type="button"
-                                                                    disabled={isPending}
+                                                                    disabled={isPending || !reserveSelection[selectedJob.id]}
                                                                     className="rounded border border-[#86efac] bg-[#f0fdf4] px-3 py-2 text-xs font-semibold text-[#166534]"
                                                                     onClick={async () => {
                                                                         await runMutation({
@@ -1540,7 +1553,8 @@ export function JobsCrudPanel({
                                                                             body: JSON.stringify({
                                                                                 id: selectedJob.id,
                                                                                 inventoryAction: 'reserve',
-                                                                                inventorySku: reserveSku[selectedJob.id] ?? '',
+                                                                                inventorySku: reserveSelection[selectedJob.id]?.sku ?? '',
+                                                                                inventoryLocation: reserveSelection[selectedJob.id]?.location ?? '',
                                                                                 reserveQuantity: reserveQty[selectedJob.id] ?? 1,
                                                                             }),
                                                                         }, '/api/jobs');
@@ -1549,6 +1563,11 @@ export function JobsCrudPanel({
                                                                     Reserve
                                                                 </button>
                                                             </div>
+                                                            {reserveSelection[selectedJob.id]?.location ? (
+                                                                <p className="text-[11px] text-[#64748b]">
+                                                                    Reserving from {reserveSelection[selectedJob.id]?.location}
+                                                                </p>
+                                                            ) : null}
                                                         </InventoryActionCard>
 
                                                         <InventoryActionCard

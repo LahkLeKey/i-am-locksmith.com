@@ -313,6 +313,7 @@ describe('jobs api route', () => {
         id: 'JOB-1',
         inventoryAction: 'reserve',
         inventorySku: 'SKU-1',
+        inventoryLocation: 'Van 1',
         reserveQuantity: 2,
       }),
     });
@@ -346,6 +347,7 @@ describe('jobs api route', () => {
         id: 'JOB-1',
         inventoryAction: 'reserve',
         inventorySku: 'MISSING',
+        inventoryLocation: 'Van 1',
         reserveQuantity: 1,
       }),
     });
@@ -378,6 +380,7 @@ describe('jobs api route', () => {
            id: 'JOB-1',
            inventoryAction: 'reserve',
            inventorySku: 'SKU-1',
+           inventoryLocation: 'Van 1',
            reserveQuantity: 1,
          }),
        });
@@ -396,6 +399,7 @@ describe('jobs api route', () => {
         id: 'JOB-1',
         inventoryAction: 'reserve',
         inventorySku: 'SKU-1',
+        inventoryLocation: 'Van 1',
         reserveQuantity: 0,
       }),
     });
@@ -405,6 +409,26 @@ describe('jobs api route', () => {
     expect(response?.status).toBe(400);
     expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
   });
+
+  it('returns 404 when reserve location does not match the sku location',
+     async () => {
+       const request = new Request('http://localhost/api/jobs', {
+         method: 'PATCH',
+         headers: {'content-type': 'application/json'},
+         body: JSON.stringify({
+           id: 'JOB-1',
+           inventoryAction: 'reserve',
+           inventorySku: 'SKU-1',
+           inventoryLocation: 'Warehouse A',
+           reserveQuantity: 1,
+         }),
+       });
+
+       const response = await PATCH(request);
+
+       expect(response?.status).toBe(404);
+       expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
+     });
 
   it('rejects completed status in generic update route', async () => {
     const request = new Request('http://localhost/api/jobs', {
