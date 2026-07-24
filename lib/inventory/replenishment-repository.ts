@@ -1,5 +1,7 @@
 import {prisma} from '@/lib/db/prisma';
 
+import {appendInventoryLedgerEntry} from './ledger-repository';
+
 export type ReplenishmentRequestRecord = {
   id: string;
   orgId: string;
@@ -21,6 +23,26 @@ export type ReplenishmentRequestInput = {
   requestedQuantity: number;
   requestedByUserId: string;
   orderingNotes?: string | null;
+};
+
+export type ReceiveReplenishmentRequestInput = {
+  requestId: string;
+  receivedQuantity?: number;
+  receivedByUserId: string;
+  receivingNotes?: string | null;
+};
+
+export type ReceiveReplenishmentRequestResult = {
+  receivedRequest: ReplenishmentRequestRecord;
+  remainingOpenRequest: ReplenishmentRequestRecord | null;
+  receivedQuantity: number;
+};
+
+export type ReceiveReplenishmentRequestErrorCode =
+    'REPLENISHMENT_REQUEST_NOT_FOUND'|'INVALID_RECEIVE_QUANTITY';
+
+export type ReceiveReplenishmentRequestError = Error&{
+  code: ReceiveReplenishmentRequestErrorCode;
 };
 
 export type IncomingQuantityRow = {
@@ -47,6 +69,13 @@ type ReplenishmentRequestClient = {
       location: string;
       _sum: {requestedQuantity: number | null};
     }>>;
+    findFirst: (args: {
+      where: {id: string; orgId: string; status: 'open'};
+    }) => Promise<ReplenishmentRequestRow | null>;
+    update: (args: {
+      where: {id: string};
+      data: {status: 'received'};
+    }) => Promise<ReplenishmentRequestRow>;
   };
 };
 
@@ -80,6 +109,14 @@ function toRecord(row: ReplenishmentRequestRow): ReplenishmentRequestRecord {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+function buildReceiveError(
+    code: ReceiveReplenishmentRequestErrorCode,
+    message: string): ReceiveReplenishmentRequestError {
+  const error = new Error(message) as ReceiveReplenishmentRequestError;
+  error.code = code;
+  return error;
 }
 
 async function getClient(): Promise<ReplenishmentRequestClient> {
@@ -128,4 +165,82 @@ export async function listIncomingQuantitiesBySkuLocation(orgId: string):
                        location: row.location,
                        incomingQuantity: toFiniteNumber(row._sum.requestedQuantity),
                      }));
+}
+
+export async function receiveReplenishmentRequest(
+    orgId: string,
+    input: ReceiveReplenishmentRequestInput):
+    Promise<ReceiveReplenishmentRequestResult> {
+  const client = await getClient();
+  const request = await client.replenishmentRequest.findFirst({
+    where: {
+      id: input.requestId,
+      orgId,
+      status: 'open',
+    },
+  });
+
+  if (!request) {
+    throw buildReceiveError(
+        'REPLENISHMENT_REQUEST_NOT_FOUND',
+        'Replenishment request not found or no longer open');
+  }
+
+  const quantityToReceive =
+      input.receivedQuantity ?? toFiniteNumber(request.requestedQuantity);
+
+  if (!Number.isInteger(quantityToReceive) || quantityToReceive <= 0) {
+    throw buildReceiveError(
+        'INVALID_RECEIVE_QUANTITY',
+        'receivedQuantity must be a whole number greater than 0');
+  }
+
+  const requestedQuantity = toFiniteNumber(request.requestedQuantity);
+  if (quantityToReceive > requestedQuantity) {
+    throw buildReceiveError(
+        'INVALID_RECEIVE_QUANTITY',
+        `receivedQuantity (${quantityToReceive}) cannot exceed requested quantity (${requestedQuantity})`);
+  }
+
+  await appendInventoryLedgerEntry(orgId, {
+    sku: request.sku,
+    location: request.location,
+    delta: quantityToReceive,
+    kind: 'replenishment_receive',
+    note: input.receivingNotes?.trim() ||
+        `Received replenishment request ${request.id} (${quantityToReceive}) by ${input.receivedByUserId}`,
+    referenceId: request.id,
+    referenceType: 'replenishment_request',
+  });
+
+  const receivedRow = await client.replenishmentRequest.update({
+    where: {id: request.id},
+    data: {status: 'received'},
+  });
+
+  const remainingQuantity = requestedQuantity - quantityToReceive;
+  let remainingOpenRequest: ReplenishmentRequestRecord | null = null;
+
+  if (remainingQuantity > 0) {
+    const remainingRow = await client.replenishmentRequest.create({
+      data: {
+        orgId,
+        sku: request.sku,
+        location: request.location,
+        supplier: request.supplier,
+        requestedQuantity: remainingQuantity,
+        status: 'open',
+        requestedByUserId: request.requestedByUserId,
+        orderingNotes:
+            `Remaining quantity from ${request.id} after receiving ${quantityToReceive}`,
+      },
+    });
+    remainingOpenRequest = toRecord(remainingRow);
+  }
+
+  return {
+    receivedRequest: toRecord(receivedRow),
+    remainingOpenRequest,
+    receivedQuantity: quantityToReceive,
+  };
 }

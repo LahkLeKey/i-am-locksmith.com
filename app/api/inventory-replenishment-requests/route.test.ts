@@ -8,18 +8,25 @@ vi.mock('@/lib/rbac/server', () => ({
 vi.mock('@/lib/inventory/replenishment-repository', () => ({
   createReplenishmentRequest: vi.fn(),
   listOpenReplenishmentRequests: vi.fn(),
+  receiveReplenishmentRequest: vi.fn(),
 }));
 
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
-import {createReplenishmentRequest, listOpenReplenishmentRequests} from '@/lib/inventory/replenishment-repository';
+import {
+  createReplenishmentRequest,
+  listOpenReplenishmentRequests,
+  receiveReplenishmentRequest,
+} from '@/lib/inventory/replenishment-repository';
 
-import {GET, POST} from './route';
+import {GET, PATCH, POST} from './route';
 
 const mockedAuthorizePermission = vi.mocked(authorizePermission);
 const mockedGetAuthorizationContext = vi.mocked(getAuthorizationContext);
 const mockedCreateReplenishmentRequest = vi.mocked(createReplenishmentRequest);
 const mockedListOpenReplenishmentRequests = vi.mocked(
     listOpenReplenishmentRequests);
+const mockedReceiveReplenishmentRequest = vi.mocked(
+  receiveReplenishmentRequest);
 
 describe('inventory replenishment requests api route', () => {
   beforeEach(() => {
@@ -27,6 +34,7 @@ describe('inventory replenishment requests api route', () => {
     mockedGetAuthorizationContext.mockReset();
     mockedCreateReplenishmentRequest.mockReset();
     mockedListOpenReplenishmentRequests.mockReset();
+    mockedReceiveReplenishmentRequest.mockReset();
 
     mockedGetAuthorizationContext.mockResolvedValue({
       userId: 'user_1',
@@ -39,6 +47,24 @@ describe('inventory replenishment requests api route', () => {
 
     mockedAuthorizePermission.mockResolvedValue({state: 'authorized'});
     mockedListOpenReplenishmentRequests.mockResolvedValue([]);
+
+    mockedReceiveReplenishmentRequest.mockResolvedValue({
+      receivedRequest: {
+        id: 'req_1',
+        orgId: 'org_1',
+        sku: 'SKU-1',
+        location: 'Warehouse A',
+        supplier: 'Supplier A',
+        requestedQuantity: 8,
+        status: 'received',
+        requestedByUserId: 'user_1',
+        orderingNotes: null,
+        createdAt: '2026-07-24T01:00:00.000Z',
+        updatedAt: '2026-07-24T01:10:00.000Z',
+      },
+      remainingOpenRequest: null,
+      receivedQuantity: 8,
+    });
   });
 
   it('lists open replenishment requests', async () => {
@@ -207,5 +233,106 @@ describe('inventory replenishment requests api route', () => {
 
     expect(response?.status).toBe(403);
     expect(mockedCreateReplenishmentRequest).not.toHaveBeenCalled();
+  });
+
+  it('receives stock against an open replenishment request', async () => {
+    const request = new Request(
+        'http://localhost/api/inventory-replenishment-requests',
+        {
+          method: 'PATCH',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({
+            requestId: 'req_1',
+            receivedQuantity: 6,
+            receivingNotes: 'PO #123 received',
+          }),
+        });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedReceiveReplenishmentRequest).toHaveBeenCalledWith('org_1', {
+      requestId: 'req_1',
+      receivedQuantity: 6,
+      receivingNotes: 'PO #123 received',
+      receivedByUserId: 'user_1',
+    });
+  });
+
+  it('rejects receive without request id', async () => {
+    const request = new Request(
+        'http://localhost/api/inventory-replenishment-requests',
+        {
+          method: 'PATCH',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({
+            receivedQuantity: 6,
+          }),
+        });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(400);
+    expect(mockedReceiveReplenishmentRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid receive quantity', async () => {
+    const request = new Request(
+        'http://localhost/api/inventory-replenishment-requests',
+        {
+          method: 'PATCH',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({
+            requestId: 'req_1',
+            receivedQuantity: 0,
+          }),
+        });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(400);
+    expect(mockedReceiveReplenishmentRequest).not.toHaveBeenCalled();
+  });
+
+  it('maps missing request receive error to 404', async () => {
+    const error = new Error('missing') as Error&{code?: string};
+    error.code = 'REPLENISHMENT_REQUEST_NOT_FOUND';
+    mockedReceiveReplenishmentRequest.mockRejectedValueOnce(error);
+
+    const request = new Request(
+        'http://localhost/api/inventory-replenishment-requests',
+        {
+          method: 'PATCH',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({
+            requestId: 'req_missing',
+            receivedQuantity: 2,
+          }),
+        });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(404);
+  });
+
+  it('maps invalid receive quantity error to 400', async () => {
+    const error = new Error('invalid qty') as Error&{code?: string};
+    error.code = 'INVALID_RECEIVE_QUANTITY';
+    mockedReceiveReplenishmentRequest.mockRejectedValueOnce(error);
+
+    const request = new Request(
+        'http://localhost/api/inventory-replenishment-requests',
+        {
+          method: 'PATCH',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({
+            requestId: 'req_1',
+            receivedQuantity: 99,
+          }),
+        });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(400);
   });
 });

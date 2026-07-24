@@ -1,4 +1,8 @@
-import {createReplenishmentRequest, listOpenReplenishmentRequests} from '@/lib/inventory/replenishment-repository';
+import {
+  createReplenishmentRequest,
+  listOpenReplenishmentRequests,
+  receiveReplenishmentRequest,
+} from '@/lib/inventory/replenishment-repository';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {NextResponse} from 'next/server';
 
@@ -10,7 +14,14 @@ type CreateRequestBody = {
   orderingNotes?: string | null;
 };
 
-async function authorize(permission: 'inventory.read'|'inventory.adjust') {
+type ReceiveRequestBody = {
+  requestId?: string;
+  receivedQuantity?: number;
+  receivingNotes?: string | null;
+};
+
+async function authorize(
+  permission: 'inventory.read'|'inventory.adjust'|'inventory.receive') {
   const context = await getAuthorizationContext();
 
   if (!context) {
@@ -94,4 +105,64 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ok: true, request: created}, {status: 201});
+}
+
+export async function PATCH(request: Request) {
+  const authResult = await authorize('inventory.receive');
+
+  if ('error' in authResult) {
+    return authResult.error;
+  }
+
+  let body: ReceiveRequestBody;
+
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({error: 'Invalid JSON payload'}, {status: 400});
+  }
+
+  const requestId = body.requestId?.trim();
+  const receivedQuantity = body.receivedQuantity;
+
+  if (!requestId) {
+    return NextResponse.json({error: 'requestId is required'}, {status: 400});
+  }
+
+  if (receivedQuantity !== undefined &&
+      (!Number.isFinite(receivedQuantity) || !Number.isInteger(receivedQuantity) ||
+       receivedQuantity <= 0)) {
+    return NextResponse.json(
+        {error: 'receivedQuantity must be a whole number greater than 0'},
+        {status: 400});
+  }
+
+  try {
+    const received = await receiveReplenishmentRequest(authResult.orgId, {
+      requestId,
+      receivedQuantity,
+      receivingNotes: body.receivingNotes?.trim() || null,
+      receivedByUserId: authResult.userId,
+    });
+
+    return NextResponse.json({ok: true, ...received});
+  } catch (error) {
+    const typedError = error as Error&{code?: string};
+
+    if (typedError.code === 'REPLENISHMENT_REQUEST_NOT_FOUND') {
+      return NextResponse.json(
+          {error: 'Replenishment request not found or no longer open'},
+          {status: 404});
+    }
+
+    if (typedError.code === 'INVALID_RECEIVE_QUANTITY') {
+      return NextResponse.json(
+          {error: typedError.message || 'Invalid received quantity'},
+          {status: 400});
+    }
+
+    return NextResponse.json(
+        {error: 'Unable to receive replenishment request'},
+        {status: 500});
+  }
 }
