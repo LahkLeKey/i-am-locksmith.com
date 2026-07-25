@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     if (sourceLocation.trim().toLowerCase() ===
-      targetLocation.trim().toLowerCase()) {
+        targetLocation.trim().toLowerCase()) {
       return Response.json(
           {error: 'Source and target locations must be different'},
           {status: 400});

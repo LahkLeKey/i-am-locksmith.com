@@ -2,11 +2,7 @@ import {describe, expect, it} from 'vitest';
 
 import {type DashboardData} from '../dashboard/types';
 
-import {
-  buildInventoryReadModel,
-  consolidateCatalogRowsBySku,
-  projectInventoryPartsByLocation,
-} from './read-model';
+import {buildInventoryReadModel, consolidateCatalogRowsBySku, projectInventoryPartsByLocation,} from './read-model';
 
 const BASE_DATA: DashboardData = {
   generatedAt: '2026-07-20T09:00:00.000Z',
@@ -322,46 +318,50 @@ describe('projectInventoryPartsByLocation', () => {
 });
 
 describe('consolidateCatalogRowsBySku', () => {
-  it('combines warehouse rows into one purchase-order candidate per SKU', () => {
-    const model = buildInventoryReadModel(BASE_DATA, [{
-      id: 'PART-1',
-      sku: 'SKU-1',
-      itemName: 'Cylinder core',
-      serviceLines: ['shop'],
-      estimatedUnitCost: 12,
-      location: 'Garage',
-      onHand: 5,
-      reserved: 1,
-      available: 4,
-      reorderPoint: 10,
-      suggestedOrderQty: 12,
-      supplier: 'Supplier A',
-      severity: 'high',
-      compatibilityNote: '',
-    }, {
-      id: 'PART-1',
-      sku: 'SKU-1',
-      itemName: 'Cylinder core',
-      serviceLines: ['shop'],
-      estimatedUnitCost: 12,
-      location: 'Van 1',
-      onHand: 3,
-      reserved: 0,
-      available: 3,
-      reorderPoint: 10,
-      suggestedOrderQty: 12,
-      supplier: 'Supplier A',
-      severity: 'high',
-      compatibilityNote: '',
-    }]);
+  it('combines warehouse rows into one purchase-order candidate per SKU',
+     () => {
+       const model = buildInventoryReadModel(BASE_DATA, [
+         {
+           id: 'PART-1',
+           sku: 'SKU-1',
+           itemName: 'Cylinder core',
+           serviceLines: ['shop'],
+           estimatedUnitCost: 12,
+           location: 'Garage',
+           onHand: 5,
+           reserved: 1,
+           available: 4,
+           reorderPoint: 10,
+           suggestedOrderQty: 12,
+           supplier: 'Supplier A',
+           severity: 'high',
+           compatibilityNote: '',
+         },
+         {
+           id: 'PART-1',
+           sku: 'SKU-1',
+           itemName: 'Cylinder core',
+           serviceLines: ['shop'],
+           estimatedUnitCost: 12,
+           location: 'Van 1',
+           onHand: 3,
+           reserved: 0,
+           available: 3,
+           reorderPoint: 10,
+           suggestedOrderQty: 12,
+           supplier: 'Supplier A',
+           severity: 'high',
+           compatibilityNote: '',
+         }
+       ]);
 
-    expect(consolidateCatalogRowsBySku(model.catalogRows)).toEqual([
-      expect.objectContaining({
-        sku: 'SKU-1',
-        onHand: 8,
-        reserved: 1,
-        available: 7,
-      }),
-    ]);
-  });
+       expect(consolidateCatalogRowsBySku(model.catalogRows)).toEqual([
+         expect.objectContaining({
+           sku: 'SKU-1',
+           onHand: 8,
+           reserved: 1,
+           available: 7,
+         }),
+       ]);
+     });
 });

@@ -43,9 +43,7 @@ export type InventoryTimelineEvent = {
 };
 
 export type InventoryIncomingQuantity = {
-  sku: string;
-  location: string;
-  incomingQuantity: number;
+  sku: string; location: string; incomingQuantity: number;
 };
 
 export type InventoryReadModelBuildOptions = {
@@ -53,19 +51,12 @@ export type InventoryReadModelBuildOptions = {
 };
 
 export type InventoryLocationBalance = {
-  sku: string;
-  location: string;
-  onHand: number;
-  reserved: number;
+  sku: string; location: string; onHand: number; reserved: number;
   available: number;
 };
 
 export type InventoryQueueEntry = {
-  id: string;
-  sku: string;
-  itemName: string;
-  location: string;
-  supplier: string;
+  id: string; sku: string; itemName: string; location: string; supplier: string;
   severity: ReplenishmentAlert['severity'];
   available: number;
   incomingQuantity: number;
@@ -110,17 +101,17 @@ export function projectInventoryPartsByLocation(
     }
 
     return skuBalances.map((balance) => ({
-      ...part,
-      location: balance.location,
-      onHand: balance.onHand,
-      reserved: balance.reserved,
-      available: balance.available,
-    }));
+                             ...part,
+                             location: balance.location,
+                             onHand: balance.onHand,
+                             reserved: balance.reserved,
+                             available: balance.available,
+                           }));
   });
 }
 
-export function consolidateCatalogRowsBySku(
-    catalogRows: InventoryCatalogRow[]): InventoryCatalogRow[] {
+export function consolidateCatalogRowsBySku(catalogRows: InventoryCatalogRow[]):
+    InventoryCatalogRow[] {
   const consolidated = new Map<string, InventoryCatalogRow>();
 
   for (const row of catalogRows) {
@@ -144,13 +135,12 @@ export function consolidateCatalogRowsBySku(
 }
 
 export function buildInventoryReadModel(
-    dashboardData: DashboardData,
-    inventoryParts: InventoryPartSource[] = [],
+    dashboardData: DashboardData, inventoryParts: InventoryPartSource[] = [],
     options: InventoryReadModelBuildOptions = {}): InventoryReadModel {
   const timeline = buildTimelineEvents(dashboardData.replenishmentAlerts);
-  const catalogRows =
-      buildCatalogRows(inventoryParts.length > 0 ? inventoryParts :
-                                                     dashboardData.replenishmentAlerts);
+  const catalogRows = buildCatalogRows(
+      inventoryParts.length > 0 ? inventoryParts :
+                                  dashboardData.replenishmentAlerts);
   const queue =
       buildQueueFromCatalogRows(catalogRows, options.incomingBySkuLocation);
   const serviceLineSummary = buildServiceLineSummary(catalogRows);
@@ -209,38 +199,42 @@ function buildCatalogRows(parts: Array<ReplenishmentAlert|InventoryPartSource>):
 
 function buildQueueFromCatalogRows(
     catalogRows: InventoryCatalogRow[],
-    incomingBySkuLocation: InventoryIncomingQuantity[] = []):
-    InventoryQueueEntry[] {
-  const incomingLookup = new Map(incomingBySkuLocation.map((entry) => [
-    `${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`,
-    entry.incomingQuantity,
+    incomingBySkuLocation: InventoryIncomingQuantity[] =
+        []): InventoryQueueEntry[] {
+  const incomingLookup = new Map(incomingBySkuLocation.map(
+      (entry) =>
+          [`${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`,
+              entry.incomingQuantity,
   ]));
 
-  const queue = catalogRows
-                    .map((row): InventoryQueueEntry => {
-                      const lookupKey =
-                          `${row.sku.toLowerCase()}::${row.location.toLowerCase()}`;
-                      const incomingQuantity =
-                          incomingLookup.get(lookupKey) ?? 0;
-                      const shortage = Math.max(
-                          0, row.reorderPoint - (row.available + incomingQuantity));
+  const queue =
+      catalogRows
+          .map(
+              (row):
+                  InventoryQueueEntry => {
+                    const lookupKey = `${row.sku.toLowerCase()}::${
+                        row.location.toLowerCase()}`;
+                    const incomingQuantity = incomingLookup.get(lookupKey) ?? 0;
+                    const shortage = Math.max(
+                        0,
+                        row.reorderPoint - (row.available + incomingQuantity));
 
-                      return {
-                        id: row.id,
-                        sku: row.sku,
-                        itemName: row.itemName,
-                        location: row.location,
-                        supplier: row.supplier,
-                        severity: row.severity,
-                        available: row.available,
-                        incomingQuantity,
-                        reorderPoint: row.reorderPoint,
-                        shortage,
-                        suggestedOrderQty: row.suggestedOrderQty,
-                        createdAt: row.createdAt,
-                      };
-                    })
-                    .filter((row) => row.shortage > 0);
+                    return {
+                      id: row.id,
+                      sku: row.sku,
+                      itemName: row.itemName,
+                      location: row.location,
+                      supplier: row.supplier,
+                      severity: row.severity,
+                      available: row.available,
+                      incomingQuantity,
+                      reorderPoint: row.reorderPoint,
+                      shortage,
+                      suggestedOrderQty: row.suggestedOrderQty,
+                      createdAt: row.createdAt,
+                    };
+                  })
+          .filter((row) => row.shortage > 0);
 
   return [...queue].sort((left, right) => {
     const severityComparison =
