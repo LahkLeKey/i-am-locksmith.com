@@ -49,7 +49,8 @@ function transferRequest(quantity: number) {
 }
 
 function transferRequestTo(
-    targetLocation: string, targetLocationType?: string) {
+  targetLocation: string, targetLocationType?: string,
+  geo?: {address: string; latitude: number; longitude: number}) {
   return new Request('http://localhost/api/inventory-transfers', {
     method: 'POST',
     headers: {'content-type': 'application/json'},
@@ -57,6 +58,9 @@ function transferRequestTo(
       sourceLocation: 'Garage',
       targetLocation,
       targetLocationType,
+      targetLocationAddress: geo?.address,
+      targetLocationLatitude: geo?.latitude,
+      targetLocationLongitude: geo?.longitude,
       parts: [{id: 'part_1', quantity: 1}],
     }),
   });
@@ -111,6 +115,9 @@ describe('inventory transfers api route', () => {
       orgId: 'org_1',
       name: 'Testing 123',
       type: 'van',
+      address: null,
+      latitude: null,
+      longitude: null,
     });
   });
 
@@ -186,5 +193,21 @@ describe('inventory transfers api route', () => {
     expect(response.status).toBe(400);
     expect(mockedRegisterInventoryLocation).not.toHaveBeenCalled();
     expect(mockedAppendInventoryLedgerEntry).not.toHaveBeenCalled();
+  });
+
+  it('registers resolved coordinates for a new warehouse location', async () => {
+    const response = await POST(transferRequestTo('North Garage', 'garage', {
+      address: '123 Main Street, Minneapolis, Minnesota',
+      latitude: 44.9778,
+      longitude: -93.265,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockedRegisterInventoryLocation).toHaveBeenCalledWith(
+        'org_1', 'North Garage', 'garage', {
+          address: '123 Main Street, Minneapolis, Minnesota',
+          latitude: 44.9778,
+          longitude: -93.265,
+        });
   });
 });

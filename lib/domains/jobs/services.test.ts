@@ -54,6 +54,7 @@ describe('Jobs Domain Services', () => {
     describe('validateJobDraft', () => {
       it('returns no errors for valid draft', () => {
         const draft: JobDraft = {
+          jobName: 'Main office rekey',
           customerName: 'John Doe',
           site: 'Main Office',
           priority: 'normal',
@@ -212,6 +213,7 @@ describe('Jobs Domain Services', () => {
     describe('canBeQuoted', () => {
       it('returns true when requirements met', () => {
         const draft: JobDraft = {
+          jobName: 'Main office rekey',
           customerName: 'John',
           site: 'Main',
           requiredSkus: ['SKU-001'],
@@ -243,6 +245,7 @@ describe('Jobs Domain Services', () => {
     describe('canBeScheduled', () => {
       it('returns true when fully qualified', () => {
         const draft: JobDraft = {
+          jobName: 'Main office rekey',
           customerName: 'John',
           site: 'Main',
           requiredSkus: ['SKU-001'],

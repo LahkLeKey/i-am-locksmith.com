@@ -70,11 +70,58 @@ model InventoryLocation {
     orgId     String
     name      String
     type      String
+    address   String?
+    latitude  Decimal? @db.Decimal(9, 6)
+    longitude Decimal? @db.Decimal(9, 6)
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     @@unique([orgId, name])
     @@index([orgId, type, name])
+}
+
+model GeoCacheEntry {
+    id                String   @id @default(cuid())
+    cacheKey          String   @unique @db.VarChar(128)
+    namespace         String   @db.VarChar(50)
+    provider          String   @db.VarChar(30)
+    endpoint          String   @db.VarChar(50)
+    requestHash       String   @db.VarChar(64)
+    normalizedRequest Json
+    response          Json
+    responseStatus    Int      @default(200)
+    byteSize          Int?
+    regionKey         String?  @db.VarChar(100)
+    dataVersion       String?  @db.VarChar(100)
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+    expiresAt         DateTime
+    staleUntil        DateTime
+    refreshLeaseUntil DateTime?
+    refreshLeaseOwner String?  @db.VarChar(100)
+    lastAccessedAt    DateTime @default(now())
+    hitCount          BigInt   @default(0)
+    errorCount        Int      @default(0)
+
+    @@index([namespace, expiresAt])
+    @@index([provider, endpoint, expiresAt])
+    @@index([regionKey, expiresAt])
+    @@index([lastAccessedAt])
+}
+
+model GeoProviderQuota {
+    provider      String   @id @db.VarChar(30)
+    nextAllowedAt DateTime
+    updatedAt     DateTime @updatedAt
+}
+
+model GeoCacheLease {
+    cacheKey   String   @id @db.VarChar(128)
+    owner      String   @db.VarChar(100)
+    leaseUntil DateTime
+    updatedAt  DateTime @updatedAt
+
+    @@index([leaseUntil])
 }
 
 model ReplenishmentRequest {
@@ -97,9 +144,12 @@ model ReplenishmentRequest {
 model JobRecord {
     id                     String    @id @default(cuid())
     jobNumber              String
+    jobName                String
     orgId                  String
     customerName           String
     site                   String
+    latitude               Decimal?  @db.Decimal(9, 6)
+    longitude              Decimal?  @db.Decimal(9, 6)
     priority               String
     status                 String
     scheduledFor           DateTime?

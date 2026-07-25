@@ -58,6 +58,7 @@ const mockedGetTechnicianById = vi.mocked(getTechnicianById);
 
 const BASE_JOB = {
   id: 'JOB-1',
+  jobName: 'Acme - Denver',
   customerName: 'Acme',
   site: 'Denver',
   priority: 'normal',
@@ -192,6 +193,8 @@ describe('jobs api route', () => {
       body: JSON.stringify({
         customerName: 'New Co',
         site: 'Austin',
+        latitude: 30.2672,
+        longitude: -97.7431,
         priority: 'high',
         scheduledFor: '2026-07-23T15:00:00.000Z',
         requiredSkus: ['SKU-1', 'SKU-2'],
@@ -217,6 +220,8 @@ describe('jobs api route', () => {
             expect.objectContaining({
               customerName: 'New Co',
               site: 'Austin',
+              latitude: 30.2672,
+              longitude: -97.7431,
               priority: 'high',
               requiredSkus: ['SKU-1', 'SKU-2'],
               followUpNote: 'Call customer before arrival',
@@ -368,6 +373,40 @@ describe('jobs api route', () => {
 
     expect(response?.status).toBe(200);
     expect(mockedUpdateJobRecord).toHaveBeenCalledOnce();
+  });
+
+  it('trims and updates the job name', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({id: 'JOB-1', jobName: '  Front door rekey  '}),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1', 'JOB-1',
+            expect.objectContaining({jobName: 'Front door rekey'}));
+  });
+
+  it('clears stale coordinates when the service site changes', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({id: 'JOB-1', site: '456 New Service Road'}),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedUpdateJobRecord).toHaveBeenCalledWith(
+        'org_1', 'JOB-1', expect.objectContaining({
+          site: '456 New Service Road',
+          latitude: null,
+          longitude: null,
+        }));
   });
 
   it('reopens a closed job through the explicit action', async () => {

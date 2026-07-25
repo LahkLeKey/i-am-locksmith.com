@@ -26,6 +26,7 @@ export class JobService {
    */
   static createJobDraft(overrides?: Partial<JobDraft>): JobDraft {
     return {
+      jobName: '',
       customerName: '',
       site: '',
       priority: 'normal',

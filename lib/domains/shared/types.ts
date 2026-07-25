@@ -27,8 +27,7 @@ export type TechnicianOption = {
 export type InventoryPart = {
   id: string; sku: string; itemName: string; estimatedUnitCost: number;
   location: string;
-  onHand: number;
-  available: number;
+  locationType?: 'garage' | 'van' | 'shop'; onHand: number; available: number;
 };
 
 /**

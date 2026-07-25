@@ -9,6 +9,7 @@ import {
 } from '@/lib/inventory/replenishment-repository';
 import { buildInventoryReadModel, projectInventoryPartsByLocation, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
+import { listInventoryLocations } from '@/lib/inventory/location-repository';
 import { listInvoices } from '@/lib/invoices/repository';
 import { listJobRecords } from '@/lib/jobs/repository';
 import { listTechnicians } from '@/lib/technicians/repository';
@@ -53,6 +54,9 @@ export default async function JobsPage() {
   const inventoryParts = canReadInventory ?
     await listInventoryParts(context.orgId) :
     [];
+  const inventoryLocations = canReadInventory ?
+    await listInventoryLocations(context.orgId) :
+    [];
   const inventoryBalances = canReadInventory ?
     await listInventorySkuLocationBalances(context.orgId) :
     [];
@@ -95,6 +99,9 @@ export default async function JobsPage() {
     itemName: part.itemName,
     estimatedUnitCost: part.estimatedUnitCost,
     location: part.location,
+    locationType: inventoryLocations.find(
+      (location) => location.name.toLowerCase() === part.location.toLowerCase(),
+    )?.type,
     onHand: part.onHand,
     available: part.available ?? part.onHand,
   }));

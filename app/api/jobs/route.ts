@@ -7,8 +7,11 @@ import {getTechnicianById} from '@/lib/technicians/repository';
 import {NextResponse} from 'next/server';
 
 type CreateJobRequest = {
+  jobName?: string;
   customerName?: string;
   site?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   priority?: JobQueuePriority;
   requiredSkus?: string[];
   inventorySelections?:
@@ -36,6 +39,7 @@ type QuotePayload = {
 
 type UpdateJobRequest = {
   id?: string;
+  jobName?: string;
   jobAction?: 'reopen';
   customerName?: string;
   site?: string;
@@ -120,6 +124,12 @@ function isJobStatus(value: unknown): value is JobQueueStatus {
 function isFinalizedJob(status: JobQueueStatus): boolean {
   return status === 'ready_for_payment' || status === 'closed' ||
       status === 'completed';
+}
+
+function isValidCoordinates(latitude: unknown, longitude: unknown): boolean {
+  return typeof latitude === 'number' && Number.isFinite(latitude) &&
+      latitude >= -90 && latitude <= 90 && typeof longitude === 'number' &&
+      Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
 }
 
 async function rejectFinalizedJobMutation(orgId: string, jobId: string) {
@@ -361,6 +371,15 @@ export async function POST(request: Request) {
         {error: 'customerName and site are required'}, {status: 400});
   }
 
+  const hasLatitude = body.latitude !== undefined && body.latitude !== null;
+  const hasLongitude = body.longitude !== undefined && body.longitude !== null;
+  if (hasLatitude !== hasLongitude ||
+      (hasLatitude && !isValidCoordinates(body.latitude, body.longitude))) {
+    return NextResponse.json(
+        {error: 'latitude and longitude must be valid coordinates'},
+        {status: 400});
+  }
+
   if (body.priority && !isJobPriority(body.priority)) {
     return NextResponse.json({error: 'Invalid priority'}, {status: 400});
   }
@@ -468,8 +487,11 @@ export async function POST(request: Request) {
       Number((computedPartEstimate + computedLaborEstimate).toFixed(2));
 
   const nextJob = await createJobRecord(authResult.orgId, {
+    jobName: body.jobName?.trim() || `${customerName} - ${site}`,
     customerName,
     site,
+    latitude: hasLatitude ? body.latitude! : null,
+    longitude: hasLongitude ? body.longitude! : null,
     priority: body.priority ?? 'normal',
     scheduledFor: body.scheduledFor ?? null,
     requiredSkus: normalizedSkus,
@@ -971,6 +993,10 @@ export async function PATCH(request: Request) {
         {error: 'customerName cannot be empty'}, {status: 400});
   }
 
+  if (body.jobName !== undefined && !body.jobName.trim()) {
+    return NextResponse.json({error: 'jobName cannot be empty'}, {status: 400});
+  }
+
   if (body.site !== undefined && !body.site.trim()) {
     return NextResponse.json({error: 'site cannot be empty'}, {status: 400});
   }
@@ -1076,8 +1102,11 @@ export async function PATCH(request: Request) {
       undefined;
 
   const updated = await updateJobRecord(authResult.orgId, jobId, {
+    jobName: body.jobName?.trim(),
     customerName: body.customerName?.trim(),
     site: body.site?.trim(),
+    latitude: body.site === undefined ? undefined : null,
+    longitude: body.site === undefined ? undefined : null,
     status: body.status,
     priority: body.priority,
     etaMinutes: body.etaMinutes,

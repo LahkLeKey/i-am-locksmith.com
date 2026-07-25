@@ -42,6 +42,12 @@ The primary office persona who needs accurate inventory state to plan and execut
 
 The primary success metric is reducing median quote-to-scheduled-job time by at least 30 percent for authenticated users.
 
+## Service Site
+The customer-facing physical address where a job is performed. A verified service site may include geographic coordinates for routing, but the entered address remains usable when location lookup is unavailable.
+
+## Inventory Location
+A named place where stock is controlled, such as a garage, van, or shop. Inventory ledger events reference the location name; the canonical location record owns its type, optional physical address, and optional geographic coordinates.
+
 ## Authenticated User Action
 A user action performed by a signed-in Clerk identity and persisted with attribution in the database.
 

@@ -46,7 +46,8 @@ export type ActiveJobWizardStep = 1|2|3|4;
  * components.
  */
 export type JobDraft = {
-  customerName: string; site: string; priority: JobQueuePriority;
+  jobName: string; customerName: string; site: string;
+  priority: JobQueuePriority;
   status: JobQueueStatus;
   scheduledFor: string;
   etaMinutes: string;

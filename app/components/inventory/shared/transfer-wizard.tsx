@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from 'react';
+import {GeoAddressField} from '@/app/components/shared/geo-address-field';
 import { formatLocationLabel, LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationType } from '@/lib/inventory/locations';
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
+import type {GeocodeResult} from '@/lib/geo/types';
 
 type TransferLine = { partId: string; sku: string; itemName: string; quantity: number; available: number };
 
@@ -10,6 +12,8 @@ type TransferDraft = {
     sourceLocation: string;
     targetLocation: string;
     targetLocationType: LocationType | null;
+    targetLocationAddress: string;
+    targetLocationGeo: GeocodeResult | null;
     lines: TransferLine[];
 };
 
@@ -42,6 +46,8 @@ export function TransferWizard({
         sourceLocation: locations[0] ?? '',
         targetLocation: '',
         targetLocationType: null,
+        targetLocationAddress: '',
+        targetLocationGeo: null,
         lines: [],
     });
     const [isPending, setIsPending] = useState(false);
@@ -93,6 +99,9 @@ export function TransferWizard({
                     sourceLocation: draft.sourceLocation,
                     targetLocation: draft.targetLocation.trim(),
                     targetLocationType: isExistingDestination ? undefined : draft.targetLocationType,
+                    targetLocationAddress: draft.targetLocationAddress || undefined,
+                    targetLocationLatitude: draft.targetLocationGeo?.latitude,
+                    targetLocationLongitude: draft.targetLocationGeo?.longitude,
                     parts: selectedLines.map((l) => ({ id: l.partId, quantity: l.quantity })),
                 }),
             });
@@ -246,6 +255,15 @@ export function TransferWizard({
                                                 ))}
                                             </div>
                                         </fieldset>
+                                    ) : null}
+                                    {!isExistingDestination && draft.targetLocation.trim() ? (
+                                        <GeoAddressField
+                                            label="Warehouse address"
+                                            value={draft.targetLocationAddress}
+                                            onChange={(value) => setDraft((current) => ({...current, targetLocationAddress: value, targetLocationGeo: null}))}
+                                            onResolved={(result) => setDraft((current) => ({...current, targetLocationGeo: result}))}
+                                            placeholder="Physical address for routing"
+                                        />
                                     ) : null}
                                 </div>
                             )}

@@ -2,7 +2,9 @@ import type {JobQueueItem, JobQueuePriority, JobQueueStatus, TimeClockLedgerEntr
 import {prisma} from '@/lib/db/prisma';
 
 export type JobRecordInput = {
-  customerName: string; site: string; priority: JobQueuePriority;
+  jobName: string; customerName: string; site: string;
+  latitude: number | null; longitude: number | null;
+  priority: JobQueuePriority;
   scheduledFor: string | null;
   requiredSkus: string[];
   followUpNote: string | null;
@@ -17,8 +19,11 @@ export type JobRecordInput = {
 };
 
 export type JobRecordUpdate = {
+  jobName?: string;
   customerName?: string;
   site?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   status?: JobQueueStatus;
   priority?: JobQueuePriority;
   etaMinutes?: number | null;
@@ -51,8 +56,11 @@ export type JobCloseoutInput = {
 };
 
 type JobRecordRow = {
-  id: string; jobNumber: string; orgId: string; customerName: string;
+  id: string; jobNumber: string; jobName: string; orgId: string;
+  customerName: string;
   site: string;
+  latitude: unknown;
+  longitude: unknown;
   priority: string;
   status: string;
   scheduledFor: Date | null;
@@ -90,7 +98,10 @@ type JobRecordClient = {
         Promise<JobRecordRow|null>;
     create: (args: {
       data: {
-        jobNumber: string; orgId: string; customerName: string; site: string;
+        jobNumber: string; jobName: string; orgId: string; customerName: string;
+        site: string;
+        latitude: number | null;
+        longitude: number | null;
         priority: string;
         status: string;
         scheduledFor: Date | null;
@@ -234,8 +245,11 @@ function toJobQueueItem(row: JobRecordRow): JobQueueItem {
 
   return {
     id: row.jobNumber,
+    jobName: row.jobName,
     customerName: row.customerName,
     site: row.site,
+    latitude: row.latitude === null ? null : Number(row.latitude),
+    longitude: row.longitude === null ? null : Number(row.longitude),
     priority: asPriority(row.priority),
     status: asStatus(row.status),
     scheduledFor: row.scheduledFor ? row.scheduledFor.toISOString() : null,
@@ -317,9 +331,12 @@ export async function createJobRecord(
   const row = await client.jobRecord.create({
     data: {
       jobNumber: buildJobNumber(),
+      jobName: input.jobName,
       orgId,
       customerName: input.customerName,
       site: input.site,
+      latitude: input.latitude,
+      longitude: input.longitude,
       priority: input.priority,
       status: 'queued',
       scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : null,
@@ -359,10 +376,13 @@ export async function updateJobRecord(
   const row = await client.jobRecord.update({
     where: {id: existing.id},
     data: {
+      ...(input.jobName !== undefined ? {jobName: input.jobName} : {}),
       ...(input.customerName !== undefined ?
               {customerName: input.customerName} :
               {}),
       ...(input.site !== undefined ? {site: input.site} : {}),
+      ...(input.latitude !== undefined ? {latitude: input.latitude} : {}),
+      ...(input.longitude !== undefined ? {longitude: input.longitude} : {}),
       ...(input.status !== undefined ? {status: input.status} : {}),
       ...(input.priority !== undefined ? {priority: input.priority} : {}),
       ...(input.etaMinutes !== undefined ? {etaMinutes: input.etaMinutes} : {}),
