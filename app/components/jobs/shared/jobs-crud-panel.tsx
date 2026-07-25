@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
@@ -24,6 +24,7 @@ export type { TechnicianOption } from '@/lib/domains/shared/types';
 
 type AddJobWizardStep = 1 | 2 | 3 | 4;
 type ActiveJobWizardStep = 1 | 2 | 3 | 4;
+type JobQueueView = 'active' | 'scheduled' | 'closed' | 'all';
 
 type EditableLedgerEntry = {
     id: string;
@@ -396,6 +397,7 @@ export function JobsCrudPanel({
     technicians: TechnicianOption[];
 }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [jobsState, setJobsState] = useState<JobQueueItem[]>(initialJobs);
 
     const [customerName, setCustomerName] = useState('');
@@ -415,6 +417,7 @@ export function JobsCrudPanel({
     const [wizardStep, setWizardStep] = useState<AddJobWizardStep>(1);
     const [isAddWizardOpen, setIsAddWizardOpen] = useState(false);
     const [isActiveWorkflowOpen, setIsActiveWorkflowOpen] = useState(false);
+    const [queueView, setQueueView] = useState<JobQueueView>('active');
 
     const [reserveSku, setReserveSku] = useState<Record<string, string>>({});
     const [reserveSelection, setReserveSelection] = useState<Record<string, SelectedInventoryLookup>>({});
@@ -448,7 +451,41 @@ export function JobsCrudPanel({
         setJobsState(initialJobs);
     }, [initialJobs]);
 
+    useEffect(() => {
+        const requestedView = searchParams.get('view');
+        const requestedJobId = searchParams.get('job');
+        if (requestedView === 'active' || requestedView === 'scheduled' || requestedView === 'closed' || requestedView === 'all') {
+            setQueueView(requestedView);
+        }
+        if (requestedJobId && initialJobs.some((job) => job.id === requestedJobId)) {
+            setSelectedJobId(requestedJobId);
+            setActiveJobWizardStep(requestedView === 'closed' ? 4 : 1);
+            setIsActiveWorkflowOpen(true);
+        }
+    }, [initialJobs, searchParams]);
+
     const jobs = useMemo(() => [...jobsState].sort((left, right) => right.id.localeCompare(left.id)), [jobsState]);
+    const visibleJobs = useMemo(() => jobs.filter((job) => {
+        if (queueView === 'active') {
+            return job.status === 'queued' || job.status === 'in_progress' || job.status === 'blocked';
+        }
+
+        if (queueView === 'scheduled') {
+            return job.status === 'scheduled';
+        }
+
+        if (queueView === 'closed') {
+            return job.status === 'closed' || job.status === 'completed';
+        }
+
+        return true;
+    }), [jobs, queueView]);
+    const queueCounts = useMemo(() => ({
+        active: jobs.filter((job) => job.status === 'queued' || job.status === 'in_progress' || job.status === 'blocked').length,
+        scheduled: jobs.filter((job) => job.status === 'scheduled').length,
+        closed: jobs.filter((job) => job.status === 'closed' || job.status === 'completed').length,
+        all: jobs.length,
+    }), [jobs]);
     const sortedInventoryParts = useMemo(
         () =>
             [...inventoryLookupParts].sort((left, right) => {
@@ -506,8 +543,8 @@ export function JobsCrudPanel({
     }, [jobs, selectedJobId]);
 
     const selectedDesktopJob = useMemo(
-        () => (selectedJobId ? jobs.find((job) => job.id === selectedJobId) ?? null : null),
-        [jobs, selectedJobId],
+        () => (selectedJobId ? visibleJobs.find((job) => job.id === selectedJobId) ?? null : null),
+        [selectedJobId, visibleJobs],
     );
 
     function getDraft(job: JobQueueItem): JobDraft {
@@ -672,22 +709,35 @@ export function JobsCrudPanel({
 
     return (
         <section className="space-y-6 overflow-x-hidden">
-            <div>
-                <h2 className="text-sm font-semibold text-[#0f172a]">Jobs Management</h2>
-                <p className="mt-1 text-xs text-[#475569]">Capture quote intake at job creation, edit workflow fields inline, and close jobs with actual financial outcomes.</p>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dbe3f0] bg-white px-4 py-4 shadow-sm">
-                <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#334155]">Add Job Wizard</p>
-                    <p className="mt-1 text-sm text-[#475569]">Launch the full-screen intake flow for quote, scheduling, parts, and technician assignment.</p>
-                </div>
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#dbe3f0] pb-3">
+                <nav aria-label="Job queue views" className="flex max-w-full gap-1 overflow-x-auto">
+                    {(['active', 'scheduled', 'closed', 'all'] as const).map((view) => (
+                        <button
+                            key={view}
+                            type="button"
+                            aria-pressed={queueView === view}
+                            onClick={() => {
+                                setQueueView(view);
+                                const nextJob = jobs.find((job) => {
+                                    if (view === 'active') return job.status === 'queued' || job.status === 'in_progress' || job.status === 'blocked';
+                                    if (view === 'scheduled') return job.status === 'scheduled';
+                                    if (view === 'closed') return job.status === 'closed' || job.status === 'completed';
+                                    return true;
+                                });
+                                setSelectedJobId(nextJob?.id ?? null);
+                            }}
+                            className={`whitespace-nowrap border-b-2 px-3 py-2 text-xs font-semibold capitalize ${queueView === view ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#64748b] hover:text-[#0f172a]'}`}
+                        >
+                            {view} <span className="ml-1 rounded-full bg-[#f1f5f9] px-1.5 py-0.5 text-[10px] text-[#475569]">{queueCounts[view]}</span>
+                        </button>
+                    ))}
+                </nav>
                 <button
                     type="button"
                     className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white"
                     onClick={() => setIsAddWizardOpen(true)}
                 >
-                    Open Intake Workflow
+                    + New Job
                 </button>
             </div>
 
@@ -982,7 +1032,7 @@ export function JobsCrudPanel({
             {error ? <p className="text-xs text-[#b91c1c]">{error}</p> : null}
 
             <div className="space-y-3 xl:hidden">
-                {jobs.map((job) => {
+                {visibleJobs.map((job) => {
                     const isDirty = isDraftDirty(job);
 
                     return (
@@ -1024,6 +1074,12 @@ export function JobsCrudPanel({
                         </article>
                     );
                 })}
+                {visibleJobs.length === 0 ? (
+                    <div className="border-y border-[#e5e7eb] py-8 text-center">
+                        <p className="text-sm font-semibold text-[#334155]">No {queueView} jobs</p>
+                        <p className="mt-1 text-xs text-[#64748b]">Choose another queue view or create a new job.</p>
+                    </div>
+                ) : null}
             </div>
 
             <div className="hidden xl:flex xl:flex-col xl:gap-5">
@@ -1039,7 +1095,7 @@ export function JobsCrudPanel({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#e5e7eb] bg-white text-[#334155]">
-                            {jobs.map((job) => {
+                            {visibleJobs.map((job) => {
                                 const isSelected = job.id === selectedJobId;
                                 const isDirty = isDraftDirty(job);
 
@@ -1069,6 +1125,13 @@ export function JobsCrudPanel({
                                     </tr>
                                 );
                             })}
+                            {visibleJobs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-3 py-8 text-center text-[#64748b]">
+                                        No {queueView} jobs. Choose another queue view or create a new job.
+                                    </td>
+                                </tr>
+                            ) : null}
                         </tbody>
                     </table>
                 </article>

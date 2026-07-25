@@ -13,12 +13,12 @@ export default async function TechniciansPage() {
 
     return (
         <section className="space-y-6">
-            <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
+            <header>
                 <h1 className="text-2xl font-semibold">Technicians</h1>
                 <p className="mt-1 text-sm text-[#4b5563]">
-                    Manage technician rates and availability used by job assignment and estimate calculations.
+                    Keep dispatch availability, skills, and labor rates current for job assignment.
                 </p>
-            </article>
+            </header>
             <TechniciansAdminPanel
                 initialTechnicians={technicians.map((item) => ({
                     id: item.id,

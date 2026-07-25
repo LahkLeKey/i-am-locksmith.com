@@ -13,6 +13,7 @@ import { AddPartDrawer } from './add-part-drawer';
 
 type ActiveWizard = 'transfer' | 'purchase-order' | null;
 type CatalogView = 'table' | 'cards';
+type StockFilter = 'all' | 'low';
 
 type InventoryLandingPanelProps = {
     catalogRows: InventoryCatalogRow[];
@@ -26,6 +27,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
     const router = useRouter();
     const [search, setSearch] = useState('');
     const [locationFilter, setLocationFilter] = useState<LocationType | 'all'>('all');
+    const [stockFilter, setStockFilter] = useState<StockFilter>('all');
     const [activeWizard, setActiveWizard] = useState<ActiveWizard>(null);
     const [catalogView, setCatalogView] = useState<CatalogView>('table');
 
@@ -49,6 +51,10 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
             rows = rows.filter((r) => categorizeLocation(r.location) === locationFilter);
         }
 
+        if (stockFilter === 'low') {
+            rows = rows.filter((r) => r.available <= r.reorderPoint);
+        }
+
         const query = search.trim().toLowerCase();
         if (query) {
             rows = rows.filter((r) =>
@@ -60,45 +66,51 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
         }
 
         return rows;
-    }, [catalogRows, locationFilter, search]);
+    }, [catalogRows, locationFilter, search, stockFilter]);
 
     const totalSkus = new Set(catalogRows.map((row) => row.sku.toLowerCase())).size;
     const totalLocations = locations.length;
 
     return (
         <>
-            {/* KPI Row */}
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <article className="rounded-md border border-[#e5e7eb] bg-[#f9fafb] p-4">
-                    <p className="text-xs text-[#6b7280]">Total SKUs</p>
-                    <p className="mt-1 text-xl font-semibold text-[#0f172a]">{totalSkus}</p>
-                    <p className="mt-0.5 text-[11px] text-[#64748b]">Parts in catalog</p>
-                </article>
-                <article className="rounded-md border border-[#e5e7eb] bg-[#f9fafb] p-4">
-                    <p className="text-xs text-[#6b7280]">Locations</p>
-                    <p className="mt-1 text-xl font-semibold text-[#0f172a]">{totalLocations}</p>
-                    <p className="mt-0.5 text-[11px] text-[#64748b]">
-                        {locationCounts.garage}g · {locationCounts.van}v · {locationCounts.shop}s tracked
-                    </p>
-                </article>
-                <article className={`rounded-md border p-4 ${lowStockCount > 0 ? 'border-[#fca5a5] bg-[#fff7f7]' : 'border-[#e5e7eb] bg-[#f9fafb]'}`}>
-                    <p className="text-xs text-[#6b7280]">Low Stock</p>
-                    <p className={`mt-1 text-xl font-semibold ${lowStockCount > 0 ? 'text-[#dc2626]' : 'text-[#0f172a]'}`}>
-                        {lowStockCount}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-[#64748b]">Items below reorder point</p>
-                </article>
-                <article className={`rounded-md border p-4 ${openPOCount > 0 ? 'border-[#fde68a] bg-[#fffbeb]' : 'border-[#e5e7eb] bg-[#f9fafb]'}`}>
-                    <p className="text-xs text-[#6b7280]">Open Orders</p>
-                    <p className={`mt-1 text-xl font-semibold ${openPOCount > 0 ? 'text-[#92400e]' : 'text-[#0f172a]'}`}>
-                        {openPOCount}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-[#64748b]">Purchase orders in flight</p>
-                </article>
-            </div>
+            <nav aria-label="Inventory workflows" className="grid overflow-hidden rounded-md border border-[#dbe3e8] bg-white sm:grid-cols-2 xl:grid-cols-4">
+                <a
+                    href="#catalog-workspace"
+                    onClick={() => { setSearch(''); setLocationFilter('all'); setStockFilter('all'); }}
+                    className="border-b border-[#e5e7eb] p-4 transition-colors hover:bg-[#f8fffe] sm:border-r xl:border-b-0"
+                >
+                    <span className="text-xs font-semibold text-[#0f766e]">Browse catalog</span>
+                    <span className="mt-1 block text-lg font-semibold text-[#0f172a]">{totalSkus} SKUs</span>
+                    <span className="text-[11px] text-[#64748b]">Reset filters and view all parts →</span>
+                </a>
+                <a
+                    href="#location-filters"
+                    onClick={() => setStockFilter('all')}
+                    className="border-b border-[#e5e7eb] p-4 transition-colors hover:bg-[#f8fffe] xl:border-b-0 xl:border-r"
+                >
+                    <span className="text-xs font-semibold text-[#0f766e]">Browse locations</span>
+                    <span className="mt-1 block text-lg font-semibold text-[#0f172a]">{totalLocations} tracked</span>
+                    <span className="text-[11px] text-[#64748b]">{locationCounts.garage} garage · {locationCounts.van} van · {locationCounts.shop} shop →</span>
+                </a>
+                <a
+                    href="#catalog-workspace"
+                    onClick={() => { setSearch(''); setLocationFilter('all'); setStockFilter('low'); }}
+                    aria-current={stockFilter === 'low' ? 'true' : undefined}
+                    className={`border-b border-[#e5e7eb] p-4 transition-colors hover:bg-[#fff7f7] sm:border-r sm:border-b-0 ${stockFilter === 'low' ? 'bg-[#fff7f7]' : ''}`}
+                >
+                    <span className={`text-xs font-semibold ${lowStockCount > 0 ? 'text-[#b91c1c]' : 'text-[#0f766e]'}`}>Review low stock</span>
+                    <span className={`mt-1 block text-lg font-semibold ${lowStockCount > 0 ? 'text-[#dc2626]' : 'text-[#0f172a]'}`}>{lowStockCount} items</span>
+                    <span className="text-[11px] text-[#64748b]">Filter to parts at or below reorder point →</span>
+                </a>
+                <Link href="/inventory/purchase-orders" className="p-4 transition-colors hover:bg-[#fffbeb]">
+                    <span className="text-xs font-semibold text-[#92400e]">Receive open orders</span>
+                    <span className="mt-1 block text-lg font-semibold text-[#0f172a]">{openPOCount} in flight</span>
+                    <span className="text-[11px] text-[#64748b]">Review deliveries and receive stock →</span>
+                </Link>
+            </nav>
 
             {/* Catalog Table */}
-            <section className="rounded-md border border-[#e5e7eb] bg-white">
+            <section id="catalog-workspace" className="scroll-mt-6 rounded-md border border-[#e5e7eb] bg-white">
                 {/* Toolbar */}
                 <div className="flex flex-wrap items-end gap-3 border-b border-[#e5e7eb] px-4 py-3">
                     <label className="flex w-full flex-1 flex-col gap-1 sm:min-w-52">
@@ -137,12 +149,12 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
                 </div>
 
                 {/* Location Filter Tabs */}
-                <div className="flex gap-0 overflow-x-auto border-b border-[#e5e7eb] text-xs">
+                <div id="location-filters" className="scroll-mt-6 flex gap-0 overflow-x-auto border-b border-[#e5e7eb] text-xs">
                     {([['all', 'All'] as const, ...Object.entries(LOCATION_TYPE_LABELS).map(([k, v]) => [k as LocationType, v] as const)]).map(([type, label]) => (
                         <button
                             key={type}
                             type="button"
-                            onClick={() => setLocationFilter(type)}
+                            onClick={() => { setLocationFilter(type); setStockFilter('all'); }}
                             className={`whitespace-nowrap px-4 py-2.5 font-medium transition-colors ${locationFilter === type
                                 ? 'border-b-2 border-[#0f766e] text-[#0f766e]'
                                 : 'text-[#64748b] hover:text-[#334155]'
@@ -184,7 +196,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
                 <div className={`grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3 ${catalogView === 'table' ? 'md:hidden' : ''}`}>
                     {filteredRows.length === 0 ? (
                         <p className="py-6 text-center text-xs text-[#64748b]">
-                            {search ? `No results for "${search}"` : 'No parts in this location.'}
+                            {search ? `No results for "${search}"` : stockFilter === 'low' ? 'No low-stock parts.' : 'No parts in this location.'}
                         </p>
                     ) : (
                         filteredRows.map((part) => <InventorySkuCard key={`${part.id}:${part.location}`} part={part} />)
@@ -208,7 +220,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
                             {filteredRows.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-4 py-6 text-center text-[#64748b]">
-                                        {search ? `No results for "${search}"` : 'No parts in this location.'}
+                                        {search ? `No results for "${search}"` : stockFilter === 'low' ? 'No low-stock parts.' : 'No parts in this location.'}
                                     </td>
                                 </tr>
                             ) : (
@@ -281,7 +293,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
 
                 {filteredRows.length > 0 && (
                     <div className="border-t border-[#e5e7eb] px-4 py-2 text-[11px] text-[#64748b]">
-                        {filteredRows.length} of {totalSkus} parts shown
+                        {filteredRows.length} of {totalSkus} parts shown{stockFilter === 'low' ? ' · Low stock filter active' : ''}
                     </div>
                 )}
             </section>

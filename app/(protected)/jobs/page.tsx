@@ -117,11 +117,15 @@ export default async function JobsPage() {
       />
       {canReadInventory && inventory ? (
         <>
-          <InventoryReplenishmentPanel
-            queue={inventory.lowStockQueue}
-            openRequests={openRequests}
-          />
-          <InventoryExceptionPanel exceptions={inventoryExceptions} />
+          {inventory.lowStockQueue.length > 0 || openRequests.length > 0 ? (
+            <InventoryReplenishmentPanel
+              queue={inventory.lowStockQueue}
+              openRequests={openRequests}
+            />
+          ) : null}
+          {inventoryExceptions.length > 0 ? (
+            <InventoryExceptionPanel exceptions={inventoryExceptions} />
+          ) : null}
         </>
       ) : null}
     </section>

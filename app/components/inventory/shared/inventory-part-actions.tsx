@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 import { formatLocationLabel } from '@/lib/inventory/locations';
 import type { InventorySkuLocationBalance } from '@/lib/inventory/ledger-repository';
@@ -38,6 +38,7 @@ export function InventoryPartActions({
     canReceive,
 }: InventoryPartActionsProps) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const transferableBalances = useMemo(
         () => balances.filter((balance) => balance.available > 0),
         [balances],
@@ -61,6 +62,26 @@ export function InventoryPartActions({
     const [isPending, setIsPending] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const requestedMode = searchParams.get('action');
+        const requestedLocation = searchParams.get('location');
+
+        if (requestedMode === 'transfer' && canTransfer) {
+            setMode('transfer');
+            if (requestedLocation && transferableBalances.some((balance) => balance.location === requestedLocation)) {
+                setSourceLocation(requestedLocation);
+                setTransferQuantity(1);
+            }
+        }
+
+        if (requestedMode === 'restock' && canRestock) {
+            setMode('restock');
+            if (requestedLocation && trackedLocations.includes(requestedLocation)) {
+                setRestockLocation(requestedLocation);
+            }
+        }
+    }, [canRestock, canTransfer, searchParams, trackedLocations, transferableBalances]);
 
     const sourceBalance = transferableBalances.find(
         (balance) => balance.location === sourceLocation,

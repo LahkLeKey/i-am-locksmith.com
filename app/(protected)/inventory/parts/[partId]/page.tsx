@@ -4,6 +4,7 @@ import { getInventoryPartById } from '@/lib/inventory/parts-repository';
 import { listInventorySkuLocationBalances, listInventoryLedgerEntries } from '@/lib/inventory/ledger-repository';
 import { listOpenReplenishmentRequests } from '@/lib/inventory/replenishment-repository';
 import { InventoryPartActions } from '@/app/components/inventory/shared';
+import { formatLocationLabel } from '@/lib/inventory/locations';
 import Link from 'next/link';
 
 function formatScheduleSafe(isoDate: string): string {
@@ -75,6 +76,12 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
     const totalReserved = partBalances.reduce((sum, b) => sum + b.reserved, 0);
     const totalAvailable = partBalances.reduce((sum, b) => sum + b.available, 0);
     const totalShortage = Math.max(0, part.reorderPoint - totalAvailable);
+    const actionHref = (action: 'transfer' | 'restock', location?: string) => {
+        const query = new URLSearchParams({ action });
+        if (location) query.set('location', location);
+        return `?${query.toString()}#actions`;
+    };
+    const actionLinkClass = 'group rounded-md border border-[#dbe3e8] bg-white p-4 text-left transition-colors hover:border-[#0f766e] hover:bg-[#f8fffe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f766e]';
 
     return (
         <section className="space-y-6">
@@ -112,40 +119,39 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                 </a>
             </nav>
 
-            <div id="overview" className="scroll-mt-6 grid gap-3 md:grid-cols-2">
-                <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
-                    <p className="text-xs text-[#6b7280]">Supplier</p>
-                    <p className="mt-1 text-sm font-semibold">{part.supplier}</p>
-                </article>
-                <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
-                    <p className="text-xs text-[#6b7280]">Service Lines</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {part.serviceLines.length > 0 ? (
-                            part.serviceLines.map((line) => (
-                                <span
-                                    key={line}
-                                    className="rounded-full bg-[#e0f2fe] px-2.5 py-0.5 text-xs font-semibold text-[#0c4a6e]"
-                                >
-                                    {line}
-                                </span>
-                            ))
-                        ) : (
-                            <span className="text-xs text-[#6b7280]">None assigned</span>
-                        )}
+            <section id="overview" className="scroll-mt-6 border-y border-[#e5e7eb] py-4">
+                <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr_auto] lg:items-center">
+                    <div>
+                        <p className="text-xs font-semibold uppercase text-[#64748b]">Sourcing</p>
+                        <p className="mt-1 text-sm font-semibold text-[#0f172a]">{part.supplier}</p>
+                        <p className="mt-1 text-xs text-[#64748b]">{part.compatibilityNote || 'No compatibility notes recorded.'}</p>
                     </div>
-                </article>
-                <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
-                    <p className="text-xs text-[#6b7280]">Compatibility Notes</p>
-                    <p className="mt-1 text-sm">{part.compatibilityNote || '—'}</p>
-                </article>
-                <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
-                    <p className="text-xs text-[#6b7280]">Reorder Policy</p>
-                    <div className="mt-2 space-y-1 text-sm">
-                        <p>Point: {part.reorderPoint}</p>
-                        <p>Qty: {part.suggestedOrderQty}</p>
+                    <div>
+                        <p className="text-xs font-semibold uppercase text-[#64748b]">Used for</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {part.serviceLines.length > 0 ? (
+                                part.serviceLines.map((line) => (
+                                    <span
+                                        key={line}
+                                        className="rounded-full bg-[#e0f2fe] px-2.5 py-0.5 text-xs font-semibold text-[#0c4a6e]"
+                                    >
+                                        {line}
+                                    </span>
+                                ))
+                            ) : (
+                                <span className="text-xs text-[#6b7280]">None assigned</span>
+                            )}
+                        </div>
                     </div>
-                </article>
-            </div>
+                    {canRestock ? (
+                        <Link href={actionHref('restock', part.location)} className="rounded-md bg-[#0f766e] px-4 py-2.5 text-center text-xs font-semibold text-white hover:bg-[#0d5f56]">
+                            Restock from {part.supplier}
+                        </Link>
+                    ) : (
+                        <a href="#activity" className="text-xs font-semibold text-[#0f766e] hover:underline">View item activity</a>
+                    )}
+                </div>
+            </section>
 
             {(canTransfer || canRestock || canReceive) ? (
                 <InventoryPartActions
@@ -166,31 +172,51 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                 />
             ) : null}
 
-            <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
-                <h2 className="font-semibold">Stock Summary</h2>
+            <section aria-labelledby="stock-summary-heading">
+                <div className="flex items-end justify-between gap-3">
+                    <div>
+                        <h2 id="stock-summary-heading" className="font-semibold">Stock Summary</h2>
+                        <p className="mt-1 text-xs text-[#64748b]">Choose a metric to inspect or act on it.</p>
+                    </div>
+                    <a href="#activity" className="text-xs font-semibold text-[#0f766e] hover:underline">View ledger</a>
+                </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-md bg-[#f9fafb] p-3">
+                    <a href="#locations" className={actionLinkClass}>
                         <p className="text-xs text-[#6b7280]">On Hand</p>
                         <p className="mt-1 text-xl font-semibold text-[#1f2937]">{totalOnHand}</p>
-                    </div>
-                    <div className="rounded-md bg-[#f9fafb] p-3">
+                        <p className="mt-2 text-xs font-semibold text-[#0f766e]">Inspect locations →</p>
+                    </a>
+                    <a href="#activity" className={actionLinkClass}>
                         <p className="text-xs text-[#6b7280]">Reserved</p>
                         <p className="mt-1 text-xl font-semibold text-[#1f2937]">{totalReserved}</p>
-                    </div>
-                    <div className="rounded-md bg-[#f9fafb] p-3">
-                        <p className="text-xs text-[#6b7280]">Available</p>
-                        <p className="mt-1 text-xl font-semibold text-[#1f2937]">{totalAvailable}</p>
-                    </div>
-                    <div className={`rounded-md p-3 ${totalShortage > 0 ? 'bg-[#fee2e2]' : 'bg-[#f9fafb]'}`}>
+                        <p className="mt-2 text-xs font-semibold text-[#0f766e]">Review movements →</p>
+                    </a>
+                    {canTransfer ? (
+                        <Link href={actionHref('transfer')} className={actionLinkClass}>
+                            <p className="text-xs text-[#6b7280]">Available</p>
+                            <p className="mt-1 text-xl font-semibold text-[#1f2937]">{totalAvailable}</p>
+                            <p className="mt-2 text-xs font-semibold text-[#0f766e]">Move stock →</p>
+                        </Link>
+                    ) : (
+                        <a href="#locations" className={actionLinkClass}>
+                            <p className="text-xs text-[#6b7280]">Available</p>
+                            <p className="mt-1 text-xl font-semibold text-[#1f2937]">{totalAvailable}</p>
+                            <p className="mt-2 text-xs font-semibold text-[#0f766e]">Inspect locations →</p>
+                        </a>
+                    )}
+                    <Link href={canRestock ? actionHref('restock', part.location) : '#locations'} className={`${actionLinkClass} ${totalShortage > 0 ? 'border-[#fecaca] bg-[#fef2f2]' : ''}`}>
                         <p className={`text-xs ${totalShortage > 0 ? 'text-[#991b1b]' : 'text-[#6b7280]'}`}>
                             {totalShortage > 0 ? 'Shortage' : 'Status'}
                         </p>
                         <p className={`mt-1 text-xl font-semibold ${totalShortage > 0 ? 'text-[#dc2626]' : 'text-[#16a34a]'}`}>
                             {totalShortage > 0 ? totalShortage : 'OK'}
                         </p>
-                    </div>
+                        <p className={`mt-2 text-xs font-semibold ${totalShortage > 0 ? 'text-[#b91c1c]' : 'text-[#0f766e]'}`}>
+                            {canRestock ? 'Request restock →' : 'Inspect policy →'}
+                        </p>
+                    </Link>
                 </div>
-            </article>
+            </section>
 
             <article id="locations" className="scroll-mt-6 rounded-md border border-[#e5e7eb] bg-white p-4">
                 <h2 className="font-semibold">Stock by Location</h2>
@@ -203,15 +229,25 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                                     <th className="px-3 py-2 text-right font-semibold text-[#6b7280]">On Hand</th>
                                     <th className="px-3 py-2 text-right font-semibold text-[#6b7280]">Reserved</th>
                                     <th className="px-3 py-2 text-right font-semibold text-[#6b7280]">Available</th>
+                                    <th className="px-3 py-2 text-right font-semibold text-[#6b7280]">Workflow</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {partBalances.map((balance) => (
-                                    <tr key={balance.location} className="border-b border-[#e5e7eb]">
-                                        <td className="px-3 py-2">{balance.location}</td>
+                                    <tr key={balance.location} className="border-b border-[#e5e7eb] hover:bg-[#f8fafc]">
+                                        <td className="px-3 py-2 font-medium">{formatLocationLabel(balance.location)}</td>
                                         <td className="px-3 py-2 text-right">{balance.onHand}</td>
                                         <td className="px-3 py-2 text-right">{balance.reserved}</td>
                                         <td className="px-3 py-2 text-right">{balance.available}</td>
+                                        <td className="px-3 py-2 text-right">
+                                            {canTransfer && balance.available > 0 ? (
+                                                <Link href={actionHref('transfer', balance.location)} className="font-semibold text-[#0f766e] hover:underline">Move stock →</Link>
+                                            ) : canRestock ? (
+                                                <Link href={actionHref('restock', balance.location)} className="font-semibold text-[#0f766e] hover:underline">Restock →</Link>
+                                            ) : (
+                                                <a href="#activity" className="font-semibold text-[#0f766e] hover:underline">View activity →</a>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
