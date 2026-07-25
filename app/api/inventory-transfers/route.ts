@@ -1,10 +1,25 @@
 import {appendInventoryLedgerEntry, listInventorySkuLocationBalances} from '@/lib/inventory/ledger-repository';
 import {getInventoryPartById} from '@/lib/inventory/parts-repository';
-import {requireRouteContext} from '@/lib/rbac/guard';
+import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 
 export async function POST(request: Request) {
   try {
-    const context = await requireRouteContext('/inventory');
+    const context = await getAuthorizationContext();
+
+    if (!context) {
+      return Response.json({error: 'Unauthorized'}, {status: 401});
+    }
+
+    const decision = await authorizePermission('inventory.transfer');
+
+    if (decision.state === 'unauthenticated') {
+      return Response.json({error: 'Unauthorized'}, {status: 401});
+    }
+
+    if (decision.state === 'forbidden') {
+      return Response.json({error: 'Forbidden'}, {status: 403});
+    }
+
     const orgId = context.orgId;
 
     if (!orgId) {
@@ -13,18 +28,38 @@ export async function POST(request: Request) {
 
     const {sourceLocation, targetLocation, parts} = await request.json();
 
-    if (!sourceLocation || !targetLocation || !parts || !Array.isArray(parts)) {
+    if (!sourceLocation || !targetLocation || !Array.isArray(parts) ||
+        parts.length === 0) {
       return Response.json({error: 'Invalid request body'}, {status: 400});
     }
 
-    if (sourceLocation === targetLocation) {
+    const hasInvalidPart = parts.some((part: unknown) => {
+      if (!part || typeof part !== 'object') return true;
+      const {id, quantity} = part as {
+        id?: unknown;
+        quantity?: unknown
+      };
+      return typeof id !== 'string' || id.trim().length === 0 ||
+          typeof quantity !== 'number' || !Number.isInteger(quantity) ||
+          quantity <= 0;
+    });
+
+    if (hasInvalidPart) {
+      return Response.json(
+          {error: 'Each part requires an id and a positive whole quantity'},
+          {status: 400});
+    }
+
+    if (sourceLocation.trim().toLowerCase() ===
+      targetLocation.trim().toLowerCase()) {
       return Response.json(
           {error: 'Source and target locations must be different'},
           {status: 400});
     }
 
-    // Verify all parts exist and have sufficient stock
     const balances = await listInventorySkuLocationBalances(orgId);
+    const transferPlan = [];
+
     for (const {id, quantity} of parts) {
       const part = await getInventoryPartById(orgId, id);
       if (!part) {
@@ -40,16 +75,13 @@ export async function POST(request: Request) {
             {error: `Insufficient stock of ${part.sku} in ${sourceLocation}`},
             {status: 400});
       }
+
+      transferPlan.push({part, quantity});
     }
 
-    // Execute transfers
-    for (const {id, quantity} of parts) {
-      const part = await getInventoryPartById(orgId, id);
-      if (!part) continue;
-
+    for (const {part, quantity} of transferPlan) {
       const reference = `transfer-${Date.now()}-${part.sku}`;
 
-      // Decrement from source
       await appendInventoryLedgerEntry(orgId, {
         sku: part.sku,
         location: sourceLocation,
@@ -60,7 +92,6 @@ export async function POST(request: Request) {
         referenceType: 'transfer',
       });
 
-      // Increment to target
       await appendInventoryLedgerEntry(orgId, {
         sku: part.sku,
         location: targetLocation,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { formatLocationLabel } from '@/lib/inventory/locations';
-import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
+import { consolidateCatalogRowsBySku, type InventoryCatalogRow } from '@/lib/inventory/read-model';
 
 type POLine = { sku: string; itemName: string; quantity: number; supplier: string };
 
@@ -37,6 +37,7 @@ export function PurchaseOrderWizard({
     catalogRows: InventoryCatalogRow[];
     locations: string[];
 }) {
+    const orderCandidates = consolidateCatalogRowsBySku(catalogRows);
     const [step, setStep] = useState<WizardStep>('supplier');
     const [supplierInput, setSupplierInput] = useState('');
     const [draft, setDraft] = useState<PODraft>({
@@ -49,12 +50,12 @@ export function PurchaseOrderWizard({
     const [feedback, setFeedback] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const knownSuppliers = Array.from(new Set(catalogRows.map((r) => r.supplier).filter(Boolean)));
-    const lowStockItems = catalogRows.filter((r) => r.available <= r.reorderPoint);
+    const knownSuppliers = Array.from(new Set(orderCandidates.map((r) => r.supplier).filter(Boolean)));
+    const lowStockItems = orderCandidates.filter((r) => r.available <= r.reorderPoint);
 
     const supplierParts = draft.supplier
-        ? catalogRows.filter((r) => r.supplier.toLowerCase() === draft.supplier.toLowerCase())
-        : catalogRows;
+        ? orderCandidates.filter((r) => r.supplier.toLowerCase() === draft.supplier.toLowerCase())
+        : orderCandidates;
 
     const selectedLines = draft.lines.filter((l) => l.quantity > 0);
 
@@ -193,7 +194,7 @@ export function PurchaseOrderWizard({
                                             >
                                                 <span>{supplier}</span>
                                                 <span className="text-xs text-[#64748b]">
-                                                    {catalogRows.filter((r) => r.supplier === supplier).length} parts
+                                                    {orderCandidates.filter((r) => r.supplier === supplier).length} parts
                                                 </span>
                                             </button>
                                         ))}
@@ -274,6 +275,19 @@ export function PurchaseOrderWizard({
                                             </button>
                                         ))}
                                     </div>
+                                    <label className="block space-y-1">
+                                        <span className="text-xs font-semibold text-[#475569]">Or add a new location</span>
+                                        <input
+                                            type="text"
+                                            value={locations.includes(draft.destinationLocation) ? '' : draft.destinationLocation}
+                                            onChange={(event) => setDraft((current) => ({
+                                                ...current,
+                                                destinationLocation: event.target.value,
+                                            }))}
+                                            placeholder="e.g. Van 2 or Shop Counter"
+                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                        />
+                                    </label>
                                     <label className="block space-y-1">
                                         <span className="text-xs font-semibold text-[#475569]">Order notes (optional)</span>
                                         <textarea

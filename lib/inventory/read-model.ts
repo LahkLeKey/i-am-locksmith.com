@@ -52,6 +52,14 @@ export type InventoryReadModelBuildOptions = {
   incomingBySkuLocation?: InventoryIncomingQuantity[];
 };
 
+export type InventoryLocationBalance = {
+  sku: string;
+  location: string;
+  onHand: number;
+  reserved: number;
+  available: number;
+};
+
 export type InventoryQueueEntry = {
   id: string;
   sku: string;
@@ -81,6 +89,59 @@ const SEVERITY_PRIORITY: Record<ReplenishmentAlert['severity'], number> = {
   medium: 2,
   low: 3,
 };
+
+export function projectInventoryPartsByLocation(
+    inventoryParts: InventoryPartSource[],
+    balances: InventoryLocationBalance[]): InventoryPartSource[] {
+  const balancesBySku = new Map<string, InventoryLocationBalance[]>();
+
+  for (const balance of balances) {
+    const sku = balance.sku.toLowerCase();
+    const skuBalances = balancesBySku.get(sku) ?? [];
+    skuBalances.push(balance);
+    balancesBySku.set(sku, skuBalances);
+  }
+
+  return inventoryParts.flatMap((part) => {
+    const skuBalances = balancesBySku.get(part.sku.toLowerCase());
+
+    if (!skuBalances || skuBalances.length === 0) {
+      return part;
+    }
+
+    return skuBalances.map((balance) => ({
+      ...part,
+      location: balance.location,
+      onHand: balance.onHand,
+      reserved: balance.reserved,
+      available: balance.available,
+    }));
+  });
+}
+
+export function consolidateCatalogRowsBySku(
+    catalogRows: InventoryCatalogRow[]): InventoryCatalogRow[] {
+  const consolidated = new Map<string, InventoryCatalogRow>();
+
+  for (const row of catalogRows) {
+    const sku = row.sku.toLowerCase();
+    const current = consolidated.get(sku);
+
+    if (!current) {
+      consolidated.set(sku, {...row});
+      continue;
+    }
+
+    consolidated.set(sku, {
+      ...current,
+      onHand: current.onHand + row.onHand,
+      reserved: current.reserved + row.reserved,
+      available: current.available + row.available,
+    });
+  }
+
+  return [...consolidated.values()];
+}
 
 export function buildInventoryReadModel(
     dashboardData: DashboardData,

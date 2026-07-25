@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { formatLocationLabel } from '@/lib/inventory/locations';
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
 
@@ -207,6 +207,19 @@ export function TransferWizard({
                                             </button>
                                         ))}
                                     </div>
+                                    <label className="block space-y-1">
+                                        <span className="text-xs font-semibold text-[#475569]">Or add a new location</span>
+                                        <input
+                                            type="text"
+                                            value={destinationLocations.includes(draft.targetLocation) ? '' : draft.targetLocation}
+                                            onChange={(event) => setDraft((current) => ({
+                                                ...current,
+                                                targetLocation: event.target.value,
+                                            }))}
+                                            placeholder="e.g. Van 2 or Garage B"
+                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                        />
+                                    </label>
                                 </div>
                             )}
 

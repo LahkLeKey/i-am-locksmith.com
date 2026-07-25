@@ -30,7 +30,7 @@ type InventoryPartClient = {
       where: {orgId: string}; orderBy: Array<{sku?: 'asc'; itemName?: 'asc'}>
     }) => Promise<InventoryPartRecord[]>;
     findFirst: (args: {where: {id: string; orgId: string}}) =>
-      Promise<InventoryPartRecord|null>;
+        Promise<InventoryPartRecord|null>;
     create: (args: {
       data:
           InventoryPartInput&{
@@ -75,8 +75,8 @@ export async function listInventoryParts(orgId: string):
   return rows.map((row) => toInventoryPartRecord(row as InventoryPartRow));
 }
 
-export async function getInventoryPartById(orgId: string, id: string):
-    Promise<InventoryPartRecord|null> {
+export async function getInventoryPartById(
+    orgId: string, id: string): Promise<InventoryPartRecord|null> {
   const client = await getClient();
 
   try {

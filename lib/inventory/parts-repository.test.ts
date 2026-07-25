@@ -1,12 +1,12 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 vi.mock('@/lib/db/prisma', () => ({
-  prisma: {
-    inventoryPart: {
-      findFirst: vi.fn(),
-    },
-  },
-}));
+                             prisma: {
+                               inventoryPart: {
+                                 findFirst: vi.fn(),
+                               },
+                             },
+                           }));
 
 import {prisma} from '@/lib/db/prisma';
 

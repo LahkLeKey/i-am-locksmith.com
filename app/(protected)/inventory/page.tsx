@@ -2,7 +2,7 @@ import { requireRouteContext } from '@/lib/rbac/guard';
 import { getDashboardData } from '@/lib/dashboard/repository';
 import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-repository';
 import { listIncomingQuantitiesBySkuLocation, listOpenReplenishmentRequests } from '@/lib/inventory/replenishment-repository';
-import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
+import { buildInventoryReadModel, projectInventoryPartsByLocation, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
 import { InventoryLandingPanel } from '@/app/components/inventory/shared/inventory-landing-panel';
 
@@ -39,23 +39,12 @@ export default async function InventoryPage() {
     listOpenReplenishmentRequests(orgId),
   ]);
 
-  const inventoryBalanceLookup = new Map(
-    inventoryBalances.map((entry) => [`${entry.sku.toLowerCase()}::${entry.location.toLowerCase()}`, entry]),
-  );
-
   const inventory = buildInventoryReadModel(
     dashboardData,
-    inventoryParts.map((part) => {
-      const balance = inventoryBalanceLookup.get(
-        `${part.sku.toLowerCase()}::${part.location.toLowerCase()}`,
-      );
-      return {
-        ...toInventoryPartSource(part),
-        onHand: balance?.onHand ?? part.onHand,
-        reserved: balance?.reserved ?? 0,
-        available: balance?.available ?? part.onHand,
-      };
-    }),
+    projectInventoryPartsByLocation(
+      inventoryParts.map(toInventoryPartSource),
+      inventoryBalances,
+    ),
     { incomingBySkuLocation },
   );
 
@@ -72,6 +61,8 @@ export default async function InventoryPage() {
         catalogRows={inventory.catalogRows}
         lowStockCount={inventory.lowStockQueue.length}
         openPOCount={openRequests.length}
+        canAdjust={context.effectivePermissions.has('inventory.adjust')}
+        canTransfer={context.effectivePermissions.has('inventory.transfer')}
       />
     </section>
   );

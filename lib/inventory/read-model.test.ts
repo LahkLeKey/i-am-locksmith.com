@@ -2,7 +2,11 @@ import {describe, expect, it} from 'vitest';
 
 import {type DashboardData} from '../dashboard/types';
 
-import {buildInventoryReadModel} from './read-model';
+import {
+  buildInventoryReadModel,
+  consolidateCatalogRowsBySku,
+  projectInventoryPartsByLocation,
+} from './read-model';
 
 const BASE_DATA: DashboardData = {
   generatedAt: '2026-07-20T09:00:00.000Z',
@@ -260,5 +264,104 @@ describe('buildInventoryReadModel', () => {
         model.lowStockQueue.find((entry) => entry.sku === 'SKU-QUEUE-2');
     expect(queueTwo?.incomingQuantity).toBe(0);
     expect(queueTwo?.shortage).toBe(2);
+  });
+});
+
+describe('projectInventoryPartsByLocation', () => {
+  it('projects one catalog row for every ledger-backed stock location', () => {
+    const parts = [{
+      id: 'PART-1',
+      sku: 'SKU-1',
+      itemName: 'Cylinder core',
+      serviceLines: ['shop'],
+      estimatedUnitCost: 12,
+      location: 'Garage',
+      onHand: 8,
+      reorderPoint: 2,
+      suggestedOrderQty: 10,
+      supplier: 'Supplier A',
+      severity: 'low' as const,
+      compatibilityNote: '',
+    }];
+    const balances = [
+      {
+        sku: 'SKU-1',
+        location: 'Garage',
+        onHand: 5,
+        reserved: 1,
+        available: 4,
+      },
+      {
+        sku: 'SKU-1',
+        location: 'Van 1',
+        onHand: 3,
+        reserved: 0,
+        available: 3,
+      },
+    ];
+
+    const projected = projectInventoryPartsByLocation(parts, balances);
+
+    expect(projected).toEqual([
+      expect.objectContaining({
+        id: 'PART-1',
+        location: 'Garage',
+        onHand: 5,
+        reserved: 1,
+        available: 4,
+      }),
+      expect.objectContaining({
+        id: 'PART-1',
+        location: 'Van 1',
+        onHand: 3,
+        reserved: 0,
+        available: 3,
+      }),
+    ]);
+  });
+});
+
+describe('consolidateCatalogRowsBySku', () => {
+  it('combines warehouse rows into one purchase-order candidate per SKU', () => {
+    const model = buildInventoryReadModel(BASE_DATA, [{
+      id: 'PART-1',
+      sku: 'SKU-1',
+      itemName: 'Cylinder core',
+      serviceLines: ['shop'],
+      estimatedUnitCost: 12,
+      location: 'Garage',
+      onHand: 5,
+      reserved: 1,
+      available: 4,
+      reorderPoint: 10,
+      suggestedOrderQty: 12,
+      supplier: 'Supplier A',
+      severity: 'high',
+      compatibilityNote: '',
+    }, {
+      id: 'PART-1',
+      sku: 'SKU-1',
+      itemName: 'Cylinder core',
+      serviceLines: ['shop'],
+      estimatedUnitCost: 12,
+      location: 'Van 1',
+      onHand: 3,
+      reserved: 0,
+      available: 3,
+      reorderPoint: 10,
+      suggestedOrderQty: 12,
+      supplier: 'Supplier A',
+      severity: 'high',
+      compatibilityNote: '',
+    }]);
+
+    expect(consolidateCatalogRowsBySku(model.catalogRows)).toEqual([
+      expect.objectContaining({
+        sku: 'SKU-1',
+        onHand: 8,
+        reserved: 1,
+        available: 7,
+      }),
+    ]);
   });
 });

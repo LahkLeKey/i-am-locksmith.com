@@ -2,6 +2,8 @@ import { requireRouteContext } from '@/lib/rbac/guard';
 import { formatSchedule } from '@/lib/dashboard/format';
 import { getInventoryPartById } from '@/lib/inventory/parts-repository';
 import { listInventorySkuLocationBalances, listInventoryLedgerEntries } from '@/lib/inventory/ledger-repository';
+import { listOpenReplenishmentRequests } from '@/lib/inventory/replenishment-repository';
+import { InventoryPartActions } from '@/app/components/inventory/shared';
 import Link from 'next/link';
 
 function formatScheduleSafe(isoDate: string): string {
@@ -52,10 +54,22 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
         );
     }
 
-    const balancesByLocation = await listInventorySkuLocationBalances(orgId);
+    const [balancesByLocation, recentEntries, openRequests] = await Promise.all([
+        listInventorySkuLocationBalances(orgId),
+        listInventoryLedgerEntries(orgId, { sku: part.sku }),
+        listOpenReplenishmentRequests(orgId),
+    ]);
     const partBalances = balancesByLocation.filter((b) => b.sku.toLowerCase() === part.sku.toLowerCase());
-    const recentEntries = await listInventoryLedgerEntries(orgId, { sku: part.sku });
     const partTimeline = recentEntries.slice(-10).reverse();
+    const partOpenRequests = openRequests.filter((request) => request.sku.toLowerCase() === part.sku.toLowerCase());
+    const trackedLocations = Array.from(new Set([
+        part.location,
+        ...balancesByLocation.map((balance) => balance.location),
+        ...openRequests.map((request) => request.location),
+    ].filter(Boolean)));
+    const canTransfer = context.effectivePermissions.has('inventory.transfer');
+    const canRestock = context.effectivePermissions.has('inventory.adjust');
+    const canReceive = context.effectivePermissions.has('inventory.receive');
 
     const totalOnHand = partBalances.reduce((sum, b) => sum + b.onHand, 0);
     const totalReserved = partBalances.reduce((sum, b) => sum + b.reserved, 0);
@@ -85,6 +99,11 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                 <a href="#overview" className="whitespace-nowrap px-3 py-2 font-medium text-[#64748b] hover:text-[#0f172a]">
                     Overview
                 </a>
+                {(canTransfer || canRestock || canReceive) ? (
+                    <a href="#actions" className="whitespace-nowrap px-3 py-2 font-medium text-[#64748b] hover:text-[#0f172a]">
+                        Stock Actions
+                    </a>
+                ) : null}
                 <a href="#locations" className="whitespace-nowrap px-3 py-2 font-medium text-[#64748b] hover:text-[#0f172a]">
                     Locations ({partBalances.length})
                 </a>
@@ -127,6 +146,25 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                     </div>
                 </article>
             </div>
+
+            {(canTransfer || canRestock || canReceive) ? (
+                <InventoryPartActions
+                    part={{
+                        id: part.id,
+                        sku: part.sku,
+                        itemName: part.itemName,
+                        supplier: part.supplier,
+                        suggestedOrderQty: part.suggestedOrderQty,
+                        defaultLocation: part.location,
+                    }}
+                    balances={partBalances}
+                    trackedLocations={trackedLocations}
+                    openRequests={partOpenRequests}
+                    canTransfer={canTransfer}
+                    canRestock={canRestock}
+                    canReceive={canReceive}
+                />
+            ) : null}
 
             <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
                 <h2 className="font-semibold">Stock Summary</h2>

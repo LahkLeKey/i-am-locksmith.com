@@ -18,9 +18,11 @@ type InventoryLandingPanelProps = {
     catalogRows: InventoryCatalogRow[];
     lowStockCount: number;
     openPOCount: number;
+    canAdjust: boolean;
+    canTransfer: boolean;
 };
 
-export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount }: InventoryLandingPanelProps) {
+export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount, canAdjust, canTransfer }: InventoryLandingPanelProps) {
     const router = useRouter();
     const [search, setSearch] = useState('');
     const [locationFilter, setLocationFilter] = useState<LocationType | 'all'>('all');
@@ -60,7 +62,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
         return rows;
     }, [catalogRows, locationFilter, search]);
 
-    const totalSkus = catalogRows.length;
+    const totalSkus = new Set(catalogRows.map((row) => row.sku.toLowerCase())).size;
     const totalLocations = locations.length;
 
     return (
@@ -110,23 +112,27 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                         />
                     </label>
                     <div className="grid w-full grid-cols-1 gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap">
-                        <AddPartDrawer onPartAdded={() => router.refresh()} trigger="+ Add SKU" />
-                        <button
-                            type="button"
-                            onClick={() => setActiveWizard('transfer')}
-                            disabled={locations.length < 2}
-                            className="rounded-md border border-[#0f766e] px-3 py-1.5 text-xs font-semibold text-[#0f766e] hover:bg-[#f0fdf4] disabled:opacity-40"
-                            title={locations.length < 2 ? 'Need at least 2 locations to transfer' : undefined}
-                        >
-                            Transfer Stock
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setActiveWizard('purchase-order')}
-                            className="rounded-md bg-[#0f766e] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0d5f56]"
-                        >
-                            + New Purchase Order
-                        </button>
+                        {canAdjust ? <AddPartDrawer onPartAdded={() => router.refresh()} trigger="+ Add SKU" /> : null}
+                        {canTransfer ? (
+                            <button
+                                type="button"
+                                onClick={() => setActiveWizard('transfer')}
+                                disabled={locations.length === 0}
+                                className="rounded-md border border-[#0f766e] px-3 py-1.5 text-xs font-semibold text-[#0f766e] hover:bg-[#f0fdf4] disabled:opacity-40"
+                                title={locations.length === 0 ? 'Add stock before creating a transfer' : undefined}
+                            >
+                                Transfer Stock
+                            </button>
+                        ) : null}
+                        {canAdjust ? (
+                            <button
+                                type="button"
+                                onClick={() => setActiveWizard('purchase-order')}
+                                className="rounded-md bg-[#0f766e] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0d5f56]"
+                            >
+                                + New Purchase Order
+                            </button>
+                        ) : null}
                     </div>
                 </div>
 
@@ -138,8 +144,8 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                             type="button"
                             onClick={() => setLocationFilter(type)}
                             className={`whitespace-nowrap px-4 py-2.5 font-medium transition-colors ${locationFilter === type
-                                    ? 'border-b-2 border-[#0f766e] text-[#0f766e]'
-                                    : 'text-[#64748b] hover:text-[#334155]'
+                                ? 'border-b-2 border-[#0f766e] text-[#0f766e]'
+                                : 'text-[#64748b] hover:text-[#334155]'
                                 }`}
                         >
                             {label}
@@ -181,7 +187,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                             {search ? `No results for "${search}"` : 'No parts in this location.'}
                         </p>
                     ) : (
-                        filteredRows.map((part) => <InventorySkuCard key={part.id} part={part} />)
+                        filteredRows.map((part) => <InventorySkuCard key={`${part.id}:${part.location}`} part={part} />)
                     )}
                 </div>
 
@@ -209,7 +215,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                                 filteredRows.map((part) => {
                                     const isLowStock = part.available <= part.reorderPoint;
                                     return (
-                                        <tr key={part.id} className="align-middle hover:bg-[#f9fafb]">
+                                        <tr key={`${part.id}:${part.location}`} className="align-middle hover:bg-[#f9fafb]">
                                             <td className="px-4 py-3">
                                                 <Link
                                                     href={`/inventory/parts/${part.id}`}
@@ -227,10 +233,10 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${categorizeLocation(part.location) === 'van'
-                                                        ? 'bg-[#dbeafe] text-[#1e40af]'
-                                                        : categorizeLocation(part.location) === 'shop'
-                                                            ? 'bg-[#d1fae5] text-[#065f46]'
-                                                            : 'bg-[#f1f5f9] text-[#475569]'
+                                                    ? 'bg-[#dbeafe] text-[#1e40af]'
+                                                    : categorizeLocation(part.location) === 'shop'
+                                                        ? 'bg-[#d1fae5] text-[#065f46]'
+                                                        : 'bg-[#f1f5f9] text-[#475569]'
                                                     }`}>
                                                     {formatLocationLabel(part.location)}
                                                 </span>
@@ -244,8 +250,8 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                                             <td className="px-4 py-3">
                                                 {isLowStock ? (
                                                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${part.severity === 'critical'
-                                                            ? 'bg-[#fee2e2] text-[#991b1b]'
-                                                            : 'bg-[#fff7ed] text-[#92400e]'
+                                                        ? 'bg-[#fee2e2] text-[#991b1b]'
+                                                        : 'bg-[#fff7ed] text-[#92400e]'
                                                         }`}>
                                                         {part.severity}
                                                     </span>
@@ -285,14 +291,20 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                 <TransferWizard
                     catalogRows={catalogRows}
                     locations={locations}
-                    onClose={() => setActiveWizard(null)}
+                    onClose={() => {
+                        setActiveWizard(null);
+                        router.refresh();
+                    }}
                 />
             )}
             {activeWizard === 'purchase-order' && (
                 <PurchaseOrderWizard
                     catalogRows={catalogRows}
                     locations={locations}
-                    onClose={() => setActiveWizard(null)}
+                    onClose={() => {
+                        setActiveWizard(null);
+                        router.refresh();
+                    }}
                 />
             )}
         </>
