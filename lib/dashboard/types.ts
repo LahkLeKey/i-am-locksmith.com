@@ -11,8 +11,8 @@ export type KpiCard = {
   trend: TrendPoint[];
 };
 
-export type JobQueueStatus =
-  'queued'|'scheduled'|'in_progress'|'blocked'|'closed'|'completed';
+export type JobQueueStatus = 'queued'|'scheduled'|'in_progress'|'blocked'|
+    'ready_for_payment'|'closed'|'completed';
 
 export type JobQueuePriority = 'low'|'normal'|'high'|'urgent';
 

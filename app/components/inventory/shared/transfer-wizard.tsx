@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { formatLocationLabel } from '@/lib/inventory/locations';
+import { formatLocationLabel, LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationType } from '@/lib/inventory/locations';
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
 
 type TransferLine = { partId: string; sku: string; itemName: string; quantity: number; available: number };
@@ -9,6 +9,7 @@ type TransferLine = { partId: string; sku: string; itemName: string; quantity: n
 type TransferDraft = {
     sourceLocation: string;
     targetLocation: string;
+    targetLocationType: LocationType | null;
     lines: TransferLine[];
 };
 
@@ -40,6 +41,7 @@ export function TransferWizard({
     const [draft, setDraft] = useState<TransferDraft>({
         sourceLocation: locations[0] ?? '',
         targetLocation: '',
+        targetLocationType: null,
         lines: [],
     });
     const [isPending, setIsPending] = useState(false);
@@ -52,6 +54,9 @@ export function TransferWizard({
 
     const destinationLocations = locations.filter(
         (loc) => loc.toLowerCase() !== draft.sourceLocation.toLowerCase(),
+    );
+    const isExistingDestination = destinationLocations.some(
+        (location) => location.toLowerCase() === draft.targetLocation.trim().toLowerCase(),
     );
 
     const selectedLines = draft.lines.filter((l) => l.quantity > 0);
@@ -72,7 +77,9 @@ export function TransferWizard({
 
     const canAdvanceSource = draft.sourceLocation.length > 0;
     const canAdvanceParts = selectedLines.length > 0;
-    const canAdvanceDestination = draft.targetLocation.length > 0 && draft.targetLocation !== draft.sourceLocation;
+    const canAdvanceDestination = draft.targetLocation.trim().length > 0 &&
+        draft.targetLocation.trim().toLowerCase() !== draft.sourceLocation.toLowerCase() &&
+        (isExistingDestination || draft.targetLocationType !== null);
 
     async function submitTransfer() {
         setIsPending(true);
@@ -84,7 +91,8 @@ export function TransferWizard({
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
                     sourceLocation: draft.sourceLocation,
-                    targetLocation: draft.targetLocation,
+                    targetLocation: draft.targetLocation.trim(),
+                    targetLocationType: isExistingDestination ? undefined : draft.targetLocationType,
                     parts: selectedLines.map((l) => ({ id: l.partId, quantity: l.quantity })),
                 }),
             });
@@ -200,7 +208,7 @@ export function TransferWizard({
                                             <button
                                                 key={loc}
                                                 type="button"
-                                                onClick={() => setDraft((d) => ({ ...d, targetLocation: loc }))}
+                                                onClick={() => setDraft((d) => ({ ...d, targetLocation: loc, targetLocationType: null }))}
                                                 className={`flex w-full items-center justify-between rounded-md border px-4 py-3 text-sm transition-colors ${draft.targetLocation === loc ? 'border-[#0f766e] bg-[#f0fdf4] font-semibold text-[#0f766e]' : 'border-[#e5e7eb] bg-white text-[#334155] hover:bg-[#f9fafb]'}`}
                                             >
                                                 {formatLocationLabel(loc)}
@@ -215,11 +223,30 @@ export function TransferWizard({
                                             onChange={(event) => setDraft((current) => ({
                                                 ...current,
                                                 targetLocation: event.target.value,
+                                                targetLocationType: current.targetLocationType,
                                             }))}
-                                            placeholder="e.g. Van 2 or Garage B"
+                                            placeholder="e.g. North lot or Service bay"
                                             className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
                                         />
                                     </label>
+                                    {!isExistingDestination && draft.targetLocation.trim() ? (
+                                        <fieldset className="space-y-2">
+                                            <legend className="text-xs font-semibold text-[#475569]">Location type</legend>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {LOCATION_TYPES.map((type) => (
+                                                    <button
+                                                        key={type}
+                                                        type="button"
+                                                        aria-pressed={draft.targetLocationType === type}
+                                                        onClick={() => setDraft((current) => ({ ...current, targetLocationType: type }))}
+                                                        className={`rounded-md border px-2 py-2 text-xs font-semibold ${draft.targetLocationType === type ? 'border-[#0f766e] bg-[#f0fdf4] text-[#0f766e]' : 'border-[#d1d5db] text-[#475569] hover:bg-[#f8fafc]'}`}
+                                                    >
+                                                        {LOCATION_TYPE_LABELS[type]}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </fieldset>
+                                    ) : null}
                                 </div>
                             )}
 
@@ -234,6 +261,12 @@ export function TransferWizard({
                                             <span className="font-semibold text-[#475569]">To</span>
                                             <span className="text-[#0f172a]">{formatLocationLabel(draft.targetLocation)}</span>
                                         </div>
+                                        {!isExistingDestination && draft.targetLocationType ? (
+                                            <div className="mt-1 flex justify-between">
+                                                <span className="font-semibold text-[#475569]">Location type</span>
+                                                <span className="text-[#0f172a]">{LOCATION_TYPE_LABELS[draft.targetLocationType]}</span>
+                                            </div>
+                                        ) : null}
                                     </div>
                                     <div className="space-y-1">
                                         {selectedLines.map((line) => (

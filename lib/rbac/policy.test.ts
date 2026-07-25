@@ -64,4 +64,17 @@ describe('permission helpers', () => {
     expect(tech.has('technicians.manage')).toBe(false);
     expect(tech.has('technicians.read')).toBe(true);
   });
+
+  it('limits offline payment recording to accounting roles', () => {
+    const owner = resolveEffectivePermissions(
+        {orgRole: 'owner_admin', userRole: 'owner_admin'});
+    const accountant = resolveEffectivePermissions(
+        {orgRole: 'owner_admin', userRole: 'accountant'});
+    const dispatcher = resolveEffectivePermissions(
+        {orgRole: 'owner_admin', userRole: 'dispatcher'});
+
+    expect(owner.has('invoices.mark_paid')).toBe(true);
+    expect(accountant.has('invoices.mark_paid')).toBe(true);
+    expect(dispatcher.has('invoices.mark_paid')).toBe(false);
+  });
 });

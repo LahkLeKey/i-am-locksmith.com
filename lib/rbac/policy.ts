@@ -12,14 +12,14 @@ export const ROLES = [
 export type Role = (typeof ROLES)[number];
 
 export const ALL_PERMISSIONS = [
-  'dashboard.read',    'jobs.read',          'jobs.create',
-  'jobs.assign',       'jobs.update',        'jobs.complete',
-  'technicians.read',  'technicians.manage', 'invoices.read',
-  'invoices.create',   'invoices.send',      'invoices.void',
-  'inventory.read',    'inventory.adjust',   'inventory.transfer',
-  'inventory.receive', 'inventory.reserve',  'reports.read',
-  'settings.read',     'settings.update',    'users.read',
-  'users.invite',      'users.role.update',
+  'dashboard.read',     'jobs.read',          'jobs.create',
+  'jobs.assign',        'jobs.update',        'jobs.complete',
+  'technicians.read',   'technicians.manage', 'invoices.read',
+  'invoices.create',    'invoices.send',      'invoices.mark_paid',
+  'invoices.void',      'inventory.read',     'inventory.adjust',
+  'inventory.transfer', 'inventory.receive',  'inventory.reserve',
+  'reports.read',       'settings.read',      'settings.update',
+  'users.read',         'users.invite',       'users.role.update',
 ] as const;
 
 export type Permission = (typeof ALL_PERMISSIONS)[number];
@@ -62,6 +62,7 @@ const ACCOUNTANT_PERMISSIONS: Permission[] = [
   'invoices.read',
   'invoices.create',
   'invoices.send',
+  'invoices.mark_paid',
   'invoices.void',
   'reports.read',
   'settings.read',

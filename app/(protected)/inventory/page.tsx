@@ -4,6 +4,7 @@ import { listInventorySkuLocationBalances } from '@/lib/inventory/ledger-reposit
 import { listIncomingQuantitiesBySkuLocation, listOpenReplenishmentRequests } from '@/lib/inventory/replenishment-repository';
 import { buildInventoryReadModel, projectInventoryPartsByLocation, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
+import { listInventoryLocations } from '@/lib/inventory/location-repository';
 import { InventoryLandingPanel } from '@/app/components/inventory/shared/inventory-landing-panel';
 
 const INVENTORY_SERVICE_LINES = ['automotive', 'mobile', 'shop'] as const;
@@ -31,12 +32,13 @@ export default async function InventoryPage() {
   const context = await requireRouteContext('/inventory');
   const orgId = requireOrgId(context.orgId);
 
-  const [dashboardData, inventoryParts, inventoryBalances, incomingBySkuLocation, openRequests] = await Promise.all([
+  const [dashboardData, inventoryParts, inventoryBalances, incomingBySkuLocation, openRequests, inventoryLocations] = await Promise.all([
     getDashboardData({ orgId }),
     listInventoryParts(orgId),
     listInventorySkuLocationBalances(orgId),
     listIncomingQuantitiesBySkuLocation(orgId),
     listOpenReplenishmentRequests(orgId),
+    listInventoryLocations(orgId),
   ]);
 
   const inventory = buildInventoryReadModel(
@@ -63,6 +65,9 @@ export default async function InventoryPage() {
         openPOCount={openRequests.length}
         canAdjust={context.effectivePermissions.has('inventory.adjust')}
         canTransfer={context.effectivePermissions.has('inventory.transfer')}
+        locationTypes={Object.fromEntries(
+          inventoryLocations.map((location) => [location.name.toLowerCase(), location.type]),
+        )}
       />
     </section>
   );

@@ -10,6 +10,11 @@ vi.mock('@/lib/inventory/parts-repository', () => ({
                                             }));
 
 vi.mock(
+    '@/lib/inventory/location-repository', () => ({
+                                             registerInventoryLocation: vi.fn(),
+                                           }));
+
+vi.mock(
     '@/lib/inventory/ledger-repository',
     () => ({
       appendInventoryLedgerEntry: vi.fn(),
@@ -19,6 +24,7 @@ vi.mock(
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {getInventoryPartById} from '@/lib/inventory/parts-repository';
 import {appendInventoryLedgerEntry, listInventorySkuLocationBalances,} from '@/lib/inventory/ledger-repository';
+import {registerInventoryLocation} from '@/lib/inventory/location-repository';
 
 import {POST} from './route';
 
@@ -28,6 +34,7 @@ const mockedGetInventoryPartById = vi.mocked(getInventoryPartById);
 const mockedAppendInventoryLedgerEntry = vi.mocked(appendInventoryLedgerEntry);
 const mockedListInventorySkuLocationBalances =
     vi.mocked(listInventorySkuLocationBalances);
+const mockedRegisterInventoryLocation = vi.mocked(registerInventoryLocation);
 
 function transferRequest(quantity: number) {
   return new Request('http://localhost/api/inventory-transfers', {
@@ -41,13 +48,15 @@ function transferRequest(quantity: number) {
   });
 }
 
-function transferRequestTo(targetLocation: string) {
+function transferRequestTo(
+    targetLocation: string, targetLocationType?: string) {
   return new Request('http://localhost/api/inventory-transfers', {
     method: 'POST',
     headers: {'content-type': 'application/json'},
     body: JSON.stringify({
       sourceLocation: 'Garage',
       targetLocation,
+      targetLocationType,
       parts: [{id: 'part_1', quantity: 1}],
     }),
   });
@@ -60,6 +69,7 @@ describe('inventory transfers api route', () => {
     mockedGetInventoryPartById.mockReset();
     mockedAppendInventoryLedgerEntry.mockReset();
     mockedListInventorySkuLocationBalances.mockReset();
+    mockedRegisterInventoryLocation.mockReset();
 
     mockedGetAuthorizationContext.mockResolvedValue({
       userId: 'user_1',
@@ -96,6 +106,12 @@ describe('inventory transfers api route', () => {
       lastUpdatedAt: '2026-07-24T01:00:00.000Z',
     }]);
     mockedAppendInventoryLedgerEntry.mockResolvedValue({} as never);
+    mockedRegisterInventoryLocation.mockResolvedValue({
+      id: 'location_1',
+      orgId: 'org_1',
+      name: 'Testing 123',
+      type: 'van',
+    });
   });
 
   it.each([0, -1, 1.5])(
@@ -150,5 +166,25 @@ describe('inventory transfers api route', () => {
               kind: 'transfer_in',
             }),
         );
+  });
+
+  it('registers an explicitly typed new destination before transfer',
+     async () => {
+       const response = await POST(transferRequestTo('Testing 123', 'van'));
+
+       expect(response.status).toBe(200);
+       expect(mockedRegisterInventoryLocation)
+           .toHaveBeenCalledWith('org_1', 'Testing 123', 'van');
+       expect(mockedRegisterInventoryLocation.mock.invocationCallOrder[0])
+           .toBeLessThan(
+               mockedAppendInventoryLedgerEntry.mock.invocationCallOrder[0]);
+     });
+
+  it('rejects an unknown destination location type', async () => {
+    const response = await POST(transferRequestTo('Testing 123', 'warehouse'));
+
+    expect(response.status).toBe(400);
+    expect(mockedRegisterInventoryLocation).not.toHaveBeenCalled();
+    expect(mockedAppendInventoryLedgerEntry).not.toHaveBeenCalled();
   });
 });

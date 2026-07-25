@@ -22,6 +22,7 @@ vi.mock('@/lib/jobs/repository', () => ({
                                    deleteJobRecord: vi.fn(),
                                    getJobRecord: vi.fn(),
                                    listJobRecords: vi.fn(),
+                                   reopenJobRecord: vi.fn(),
                                    updateJobRecord: vi.fn(),
                                  }));
 
@@ -32,7 +33,7 @@ vi.mock('@/lib/technicians/repository', () => ({
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
 import {listInventorySkuLocationBalances, reserveInventoryForJob} from '@/lib/inventory/ledger-repository';
-import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
+import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, reopenJobRecord, updateJobRecord} from '@/lib/jobs/repository';
 import {getTechnicianById} from '@/lib/technicians/repository';
 
 import {DELETE, GET, PATCH, POST} from './route';
@@ -51,6 +52,7 @@ const mockedCreateJobRecord = vi.mocked(createJobRecord);
 const mockedDeleteJobRecord = vi.mocked(deleteJobRecord);
 const mockedGetJobRecord = vi.mocked(getJobRecord);
 const mockedListJobRecords = vi.mocked(listJobRecords);
+const mockedReopenJobRecord = vi.mocked(reopenJobRecord);
 const mockedUpdateJobRecord = vi.mocked(updateJobRecord);
 const mockedGetTechnicianById = vi.mocked(getTechnicianById);
 
@@ -104,6 +106,7 @@ describe('jobs api route', () => {
     mockedDeleteJobRecord.mockReset();
     mockedGetJobRecord.mockReset();
     mockedListJobRecords.mockReset();
+    mockedReopenJobRecord.mockReset();
     mockedUpdateJobRecord.mockReset();
     mockedReserveInventoryForJob.mockReset();
 
@@ -123,6 +126,18 @@ describe('jobs api route', () => {
     mockedDeleteJobRecord.mockResolvedValue({...BASE_JOB} as never);
     mockedGetJobRecord.mockResolvedValue({...BASE_JOB} as never);
     mockedListJobRecords.mockResolvedValue([{...BASE_JOB}] as never);
+    mockedReopenJobRecord.mockResolvedValue({
+      ...BASE_JOB,
+      status: 'in_progress',
+      closeout: {
+        actualPartCost: null,
+        actualLaborCost: null,
+        actualMinutes: null,
+        finalTotal: null,
+        closedOutAt: null,
+        resolutionNotes: null,
+      },
+    } as never);
     mockedGetTechnicianById.mockResolvedValue({
       id: 'tech_1',
       orgId: 'org_1',
@@ -216,6 +231,115 @@ describe('jobs api route', () => {
     expect(mockedGetTechnicianById).toHaveBeenCalledWith('org_1', 'tech_1');
   });
 
+  it('reserves a selected SKU from its chosen source location', async () => {
+    mockedCreateJobRecord.mockResolvedValue({
+      ...BASE_JOB,
+      id: 'JOB-NEW',
+      requiredSkus: ['SKU-1'],
+    } as never);
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        customerName: 'New Co',
+        site: 'Austin',
+        assignedTechnicianId: 'tech_1',
+        inventorySelections: [
+          {sku: 'SKU-1', location: 'Van 1', quantity: 1},
+        ],
+        quote: {
+          partEstimate: 0,
+          laborEstimate: 0,
+          estimatedMinutes: 45,
+          estimatedTotal: 0,
+        },
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedCreateJobRecord)
+        .toHaveBeenCalledWith(
+            'org_1', expect.objectContaining({requiredSkus: ['SKU-1']}));
+    expect(mockedReserveInventoryForJob)
+        .toHaveBeenCalledWith('org_1', 'SKU-1', 'Van 1', {
+          jobId: 'JOB-NEW',
+          jobNumber: 'JOB-NEW',
+          quantity: 1,
+          note: 'Reserved for JOB-NEW',
+        });
+  });
+
+  it('rejects a selected source with insufficient stock before creating a job',
+     async () => {
+       mockedListInventorySkuLocationBalances.mockResolvedValue(
+           [{
+             orgId: 'org_1',
+             sku: 'SKU-1',
+             location: 'Van 1',
+             onHand: 8,
+             reserved: 8,
+             available: 0,
+             entryCount: 1,
+             lastUpdatedAt: '2026-07-20T10:00:00.000Z',
+           }] as never);
+       const request = new Request('http://localhost/api/jobs', {
+         method: 'POST',
+         headers: {'content-type': 'application/json'},
+         body: JSON.stringify({
+           customerName: 'New Co',
+           site: 'Austin',
+           assignedTechnicianId: 'tech_1',
+           inventorySelections: [
+             {sku: 'SKU-1', location: 'Van 1', quantity: 1},
+           ],
+           quote: {
+             partEstimate: 0,
+             laborEstimate: 0,
+             estimatedMinutes: 45,
+             estimatedTotal: 0,
+           },
+         }),
+       });
+
+       const response = await POST(request);
+
+       expect(response?.status).toBe(400);
+       expect(mockedCreateJobRecord).not.toHaveBeenCalled();
+       expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
+     });
+
+  it('requires inventory reservation permission for sourced parts',
+     async () => {
+       mockedAuthorizePermission.mockResolvedValueOnce({state: 'authorized'})
+           .mockResolvedValueOnce({state: 'forbidden'});
+       const request = new Request('http://localhost/api/jobs', {
+         method: 'POST',
+         headers: {'content-type': 'application/json'},
+         body: JSON.stringify({
+           customerName: 'New Co',
+           site: 'Austin',
+           assignedTechnicianId: 'tech_1',
+           inventorySelections: [
+             {sku: 'SKU-1', location: 'Van 1', quantity: 1},
+           ],
+           quote: {
+             partEstimate: 0,
+             laborEstimate: 0,
+             estimatedMinutes: 45,
+             estimatedTotal: 0,
+           },
+         }),
+       });
+
+       const response = await POST(request);
+
+       expect(response?.status).toBe(403);
+       expect(mockedCreateJobRecord).not.toHaveBeenCalled();
+       expect(mockedReserveInventoryForJob).not.toHaveBeenCalled();
+     });
+
   it('lists jobs', async () => {
     const response = await GET();
 
@@ -244,6 +368,71 @@ describe('jobs api route', () => {
 
     expect(response?.status).toBe(200);
     expect(mockedUpdateJobRecord).toHaveBeenCalledOnce();
+  });
+
+  it('reopens a closed job through the explicit action', async () => {
+    mockedGetJobRecord.mockResolvedValue({
+      ...BASE_JOB,
+      status: 'closed',
+    } as never);
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({id: 'JOB-1', jobAction: 'reopen'}),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(200);
+    expect(mockedReopenJobRecord).toHaveBeenCalledWith('org_1', 'JOB-1');
+    expect(mockedUpdateJobRecord).not.toHaveBeenCalled();
+  });
+
+  it('rejects reopening a job that is not closed', async () => {
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({id: 'JOB-1', jobAction: 'reopen'}),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(409);
+    expect(mockedReopenJobRecord).not.toHaveBeenCalled();
+  });
+
+  it('rejects ordinary edits to a closed job', async () => {
+    mockedGetJobRecord.mockResolvedValue({
+      ...BASE_JOB,
+      status: 'closed',
+    } as never);
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({id: 'JOB-1', priority: 'high'}),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(409);
+    expect(mockedUpdateJobRecord).not.toHaveBeenCalled();
+  });
+
+  it('rejects ordinary edits after a job is ready for payment', async () => {
+    mockedGetJobRecord.mockResolvedValue({
+      ...BASE_JOB,
+      status: 'ready_for_payment',
+    } as never);
+    const request = new Request('http://localhost/api/jobs', {
+      method: 'PATCH',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({id: 'JOB-1', priority: 'high'}),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response?.status).toBe(409);
+    expect(mockedUpdateJobRecord).not.toHaveBeenCalled();
   });
 
   it('rejects invalid quote values', async () => {

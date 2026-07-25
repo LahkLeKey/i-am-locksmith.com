@@ -83,8 +83,9 @@ export class JobService {
     const validTransitions: Record<JobQueueStatus, JobQueueStatus[]> = {
       queued: ['scheduled', 'blocked'],
       scheduled: ['in_progress', 'blocked', 'queued'],
-      in_progress: ['blocked', 'closed'],
+      in_progress: ['blocked', 'ready_for_payment'],
       blocked: ['scheduled', 'in_progress'],
+      ready_for_payment: ['closed'],
       closed: ['completed'],
       completed: [],  // terminal state
     };
@@ -100,8 +101,9 @@ export class JobService {
     const nextMap: Record<JobQueueStatus, JobQueueStatus> = {
       queued: 'scheduled',
       scheduled: 'in_progress',
-      in_progress: 'closed',
+      in_progress: 'ready_for_payment',
       blocked: 'scheduled',
+      ready_for_payment: 'closed',
       closed: 'completed',
       completed: 'completed',  // terminal
     };

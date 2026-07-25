@@ -65,6 +65,18 @@ model InventoryLedgerEntry {
     @@index([orgId, kind, createdAt])
 }
 
+model InventoryLocation {
+    id        String   @id @default(cuid())
+    orgId     String
+    name      String
+    type      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([orgId, name])
+    @@index([orgId, type, name])
+}
+
 model ReplenishmentRequest {
     id                String   @id @default(cuid())
     orgId             String
@@ -113,11 +125,55 @@ model JobRecord {
     finalTotal             Decimal?  @db.Decimal(10, 2)
     closedOutAt            DateTime?
     closeoutNotes          String?
+    invoice                Invoice?
     createdAt              DateTime  @default(now())
     updatedAt              DateTime  @updatedAt
 
     @@unique([orgId, jobNumber])
     @@index([orgId, status, updatedAt])
+}
+
+model Invoice {
+    id                String           @id @default(cuid())
+    orgId             String
+    invoiceNumber     String
+    jobId             String           @unique
+    jobNumber         String
+    customerName      String
+    site              String
+    subtotal          Decimal          @db.Decimal(10, 2)
+    taxAmount         Decimal          @default(0) @db.Decimal(10, 2)
+    totalAmount       Decimal          @db.Decimal(10, 2)
+    status            String           @default("draft")
+    notes             String?
+    finalizedAt       DateTime?
+    finalizedByUserId String?
+    paidAt            DateTime?
+    createdAt         DateTime         @default(now())
+    updatedAt         DateTime         @updatedAt
+    job               JobRecord        @relation(fields: [jobId], references: [id], onDelete: Restrict)
+    payments          InvoicePayment[]
+
+    @@unique([orgId, invoiceNumber])
+    @@unique([orgId, jobNumber])
+    @@index([orgId, status, finalizedAt])
+}
+
+model InvoicePayment {
+    id               String   @id @default(cuid())
+    orgId            String
+    invoiceId        String
+    amount           Decimal  @db.Decimal(10, 2)
+    method           String
+    reference        String?
+    notes            String?
+    receivedAt       DateTime
+    recordedByUserId String
+    createdAt        DateTime @default(now())
+    invoice          Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+    @@index([orgId, invoiceId, receivedAt])
+    @@index([orgId, receivedAt])
 }
 
 model Technician {

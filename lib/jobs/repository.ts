@@ -120,7 +120,8 @@ type JobRecordClient = {
 
 function asStatus(value: string): JobQueueStatus {
   if (value === 'queued' || value === 'scheduled' || value === 'in_progress' ||
-      value === 'blocked' || value === 'closed' || value === 'completed') {
+      value === 'blocked' || value === 'ready_for_payment' ||
+      value === 'closed' || value === 'completed') {
     return value;
   }
 
@@ -350,7 +351,8 @@ export async function updateJobRecord(
   const client = await getClient();
   const existing =
       await client.jobRecord.findFirst({where: {orgId, jobNumber}});
-  if (!existing) {
+  if (!existing || existing.status === 'closed' ||
+      existing.status === 'completed') {
     return null;
   }
 
@@ -428,7 +430,8 @@ export async function closeOutJobRecord(
   const client = await getClient();
   const existing =
       await client.jobRecord.findFirst({where: {orgId, jobNumber}});
-  if (!existing) {
+  if (!existing || existing.status === 'closed' ||
+      existing.status === 'completed') {
     return null;
   }
 
@@ -442,6 +445,32 @@ export async function closeOutJobRecord(
       finalTotal: input.finalTotal,
       closedOutAt: new Date(),
       closeoutNotes: input.resolutionNotes,
+    },
+  });
+
+  return toJobQueueItem(row);
+}
+
+export async function reopenJobRecord(
+    orgId: string, jobNumber: string): Promise<JobQueueItem|null> {
+  const client = await getClient();
+  const existing =
+      await client.jobRecord.findFirst({where: {orgId, jobNumber}});
+  if (!existing ||
+      (existing.status !== 'closed' && existing.status !== 'completed')) {
+    return null;
+  }
+
+  const row = await client.jobRecord.update({
+    where: {id: existing.id},
+    data: {
+      status: 'in_progress',
+      actualPartCost: null,
+      actualLaborCost: null,
+      actualMinutes: null,
+      finalTotal: null,
+      closedOutAt: null,
+      closeoutNotes: null,
     },
   });
 

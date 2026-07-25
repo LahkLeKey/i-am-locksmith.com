@@ -7,8 +7,9 @@ import {
   listIncomingQuantitiesBySkuLocation,
   listOpenReplenishmentRequests,
 } from '@/lib/inventory/replenishment-repository';
-import { buildInventoryReadModel, type InventoryPartSource } from '@/lib/inventory/read-model';
+import { buildInventoryReadModel, projectInventoryPartsByLocation, type InventoryPartSource } from '@/lib/inventory/read-model';
 import { listInventoryParts } from '@/lib/inventory/parts-repository';
+import { listInvoices } from '@/lib/invoices/repository';
 import { listJobRecords } from '@/lib/jobs/repository';
 import { listTechnicians } from '@/lib/technicians/repository';
 
@@ -41,7 +42,10 @@ export default async function JobsPage() {
     'inventory.read',
   );
 
-  const jobs = await listJobRecords(context.orgId);
+  const [jobs, invoices] = await Promise.all([
+    listJobRecords(context.orgId),
+    listInvoices(context.orgId),
+  ]);
   const technicians = await listTechnicians(context.orgId);
   const dashboardData = canReadInventory ?
     await getDashboardData({ orgId: context.orgId }) :
@@ -82,18 +86,17 @@ export default async function JobsPage() {
       { incomingBySkuLocation },
     ) :
     null;
-  const inventoryLookupParts = inventoryParts.map((part) => ({
+  const inventoryLookupParts = projectInventoryPartsByLocation(
+    inventoryParts.map(toInventoryPartSource),
+    inventoryBalances,
+  ).map((part) => ({
     id: part.id,
     sku: part.sku,
     itemName: part.itemName,
     estimatedUnitCost: part.estimatedUnitCost,
     location: part.location,
-    onHand: inventoryBalanceLookup.get(
-      `${part.sku.toLowerCase()}::${part.location.toLowerCase()}`,
-    )?.onHand ?? part.onHand,
-    available: inventoryBalanceLookup.get(
-      `${part.sku.toLowerCase()}::${part.location.toLowerCase()}`,
-    )?.available ?? part.onHand,
+    onHand: part.onHand,
+    available: part.available ?? part.onHand,
   }));
 
   return (
@@ -106,6 +109,30 @@ export default async function JobsPage() {
       </article>
       <JobsCrudPanel
         initialJobs={jobs}
+        canRecordPayments={hasPermission(
+          context.effectivePermissions,
+          'invoices.mark_paid',
+        )}
+        initialInvoices={invoices.map((invoice) => ({
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          jobNumber: invoice.jobNumber,
+          status: invoice.status,
+          subtotal: invoice.subtotal,
+          taxAmount: invoice.taxAmount,
+          totalAmount: invoice.totalAmount,
+          paidAmount: invoice.paidAmount,
+          balanceDue: invoice.balanceDue,
+          finalizedAt: invoice.finalizedAt?.toISOString() ?? null,
+          notes: invoice.notes,
+          payments: invoice.payments.map((payment) => ({
+            id: payment.id,
+            amount: payment.amount,
+            method: payment.method,
+            reference: payment.reference,
+            receivedAt: payment.receivedAt.toISOString(),
+          })),
+        }))}
         inventoryLookupParts={inventoryLookupParts}
         technicians={technicians.map((item) => ({
           id: item.id,

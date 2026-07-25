@@ -1,7 +1,7 @@
 import type {JobQueuePriority, JobQueueStatus} from '@/lib/dashboard/types';
 import {listInventorySkuLocationBalances, reserveInventoryForJob} from '@/lib/inventory/ledger-repository';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
-import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, updateJobRecord} from '@/lib/jobs/repository';
+import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, reopenJobRecord, updateJobRecord} from '@/lib/jobs/repository';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {getTechnicianById} from '@/lib/technicians/repository';
 import {NextResponse} from 'next/server';
@@ -11,6 +11,8 @@ type CreateJobRequest = {
   site?: string;
   priority?: JobQueuePriority;
   requiredSkus?: string[];
+  inventorySelections?:
+      Array<{sku?: string; location?: string; quantity?: number;}>;
   scheduledFor?: string | null;
   followUpNote?: string | null;
   assignedTechnicianIds?: string[];
@@ -34,6 +36,7 @@ type QuotePayload = {
 
 type UpdateJobRequest = {
   id?: string;
+  jobAction?: 'reopen';
   customerName?: string;
   site?: string;
   status?: JobQueueStatus;
@@ -83,8 +86,10 @@ type DeleteJobRequest = {
 
 const ALLOWED_PRIORITIES: JobQueuePriority[] =
     ['low', 'normal', 'high', 'urgent'];
-const ALLOWED_STATUSES: JobQueueStatus[] =
-    ['queued', 'scheduled', 'in_progress', 'blocked', 'closed', 'completed'];
+const ALLOWED_STATUSES: JobQueueStatus[] = [
+  'queued', 'scheduled', 'in_progress', 'blocked', 'ready_for_payment',
+  'closed', 'completed'
+];
 
 function computePartEstimateFromSkus(
     requiredSkus: string[],
@@ -112,6 +117,27 @@ function isJobStatus(value: unknown): value is JobQueueStatus {
       ALLOWED_STATUSES.includes(value as JobQueueStatus);
 }
 
+function isFinalizedJob(status: JobQueueStatus): boolean {
+  return status === 'ready_for_payment' || status === 'closed' ||
+      status === 'completed';
+}
+
+async function rejectFinalizedJobMutation(orgId: string, jobId: string) {
+  const current = await getJobRecord(orgId, jobId);
+  if (!current) {
+    return NextResponse.json({error: 'Job not found'}, {status: 404});
+  }
+  if (isFinalizedJob(current.status)) {
+    return NextResponse.json(
+        {
+          error:
+              'Invoiced jobs are read-only. Reopen the job before editing it.'
+        },
+        {status: 409});
+  }
+  return null;
+}
+
 function normalizeSkus(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -128,6 +154,39 @@ function normalizeStringList(value: unknown): string[] {
 
   return value.map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
       .filter((entry) => entry.length > 0);
+}
+
+type JobInventorySelection = {
+  sku: string; location: string; quantity: number;
+};
+
+function normalizeInventorySelections(value: unknown): JobInventorySelection[]|
+    null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const selections = value.map((entry) => {
+    if (!entry || typeof entry !== 'object') return null;
+    const candidate = entry as {
+      sku?: unknown;
+      location?: unknown;
+      quantity?: unknown
+    };
+    if (typeof candidate.sku !== 'string' || !candidate.sku.trim() ||
+        typeof candidate.location !== 'string' || !candidate.location.trim() ||
+        typeof candidate.quantity !== 'number' ||
+        !Number.isInteger(candidate.quantity) || candidate.quantity <= 0) {
+      return null;
+    }
+    return {
+      sku: candidate.sku.trim(),
+      location: candidate.location.trim(),
+      quantity: candidate.quantity,
+    };
+  });
+
+  if (selections.some((selection) => selection === null)) return null;
+  return selections as JobInventorySelection[];
 }
 
 function normalizeTimeClockLedger(value: unknown): Array<{
@@ -336,9 +395,66 @@ export async function POST(request: Request) {
   const primaryTechnician = technicians[0];
 
   const estimatedMinutes = Math.trunc(body.quote!.estimatedMinutes!);
-  const normalizedSkus = normalizeSkus(body.requiredSkus);
+  const inventorySelections =
+      normalizeInventorySelections(body.inventorySelections);
+  if (!inventorySelections) {
+    return NextResponse.json(
+        {
+          error:
+              'Each inventory selection requires a SKU, location, and positive whole quantity'
+        },
+        {status: 400});
+  }
+  const selectedSkuKeys =
+      inventorySelections.map((selection) => selection.sku.toLowerCase());
+  if (new Set(selectedSkuKeys).size !== selectedSkuKeys.length) {
+    return NextResponse.json(
+        {error: 'Select only one source location per SKU'}, {status: 400});
+  }
+  if (inventorySelections.length > 0) {
+    const inventoryDecision = await authorizePermission('inventory.reserve');
+    if (inventoryDecision.state === 'unauthenticated') {
+      return NextResponse.json({error: 'Unauthorized'}, {status: 401});
+    }
+    if (inventoryDecision.state === 'forbidden') {
+      return NextResponse.json({error: 'Forbidden'}, {status: 403});
+    }
+  }
+  const normalizedSkus = inventorySelections.length > 0 ?
+      inventorySelections.map((selection) => selection.sku) :
+      normalizeSkus(body.requiredSkus);
   const inventoryParts = await listInventoryParts(authResult.orgId);
-  const computedPartEstimate =
+  const inventoryBalances = inventorySelections.length > 0 ?
+      await listInventorySkuLocationBalances(authResult.orgId) :
+      [];
+  let computedPartEstimate = 0;
+
+  for (const selection of inventorySelections) {
+    const part = inventoryParts.find(
+        (candidate) =>
+            candidate.sku.toLowerCase() === selection.sku.toLowerCase());
+    const balance = inventoryBalances.find(
+        (candidate) =>
+            candidate.sku.toLowerCase() === selection.sku.toLowerCase() &&
+            candidate.location.toLowerCase() ===
+                selection.location.toLowerCase());
+    if (!part || !balance) {
+      return NextResponse.json(
+          {error: `${selection.sku} is not stocked at ${selection.location}`},
+          {status: 400});
+    }
+    if (balance.available < selection.quantity) {
+      return NextResponse.json(
+          {
+            error: `Insufficient available stock of ${selection.sku} at ${
+                selection.location}`
+          },
+          {status: 400});
+    }
+    computedPartEstimate += part.estimatedUnitCost * selection.quantity;
+  }
+  computedPartEstimate = inventorySelections.length > 0 ?
+      Number(computedPartEstimate.toFixed(2)) :
       computePartEstimateFromSkus(normalizedSkus, inventoryParts);
   const computedLaborEstimate =
       Number(technicians
@@ -370,6 +486,16 @@ export async function POST(request: Request) {
     },
   });
 
+  for (const selection of inventorySelections) {
+    await reserveInventoryForJob(
+        authResult.orgId, selection.sku, selection.location, {
+          jobId: nextJob.id,
+          jobNumber: nextJob.id,
+          quantity: selection.quantity,
+          note: `Reserved for ${nextJob.id}`,
+        });
+  }
+
   return NextResponse.json(
       {ok: true, message: `Created ${nextJob.id}`, job: nextJob});
 }
@@ -400,6 +526,30 @@ export async function PATCH(request: Request) {
 
   const jobId = body.id;
 
+  if (body.jobAction === 'reopen') {
+    const authResult = await authorize('jobs.update');
+    if ('error' in authResult) return authResult.error;
+
+    const current = await getJobRecord(authResult.orgId, jobId);
+    if (!current) {
+      return NextResponse.json({error: 'Job not found'}, {status: 404});
+    }
+    if (current.status !== 'closed' && current.status !== 'completed') {
+      return NextResponse.json(
+          {error: 'Only closed jobs can be reopened'}, {status: 409});
+    }
+
+    const reopened = await reopenJobRecord(authResult.orgId, jobId);
+    if (!reopened) {
+      return NextResponse.json({error: 'Unable to reopen job'}, {status: 409});
+    }
+    return NextResponse.json({
+      ok: true,
+      message: `Reopened ${reopened.id}`,
+      job: reopened,
+    });
+  }
+
   if (body.inventoryAction === 'reserve') {
     const authResult = await authorizeInventory('inventory.reserve');
 
@@ -407,11 +557,15 @@ export async function PATCH(request: Request) {
       return authResult.error;
     }
 
+    const finalizedResponse =
+        await rejectFinalizedJobMutation(authResult.orgId, jobId);
+    if (finalizedResponse) return finalizedResponse;
+
     const inventorySku = body.inventorySku?.trim();
-        const inventoryLocation = body.inventoryLocation?.trim();
+    const inventoryLocation = body.inventoryLocation?.trim();
     const reserveQuantity = body.reserveQuantity;
 
-        if (!inventorySku || !inventoryLocation) {
+    if (!inventorySku || !inventoryLocation) {
       return NextResponse.json(
           {error: 'inventorySku and inventoryLocation are required'},
           {status: 400});
@@ -500,6 +654,10 @@ export async function PATCH(request: Request) {
     if ('error' in authResult) {
       return authResult.error;
     }
+
+    const finalizedResponse =
+        await rejectFinalizedJobMutation(authResult.orgId, jobId);
+    if (finalizedResponse) return finalizedResponse;
 
     const inventorySku = body.inventorySku?.trim();
     const draft = body.createInventory;
@@ -608,6 +766,10 @@ export async function PATCH(request: Request) {
     if ('error' in authResult) {
       return authResult.error;
     }
+
+    const finalizedResponse =
+        await rejectFinalizedJobMutation(authResult.orgId, jobId);
+    if (finalizedResponse) return finalizedResponse;
 
     const current = await getJobRecord(authResult.orgId, jobId);
     if (!current) {
@@ -776,6 +938,10 @@ export async function PATCH(request: Request) {
     return authResult.error;
   }
 
+  const finalizedResponse =
+      await rejectFinalizedJobMutation(authResult.orgId, jobId);
+  if (finalizedResponse) return finalizedResponse;
+
   if (body.status && !isJobStatus(body.status)) {
     return NextResponse.json({error: 'Invalid status'}, {status: 400});
   }
@@ -788,6 +954,12 @@ export async function PATCH(request: Request) {
         },
         {status: 400},
     );
+  }
+
+  if (body.status === 'ready_for_payment' || body.status === 'closed') {
+    return NextResponse.json(
+        {error: 'Use the closeout workflow for payment and close statuses'},
+        {status: 400});
   }
 
   if (body.priority && !isJobPriority(body.priority)) {
@@ -944,6 +1116,10 @@ export async function DELETE(request: Request) {
   if (!body.id) {
     return NextResponse.json({error: 'id is required'}, {status: 400});
   }
+
+  const finalizedResponse =
+      await rejectFinalizedJobMutation(authResult.orgId, body.id);
+  if (finalizedResponse) return finalizedResponse;
 
   const deleted = await deleteJobRecord(authResult.orgId, body.id);
 

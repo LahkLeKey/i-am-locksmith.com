@@ -21,9 +21,10 @@ type InventoryLandingPanelProps = {
     openPOCount: number;
     canAdjust: boolean;
     canTransfer: boolean;
+    locationTypes: Record<string, LocationType>;
 };
 
-export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount, canAdjust, canTransfer }: InventoryLandingPanelProps) {
+export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount, canAdjust, canTransfer, locationTypes }: InventoryLandingPanelProps) {
     const router = useRouter();
     const [search, setSearch] = useState('');
     const [locationFilter, setLocationFilter] = useState<LocationType | 'all'>('all');
@@ -35,20 +36,22 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
         () => Array.from(new Set(catalogRows.map((r) => r.location))).sort(),
         [catalogRows],
     );
+    const getLocationType = (location: string) =>
+        categorizeLocation(location, locationTypes[location.toLowerCase()]);
 
     const locationCounts = useMemo((): Record<LocationType, number> => {
         const counts = { garage: 0, van: 0, shop: 0 };
         for (const row of catalogRows) {
-            counts[categorizeLocation(row.location)]++;
+            counts[getLocationType(row.location)]++;
         }
         return counts;
-    }, [catalogRows]);
+    }, [catalogRows, locationTypes]);
 
     const filteredRows = useMemo(() => {
         let rows = catalogRows;
 
         if (locationFilter !== 'all') {
-            rows = rows.filter((r) => categorizeLocation(r.location) === locationFilter);
+            rows = rows.filter((r) => getLocationType(r.location) === locationFilter);
         }
 
         if (stockFilter === 'low') {
@@ -66,7 +69,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
         }
 
         return rows;
-    }, [catalogRows, locationFilter, search, stockFilter]);
+    }, [catalogRows, locationFilter, locationTypes, search, stockFilter]);
 
     const totalSkus = new Set(catalogRows.map((row) => row.sku.toLowerCase())).size;
     const totalLocations = locations.length;
@@ -199,7 +202,7 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
                             {search ? `No results for "${search}"` : stockFilter === 'low' ? 'No low-stock parts.' : 'No parts in this location.'}
                         </p>
                     ) : (
-                        filteredRows.map((part) => <InventorySkuCard key={`${part.id}:${part.location}`} part={part} />)
+                        filteredRows.map((part) => <InventorySkuCard key={`${part.id}:${part.location}`} part={part} locationType={getLocationType(part.location)} />)
                     )}
                 </div>
 
@@ -244,9 +247,9 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount,
                                                 </Link>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${categorizeLocation(part.location) === 'van'
+                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getLocationType(part.location) === 'van'
                                                     ? 'bg-[#dbeafe] text-[#1e40af]'
-                                                    : categorizeLocation(part.location) === 'shop'
+                                                    : getLocationType(part.location) === 'shop'
                                                         ? 'bg-[#d1fae5] text-[#065f46]'
                                                         : 'bg-[#f1f5f9] text-[#475569]'
                                                     }`}>

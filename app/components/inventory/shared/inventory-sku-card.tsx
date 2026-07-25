@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { categorizeLocation, formatLocationLabel } from '@/lib/inventory/locations';
+import { formatLocationLabel, type LocationType } from '@/lib/inventory/locations';
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
 
 const LOCATION_STYLES = {
@@ -9,8 +9,7 @@ const LOCATION_STYLES = {
     shop: 'bg-[#d1fae5] text-[#065f46]',
 };
 
-export function InventorySkuCard({ part }: { part: InventoryCatalogRow }) {
-    const locationType = categorizeLocation(part.location);
+export function InventorySkuCard({ part, locationType }: { part: InventoryCatalogRow; locationType: LocationType }) {
     const isLowStock = part.available <= part.reorderPoint;
 
     return (

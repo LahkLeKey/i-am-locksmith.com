@@ -29,6 +29,7 @@ const STATUS_LABELS: Record<JobQueueStatus, string> = {
     scheduled: '📅 Scheduled',
     in_progress: '🔧 In Progress',
     blocked: '⛔ Blocked',
+    ready_for_payment: 'Ready for Payment',
     closed: '✅ Closed',
     completed: '🎉 Completed',
 };
@@ -51,8 +52,9 @@ export function JobListSection({
                     in_progress: 1,
                     scheduled: 2,
                     queued: 3,
-                    closed: 4,
-                    completed: 5,
+                    ready_for_payment: 4,
+                    closed: 5,
+                    completed: 6,
                 };
 
                 const statusDiff = statusOrder[a.status] - statusOrder[b.status];

@@ -53,6 +53,7 @@ export function getStepProgressPercentage(currentStep: number, totalSteps: numbe
 interface WizardStepProps {
     step: WizardStepConfig;
     isCurrent: boolean;
+    canNavigate?: boolean;
     onClick?: () => void;
     className?: string;
 }
@@ -60,6 +61,7 @@ interface WizardStepProps {
 export const WizardStep = React.memo(({
     step,
     isCurrent,
+    canNavigate = false,
     onClick,
     className = '',
 }: WizardStepProps) => {
@@ -77,7 +79,7 @@ export const WizardStep = React.memo(({
         <button
             type="button"
             onClick={onClick}
-            disabled={status === 'incomplete' && !isCurrent}
+            disabled={status === 'incomplete' && !isCurrent && !canNavigate}
             className={`${statusStyles} ${className} disabled:opacity-50 disabled:cursor-not-allowed`}
             aria-current={isCurrent ? 'step' : undefined}
         >

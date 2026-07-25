@@ -1,8 +1,10 @@
-import {closeOutJobRecord} from '@/lib/jobs/repository';
+import {closeInvoiceBackedJob, markJobReadyForPayment} from '@/lib/invoices/repository';
+import {getJobRecord} from '@/lib/jobs/repository';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
 import {NextResponse} from 'next/server';
 
 type CloseoutRequest = {
+  action?: 'ready_for_payment'|'close';
   id?: string;
   actualPartCost?: number;
   actualLaborCost?: number;
@@ -37,7 +39,7 @@ async function authorizeCloseout() {
     return {error: NextResponse.json({error: 'Forbidden'}, {status: 403})};
   }
 
-  return {orgId: context.orgId};
+  return {orgId: context.orgId, userId: context.userId};
 }
 
 export async function POST(request: Request) {
@@ -56,6 +58,49 @@ export async function POST(request: Request) {
 
   if (!body.id) {
     return NextResponse.json({error: 'id is required'}, {status: 400});
+  }
+
+  if (body.action === 'close') {
+    try {
+      await closeInvoiceBackedJob(authResult.orgId, body.id);
+      const job = await getJobRecord(authResult.orgId, body.id);
+      return NextResponse.json({
+        ok: true,
+        message: `Closed ${body.id}`,
+        job,
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'UNKNOWN';
+      if (code === 'JOB_NOT_FOUND') {
+        return NextResponse.json({error: 'Job not found'}, {status: 404});
+      }
+      if (code === 'INVOICE_REQUIRED') {
+        return NextResponse.json(
+            {error: 'An invoice is required before closing the job'},
+            {status: 409});
+      }
+      return NextResponse.json(
+          {error: 'Only jobs ready for payment can be closed'}, {status: 409});
+    }
+  }
+
+  const current = await getJobRecord(authResult.orgId, body.id);
+  if (!current) {
+    return NextResponse.json({error: 'Job not found'}, {status: 404});
+  }
+  if (current.status === 'closed' || current.status === 'completed') {
+    return NextResponse.json(
+        {error: 'Closed jobs are read-only. Reopen the job before editing it.'},
+        {status: 409});
+  }
+
+  const invoiceDecision = await authorizePermission('invoices.create');
+  if (invoiceDecision.state === 'unauthenticated') {
+    return NextResponse.json({error: 'Unauthorized'}, {status: 401});
+  }
+  if (invoiceDecision.state === 'forbidden') {
+    return NextResponse.json(
+        {error: 'Invoice creation permission is required'}, {status: 403});
   }
 
   const actualPartCost = body.actualPartCost;
@@ -82,21 +127,33 @@ export async function POST(request: Request) {
     );
   }
 
-  const job = await closeOutJobRecord(authResult.orgId, body.id, {
-    actualPartCost: actualPartCost!,
-    actualLaborCost: actualLaborCost!,
-    actualMinutes: actualMinutes!,
-    finalTotal: finalTotal!,
-    resolutionNotes: body.resolutionNotes || null,
-  });
-
-  if (!job) {
-    return NextResponse.json({error: 'Job not found'}, {status: 404});
+  try {
+    const invoice = await markJobReadyForPayment(
+        authResult.orgId, body.id, authResult.userId, {
+          actualPartCost: actualPartCost!,
+          actualLaborCost: actualLaborCost!,
+          actualMinutes: actualMinutes!,
+          finalTotal: finalTotal!,
+          resolutionNotes: body.resolutionNotes || null,
+        });
+    const job = await getJobRecord(authResult.orgId, body.id);
+    return NextResponse.json({
+      ok: true,
+      message: `${body.id} is ready for payment`,
+      job,
+      invoice,
+    });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UNKNOWN';
+    if (code === 'JOB_NOT_FOUND') {
+      return NextResponse.json({error: 'Job not found'}, {status: 404});
+    }
+    if (code === 'INVOICE_EXISTS') {
+      return NextResponse.json(
+          {error: 'This job already has an invoice'}, {status: 409});
+    }
+    return NextResponse.json(
+        {error: 'Only active jobs can be marked ready for payment'},
+        {status: 409});
   }
-
-  return NextResponse.json({
-    ok: true,
-    message: `Closed out ${job.id}`,
-    job,
-  });
 }

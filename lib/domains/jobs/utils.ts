@@ -58,6 +58,13 @@ export function formatDateTime(value: string|null): string {
   }
 }
 
+export function initialJobWorkflowStep(status: JobQueueItem['status']): 1|5 {
+  return status === 'ready_for_payment' || status === 'closed' ||
+          status === 'completed' ?
+      5 :
+      1;
+}
+
 // ============================================================================
 // Quote Calculations
 // ============================================================================

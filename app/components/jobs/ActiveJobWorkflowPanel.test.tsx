@@ -45,10 +45,11 @@ describe('ActiveJobWorkflowPanel', () => {
     });
 
     it('recognizes valid workflow transitions', () => {
-        // queued -> scheduled -> in_progress -> closed
+        // queued -> scheduled -> in_progress -> ready_for_payment -> closed
         expect(JobService.canTransitionToStatus('queued', 'scheduled')).toBe(true);
         expect(JobService.canTransitionToStatus('scheduled', 'in_progress')).toBe(true);
-        expect(JobService.canTransitionToStatus('in_progress', 'closed')).toBe(true);
+        expect(JobService.canTransitionToStatus('in_progress', 'ready_for_payment')).toBe(true);
+        expect(JobService.canTransitionToStatus('ready_for_payment', 'closed')).toBe(true);
     });
 
     it('prevents invalid status transitions', () => {

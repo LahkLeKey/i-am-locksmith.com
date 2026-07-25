@@ -88,7 +88,10 @@ describe('Jobs Domain Services', () => {
             .toBe(true);
         expect(JobService.canTransitionToStatus('scheduled', 'in_progress'))
             .toBe(true);
-        expect(JobService.canTransitionToStatus('in_progress', 'closed'))
+        expect(JobService.canTransitionToStatus(
+                   'in_progress', 'ready_for_payment'))
+            .toBe(true);
+        expect(JobService.canTransitionToStatus('ready_for_payment', 'closed'))
             .toBe(true);
       });
 
@@ -106,6 +109,8 @@ describe('Jobs Domain Services', () => {
         expect(JobService.getNextRecommendedStatus('scheduled'))
             .toBe('in_progress');
         expect(JobService.getNextRecommendedStatus('in_progress'))
+            .toBe('ready_for_payment');
+        expect(JobService.getNextRecommendedStatus('ready_for_payment'))
             .toBe('closed');
         expect(JobService.getNextRecommendedStatus('closed')).toBe('completed');
         expect(JobService.getNextRecommendedStatus('completed'))

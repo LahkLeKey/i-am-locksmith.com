@@ -1,6 +1,7 @@
 import type {InventoryCatalogRow} from './read-model';
 
-export type LocationType = 'garage'|'van'|'shop';
+export const LOCATION_TYPES = ['garage', 'van', 'shop'] as const;
+export type LocationType = (typeof LOCATION_TYPES)[number];
 
 export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   garage: 'Garage',
@@ -11,7 +12,9 @@ export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
 const VAN_PATTERN = /van|truck|mobile/i;
 const SHOP_PATTERN = /shop|counter|store|front/i;
 
-export function categorizeLocation(location: string): LocationType {
+export function categorizeLocation(
+    location: string, explicitType?: LocationType): LocationType {
+  if (explicitType) return explicitType;
   if (VAN_PATTERN.test(location)) return 'van';
   if (SHOP_PATTERN.test(location)) return 'shop';
   return 'garage';

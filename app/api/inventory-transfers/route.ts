@@ -1,6 +1,9 @@
 import {appendInventoryLedgerEntry, listInventorySkuLocationBalances} from '@/lib/inventory/ledger-repository';
+import {registerInventoryLocation} from '@/lib/inventory/location-repository';
 import {getInventoryPartById} from '@/lib/inventory/parts-repository';
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
+
+import {LOCATION_TYPES, type LocationType} from '../../../lib/inventory/locations';
 
 export async function POST(request: Request) {
   try {
@@ -26,7 +29,8 @@ export async function POST(request: Request) {
       return Response.json({error: 'Organization required'}, {status: 403});
     }
 
-    const {sourceLocation, targetLocation, parts} = await request.json();
+    const {sourceLocation, targetLocation, targetLocationType, parts} =
+        await request.json();
 
     if (!sourceLocation || !targetLocation || !Array.isArray(parts) ||
         parts.length === 0) {
@@ -57,6 +61,12 @@ export async function POST(request: Request) {
           {status: 400});
     }
 
+    if (targetLocationType !== undefined &&
+        !LOCATION_TYPES.includes(targetLocationType as LocationType)) {
+      return Response.json(
+          {error: 'Location type must be garage, van, or shop'}, {status: 400});
+    }
+
     const balances = await listInventorySkuLocationBalances(orgId);
     const transferPlan = [];
 
@@ -77,6 +87,11 @@ export async function POST(request: Request) {
       }
 
       transferPlan.push({part, quantity});
+    }
+
+    if (targetLocationType) {
+      await registerInventoryLocation(
+          orgId, targetLocation, targetLocationType as LocationType);
     }
 
     for (const {part, quantity} of transferPlan) {

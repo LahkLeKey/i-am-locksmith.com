@@ -7,7 +7,7 @@
 import {describe, expect, it} from 'vitest';
 
 import type {EditableLedgerEntry} from './types';
-import {analyzeLedgerPairs, computeElapsedMinutesFromLedger, computePartEstimateFromSkus, determinePairStatus, ensureLedgerPairs, formatDateTime, sameIds, sameSkus, toLocalDateTime, toNumber, validateLedgerPairs,} from './utils';
+import {analyzeLedgerPairs, computeElapsedMinutesFromLedger, computePartEstimateFromSkus, determinePairStatus, ensureLedgerPairs, formatDateTime, initialJobWorkflowStep, sameIds, sameSkus, toLocalDateTime, toNumber, validateLedgerPairs,} from './utils';
 
 describe('Jobs Domain Utilities', () => {
   // ========================================================================
@@ -52,6 +52,21 @@ describe('Jobs Domain Utilities', () => {
     it('returns empty string for null/invalid', () => {
       expect(formatDateTime(null)).toBe('');
       expect(formatDateTime('invalid')).toBe('');
+    });
+  });
+
+  describe('initialJobWorkflowStep', () => {
+    it('opens finalized jobs at closeout', () => {
+      expect(initialJobWorkflowStep('ready_for_payment')).toBe(5);
+      expect(initialJobWorkflowStep('closed')).toBe(5);
+      expect(initialJobWorkflowStep('completed')).toBe(5);
+    });
+
+    it('opens operational jobs at core details', () => {
+      expect(initialJobWorkflowStep('queued')).toBe(1);
+      expect(initialJobWorkflowStep('scheduled')).toBe(1);
+      expect(initialJobWorkflowStep('in_progress')).toBe(1);
+      expect(initialJobWorkflowStep('blocked')).toBe(1);
     });
   });
 
