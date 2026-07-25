@@ -1,5 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import Script from "next/script";
 import localFont from "next/font/local";
 import { templateMetadata } from "./_template/content/metadata";

@@ -11,8 +11,8 @@ export class GeoServiceError extends Error {
   }
 }
 
-export async function geocodeAddress(
-    request: GeocodeRequest): Promise<GeoServiceResult<GeocodeResult[]>> {
+export async function geocodeAddress(request: GeocodeRequest):
+    Promise<GeoServiceResult<GeocodeResult[]>> {
   const normalizedRequest = {
     language: request.language.trim() || 'en',
     limit: request.limit,
@@ -21,23 +21,49 @@ export async function geocodeAddress(
   const identity = buildGeoCacheIdentity(normalizedRequest);
   const cached = await getGeoCache<GeocodeResult[]>(identity.cacheKey);
   if (cached.status === 'HIT') {
-    return {data: cached.value, cache: {status: 'HIT', createdAt: cached.createdAt.toISOString(), expiresAt: cached.expiresAt.toISOString(), stale: false}};
+    return {
+      data: cached.value,
+      cache: {
+        status: 'HIT',
+        createdAt: cached.createdAt.toISOString(),
+        expiresAt: cached.expiresAt.toISOString(),
+        stale: false
+      }
+    };
   }
 
   const requestId = randomUUID();
-  const lease = await acquireGeoCacheLease(identity.cacheKey, requestId, 30_000);
+  const lease =
+      await acquireGeoCacheLease(identity.cacheKey, requestId, 30_000);
   if (!lease) {
     if (cached.status === 'STALE') {
-      return {data: cached.value, cache: {status: 'STALE', createdAt: cached.createdAt.toISOString(), expiresAt: cached.expiresAt.toISOString(), stale: true}};
+      return {
+        data: cached.value,
+        cache: {
+          status: 'STALE',
+          createdAt: cached.createdAt.toISOString(),
+          expiresAt: cached.expiresAt.toISOString(),
+          stale: true
+        }
+      };
     }
     throw new GeoServiceError(
         'UPSTREAM_RATE_LIMITED', 'Another request is refreshing this address.');
   }
 
   try {
-    const quota = await acquireProviderQuota('nominatim', Number(process.env.GEO_NOMINATIM_INTERVAL_MS ?? 1100));
+    const quota = await acquireProviderQuota(
+        'nominatim', Number(process.env.GEO_NOMINATIM_INTERVAL_MS ?? 1100));
     if (!quota && cached.status === 'STALE') {
-      return {data: cached.value, cache: {status: 'STALE', createdAt: cached.createdAt.toISOString(), expiresAt: cached.expiresAt.toISOString(), stale: true}};
+      return {
+        data: cached.value,
+        cache: {
+          status: 'STALE',
+          createdAt: cached.createdAt.toISOString(),
+          expiresAt: cached.expiresAt.toISOString(),
+          stale: true
+        }
+      };
     }
     if (!quota) {
       throw new GeoServiceError(
@@ -50,11 +76,37 @@ export async function geocodeAddress(
     const freshMs = data.length === 0 ? 10 * 60_000 : 24 * 60 * 60_000;
     const staleMs = data.length === 0 ? 0 : 3 * 24 * 60 * 60_000;
     const expiresAt = new Date(createdAt.getTime() + freshMs);
-    await setGeoCache({...identity, normalizedRequest: {requestHash: identity.requestHash}, namespace: 'geo', provider: 'nominatim', endpoint: 'geocode', response: data, responseStatus: 200, expiresAt, staleUntil: new Date(expiresAt.getTime() + staleMs)});
-    return {data, cache: {status: cached.status === 'STALE' ? 'REFRESHED' : 'MISS', createdAt: createdAt.toISOString(), expiresAt: expiresAt.toISOString(), stale: false}};
+    await setGeoCache({
+      ...identity,
+      normalizedRequest: {requestHash: identity.requestHash},
+      namespace: 'geo',
+      provider: 'nominatim',
+      endpoint: 'geocode',
+      response: data,
+      responseStatus: 200,
+      expiresAt,
+      staleUntil: new Date(expiresAt.getTime() + staleMs)
+    });
+    return {
+      data,
+      cache: {
+        status: cached.status === 'STALE' ? 'REFRESHED' : 'MISS',
+        createdAt: createdAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        stale: false
+      }
+    };
   } catch (error) {
     if (cached.status === 'STALE' && !(error instanceof GeoServiceError)) {
-      return {data: cached.value, cache: {status: 'STALE', createdAt: cached.createdAt.toISOString(), expiresAt: cached.expiresAt.toISOString(), stale: true}};
+      return {
+        data: cached.value,
+        cache: {
+          status: 'STALE',
+          createdAt: cached.createdAt.toISOString(),
+          expiresAt: cached.expiresAt.toISOString(),
+          stale: true
+        }
+      };
     }
     throw error;
   } finally {

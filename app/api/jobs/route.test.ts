@@ -401,8 +401,8 @@ describe('jobs api route', () => {
     const response = await PATCH(request);
 
     expect(response?.status).toBe(200);
-    expect(mockedUpdateJobRecord).toHaveBeenCalledWith(
-        'org_1', 'JOB-1', expect.objectContaining({
+    expect(mockedUpdateJobRecord)
+        .toHaveBeenCalledWith('org_1', 'JOB-1', expect.objectContaining({
           site: '456 New Service Road',
           latitude: null,
           longitude: null,

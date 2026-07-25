@@ -31,6 +31,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "clsx": "^2.1.1",
+    "leaflet": "^1.9.4",
     "marked": "^16.3.0",
     "next": "16.2.4",
     "pdf-lib": "^1.17.1",
@@ -39,6 +40,7 @@
     "quill-delta": "^5.1.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-leaflet": "^5.0.0",
     "react-quill-new": "^3.8.3",
     "react-syntax-highlighter": "^15.6.1",
     "tailwindcss": "^4.2.2",
@@ -49,7 +51,9 @@
   "devDependencies": {
     "@clerk/testing": "^2.2.11",
     "@playwright/test": "^1.61.1",
+    "@types/leaflet": "^1.9.21",
     "@types/turndown": "^5.0.5",
+    "dotenv": "^17.4.2",
     "prisma": "^6.19.3",
     "vitest": "^4.1.10"
   },

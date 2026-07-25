@@ -4,15 +4,20 @@ import {LOCATION_TYPES, type LocationType} from './locations';
 
 export type InventoryLocationRecord = {
   id: string; orgId: string; name: string; type: LocationType;
-  address: string | null; latitude: number | null; longitude: number | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 function isLocationType(value: string): value is LocationType {
   return LOCATION_TYPES.includes(value as LocationType);
 }
 
-function toRecord(row: {id: string; orgId: string; name: string; type: string; address: string | null; latitude: unknown; longitude: unknown}):
-    InventoryLocationRecord {
+function toRecord(row: {
+  id: string; orgId: string; name: string; type: string; address: string | null;
+  latitude: unknown;
+  longitude: unknown
+}): InventoryLocationRecord {
   return {
     id: row.id,
     orgId: row.orgId,
@@ -34,8 +39,9 @@ export async function listInventoryLocations(orgId: string):
 }
 
 export async function registerInventoryLocation(
-    orgId: string, name: string,
-  type: LocationType, geo?: {address: string; latitude: number; longitude: number}): Promise<InventoryLocationRecord> {
+    orgId: string, name: string, type: LocationType,
+    geo?: {address: string; latitude: number; longitude: number}):
+    Promise<InventoryLocationRecord> {
   const normalizedName = name.trim();
   const row = await prisma.inventoryLocation.upsert({
     where: {orgId_name: {orgId, name: normalizedName}},

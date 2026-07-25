@@ -1,8 +1,7 @@
-import {randomUUID} from 'node:crypto';
-
-import {GeoServiceError, geocodeAddress} from '@/lib/geo/service';
+import {geocodeAddress, GeoServiceError} from '@/lib/geo/service';
 import {getAuthorizationContext} from '@/lib/rbac/server';
 import {NextResponse} from 'next/server';
+import {randomUUID} from 'node:crypto';
 
 const ATTRIBUTION = {
   text: '© OpenStreetMap contributors',
@@ -12,10 +11,18 @@ const ATTRIBUTION = {
 function errorResponse(
     requestId: string, code: string, message: string, status: number,
     retryable = false) {
-  return NextResponse.json({
-    error: {code, message, retryable, provider: 'nominatim', upstreamCode: null},
-    requestId,
-  }, {status});
+  return NextResponse.json(
+      {
+        error: {
+          code,
+          message,
+          retryable,
+          provider: 'nominatim',
+          upstreamCode: null
+        },
+        requestId,
+      },
+      {status});
 }
 
 export async function GET(request: Request) {

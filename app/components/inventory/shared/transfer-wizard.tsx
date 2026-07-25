@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from 'react';
-import {GeoAddressField} from '@/app/components/shared/geo-address-field';
+import { GeoAddressField } from '@/app/components/shared/geo-address-field';
 import { formatLocationLabel, LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationType } from '@/lib/inventory/locations';
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
-import type {GeocodeResult} from '@/lib/geo/types';
+import type { GeocodeResult } from '@/lib/geo/types';
 
 type TransferLine = { partId: string; sku: string; itemName: string; quantity: number; available: number };
 
@@ -260,8 +260,8 @@ export function TransferWizard({
                                         <GeoAddressField
                                             label="Warehouse address"
                                             value={draft.targetLocationAddress}
-                                            onChange={(value) => setDraft((current) => ({...current, targetLocationAddress: value, targetLocationGeo: null}))}
-                                            onResolved={(result) => setDraft((current) => ({...current, targetLocationGeo: result}))}
+                                            onChange={(value) => setDraft((current) => ({ ...current, targetLocationAddress: value, targetLocationGeo: null }))}
+                                            onResolved={(result) => setDraft((current) => ({ ...current, targetLocationGeo: result }))}
                                             placeholder="Physical address for routing"
                                         />
                                     ) : null}

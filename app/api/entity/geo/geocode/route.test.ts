@@ -1,17 +1,19 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-vi.mock('@/lib/geo/service', () => ({
-  GeoServiceError: class GeoServiceError extends Error {
-    constructor(public code: string, message: string) {
-      super(message);
-    }
-  },
-  geocodeAddress: vi.fn(),
-}));
+vi.mock(
+    '@/lib/geo/service',
+    () => ({
+      GeoServiceError: class GeoServiceError extends Error{
+        constructor(public code: string, message: string) {
+          super(message);
+        }
+      },
+                                                     geocodeAddress: vi.fn(),
+    }));
 
 vi.mock('@/lib/rbac/server', () => ({
-  getAuthorizationContext: vi.fn(),
-}));
+                               getAuthorizationContext: vi.fn(),
+                             }));
 
 import {geocodeAddress} from '@/lib/geo/service';
 import {getAuthorizationContext} from '@/lib/rbac/server';
@@ -26,8 +28,11 @@ describe('geo geocode api route', () => {
     mockedGeocodeAddress.mockReset();
     mockedGetAuthorizationContext.mockReset();
     mockedGetAuthorizationContext.mockResolvedValue({
-      userId: 'user_1', orgId: 'org_1', orgRole: 'owner_admin',
-      userRole: 'owner_admin', clerkOrgRole: 'org:admin',
+      userId: 'user_1',
+      orgId: 'org_1',
+      orgRole: 'owner_admin',
+      userRole: 'owner_admin',
+      clerkOrgRole: 'org:admin',
       effectivePermissions: new Set(),
     });
   });
@@ -43,8 +48,8 @@ describe('geo geocode api route', () => {
   });
 
   it('rejects a blank address query', async () => {
-    const response = await GET(new Request(
-        'http://localhost/api/entity/geo/geocode?q=%20%20'));
+    const response = await GET(
+        new Request('http://localhost/api/entity/geo/geocode?q=%20%20'));
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({

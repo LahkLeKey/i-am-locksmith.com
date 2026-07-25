@@ -23,9 +23,8 @@ export type TimeClockLedgerEntry = {
 export type JobQueueItem = {
   id: string;
   jobName?: string; customerName: string; site: string;
-  latitude?: number | null; longitude?: number | null;
-  priority: JobQueuePriority;
-  status: JobQueueStatus;
+  latitude?: number | null;
+  longitude?: number | null; priority: JobQueuePriority; status: JobQueueStatus;
   scheduledFor: string | null;
   etaMinutes: number | null;
   requiredSkus: string[];

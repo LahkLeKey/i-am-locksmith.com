@@ -8,10 +8,13 @@ type NominatimResult = {
   osm_id?: unknown;
 };
 
-export async function fetchNominatimGeocode(request: GeocodeRequest): Promise<GeocodeResult[]> {
-  const baseUrl = process.env.NOMINATIM_BASE_URL ?? 'https://nominatim.openstreetmap.org';
+export async function fetchNominatimGeocode(request: GeocodeRequest):
+    Promise<GeocodeResult[]> {
+  const baseUrl =
+      process.env.NOMINATIM_BASE_URL ?? 'https://nominatim.openstreetmap.org';
   const userAgent = process.env.GEO_USER_AGENT;
-  if (!userAgent) throw new Error('GEO_USER_AGENT is required for Nominatim requests.');
+  if (!userAgent)
+    throw new Error('GEO_USER_AGENT is required for Nominatim requests.');
 
   const url = new URL('/search', baseUrl);
   url.searchParams.set('q', request.query);
@@ -29,8 +32,16 @@ export async function fetchNominatimGeocode(request: GeocodeRequest): Promise<Ge
     const latitude = Number(entry.lat);
     const longitude = Number(entry.lon);
     const osmId = Number(entry.osm_id);
-    if (typeof entry.display_name !== 'string' || typeof entry.osm_type !== 'string' ||
-        !Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(osmId)) return [];
-    return [{displayName: entry.display_name, latitude, longitude, osmType: entry.osm_type, osmId}];
+    if (typeof entry.display_name !== 'string' ||
+        typeof entry.osm_type !== 'string' || !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) || !Number.isFinite(osmId))
+      return [];
+    return [{
+      displayName: entry.display_name,
+      latitude,
+      longitude,
+      osmType: entry.osm_type,
+      osmId
+    }];
   });
 }

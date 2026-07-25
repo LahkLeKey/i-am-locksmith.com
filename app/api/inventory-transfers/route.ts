@@ -29,9 +29,15 @@ export async function POST(request: Request) {
       return Response.json({error: 'Organization required'}, {status: 403});
     }
 
-    const {sourceLocation, targetLocation, targetLocationType, targetLocationAddress,
-         targetLocationLatitude, targetLocationLongitude, parts} =
-        await request.json();
+    const {
+      sourceLocation,
+      targetLocation,
+      targetLocationType,
+      targetLocationAddress,
+      targetLocationLatitude,
+      targetLocationLongitude,
+      parts
+    } = await request.json();
 
     if (!sourceLocation || !targetLocation || !Array.isArray(parts) ||
         parts.length === 0) {
@@ -68,15 +74,20 @@ export async function POST(request: Request) {
           {error: 'Location type must be garage, van, or shop'}, {status: 400});
     }
 
-    const hasLatitude = targetLocationLatitude !== undefined && targetLocationLatitude !== null;
-    const hasLongitude = targetLocationLongitude !== undefined && targetLocationLongitude !== null;
+    const hasLatitude =
+        targetLocationLatitude !== undefined && targetLocationLatitude !== null;
+    const hasLongitude = targetLocationLongitude !== undefined &&
+        targetLocationLongitude !== null;
     if (hasLatitude !== hasLongitude ||
-      (hasLatitude &&
-       (typeof targetLocationLatitude !== 'number' || !Number.isFinite(targetLocationLatitude) ||
-        targetLocationLatitude < -90 || targetLocationLatitude > 90 ||
-        typeof targetLocationLongitude !== 'number' || !Number.isFinite(targetLocationLongitude) ||
-        targetLocationLongitude < -180 || targetLocationLongitude > 180))) {
-      return Response.json({error: 'Invalid destination coordinates'}, {status: 400});
+        (hasLatitude &&
+         (typeof targetLocationLatitude !== 'number' ||
+          !Number.isFinite(targetLocationLatitude) ||
+          targetLocationLatitude < -90 || targetLocationLatitude > 90 ||
+          typeof targetLocationLongitude !== 'number' ||
+          !Number.isFinite(targetLocationLongitude) ||
+          targetLocationLongitude < -180 || targetLocationLongitude > 180))) {
+      return Response.json(
+          {error: 'Invalid destination coordinates'}, {status: 400});
     }
 
     const balances = await listInventorySkuLocationBalances(orgId);
@@ -105,7 +116,9 @@ export async function POST(request: Request) {
       const locationType = targetLocationType as LocationType;
       if (hasLatitude) {
         await registerInventoryLocation(orgId, targetLocation, locationType, {
-          address: typeof targetLocationAddress === 'string' ? targetLocationAddress.trim() : '',
+          address: typeof targetLocationAddress === 'string' ?
+              targetLocationAddress.trim() :
+              '',
           latitude: targetLocationLatitude,
           longitude: targetLocationLongitude,
         });

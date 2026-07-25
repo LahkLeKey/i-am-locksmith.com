@@ -73,3 +73,22 @@
 .jobs-quill-shell .jobs-quill .ql-container.ql-snow {
   border-bottom: 0;
 }
+
+.geo-map-marker {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 3px solid #ffffff;
+  border-radius: 50% 50% 50% 0;
+  background: #0f766e;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.35);
+  transform: rotate(-45deg);
+}
+
+.geo-map-marker > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+}

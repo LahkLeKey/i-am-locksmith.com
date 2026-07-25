@@ -49,8 +49,8 @@ function transferRequest(quantity: number) {
 }
 
 function transferRequestTo(
-  targetLocation: string, targetLocationType?: string,
-  geo?: {address: string; latitude: number; longitude: number}) {
+    targetLocation: string, targetLocationType?: string,
+    geo?: {address: string; latitude: number; longitude: number}) {
   return new Request('http://localhost/api/inventory-transfers', {
     method: 'POST',
     headers: {'content-type': 'application/json'},
@@ -195,19 +195,20 @@ describe('inventory transfers api route', () => {
     expect(mockedAppendInventoryLedgerEntry).not.toHaveBeenCalled();
   });
 
-  it('registers resolved coordinates for a new warehouse location', async () => {
-    const response = await POST(transferRequestTo('North Garage', 'garage', {
-      address: '123 Main Street, Minneapolis, Minnesota',
-      latitude: 44.9778,
-      longitude: -93.265,
-    }));
+  it('registers resolved coordinates for a new warehouse location',
+     async () => {
+       const response = await POST(transferRequestTo('North Garage', 'garage', {
+         address: '123 Main Street, Minneapolis, Minnesota',
+         latitude: 44.9778,
+         longitude: -93.265,
+       }));
 
-    expect(response.status).toBe(200);
-    expect(mockedRegisterInventoryLocation).toHaveBeenCalledWith(
-        'org_1', 'North Garage', 'garage', {
-          address: '123 Main Street, Minneapolis, Minnesota',
-          latitude: 44.9778,
-          longitude: -93.265,
-        });
-  });
+       expect(response.status).toBe(200);
+       expect(mockedRegisterInventoryLocation)
+           .toHaveBeenCalledWith('org_1', 'North Garage', 'garage', {
+             address: '123 Main Street, Minneapolis, Minnesota',
+             latitude: 44.9778,
+             longitude: -93.265,
+           });
+     });
 });

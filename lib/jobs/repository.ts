@@ -2,8 +2,8 @@ import type {JobQueueItem, JobQueuePriority, JobQueueStatus, TimeClockLedgerEntr
 import {prisma} from '@/lib/db/prisma';
 
 export type JobRecordInput = {
-  jobName: string; customerName: string; site: string;
-  latitude: number | null; longitude: number | null;
+  jobName: string; customerName: string; site: string; latitude: number | null;
+  longitude: number | null;
   priority: JobQueuePriority;
   scheduledFor: string | null;
   requiredSkus: string[];
