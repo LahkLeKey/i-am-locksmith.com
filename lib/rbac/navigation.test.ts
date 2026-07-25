@@ -18,6 +18,15 @@ describe('buildVisibleNavigation', () => {
     const nav = buildVisibleNavigation(getRolePermissions('owner_admin'));
     expect(nav.some((item) => item.href === '/settings')).toBe(true);
     expect(nav.some((item) => item.href === '/technicians')).toBe(true);
+    expect(nav.some((item) => item.href === '/customers')).toBe(true);
+  });
+
+  it('shows customers to dispatch and field roles with customer context', () => {
+    const dispatcher = buildVisibleNavigation(getRolePermissions('dispatcher'));
+    const technician = buildVisibleNavigation(getRolePermissions('technician'));
+
+    expect(dispatcher.some((item) => item.href === '/customers')).toBe(true);
+    expect(technician.some((item) => item.href === '/customers')).toBe(true);
   });
 
   it('hides technicians for dispatcher', () => {

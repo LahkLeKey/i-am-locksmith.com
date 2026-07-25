@@ -47,11 +47,26 @@ describe('permission helpers', () => {
 
   it('contains protected shell routes required for navigation', () => {
     expect(ROUTE_PERMISSION_MAP['/jobs']).toBe('jobs.read');
+    expect(ROUTE_PERMISSION_MAP['/customers']).toBe('customers.read');
     expect(ROUTE_PERMISSION_MAP['/technicians']).toBe('technicians.manage');
     expect(ROUTE_PERMISSION_MAP['/inventory']).toBe('inventory.read');
     expect(ROUTE_PERMISSION_MAP['/invoices']).toBe('invoices.read');
     expect(ROUTE_PERMISSION_MAP['/reports']).toBe('reports.read');
     expect(ROUTE_PERMISSION_MAP['/settings']).toBe('settings.read');
+  });
+
+  it('keeps customer management with owners and dispatchers', () => {
+    const owner = resolveEffectivePermissions(
+        {orgRole: 'owner_admin', userRole: 'owner_admin'});
+    const dispatcher = resolveEffectivePermissions(
+        {orgRole: 'owner_admin', userRole: 'dispatcher'});
+    const technician = resolveEffectivePermissions(
+        {orgRole: 'owner_admin', userRole: 'technician'});
+
+    expect(owner.has('customers.manage')).toBe(true);
+    expect(dispatcher.has('customers.manage')).toBe(true);
+    expect(technician.has('customers.read')).toBe(true);
+    expect(technician.has('customers.manage')).toBe(false);
   });
 
   it('keeps technician assignment constraints by role', () => {

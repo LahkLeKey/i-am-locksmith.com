@@ -2,7 +2,10 @@ import type {JobQueueItem, JobQueuePriority, JobQueueStatus, TimeClockLedgerEntr
 import {prisma} from '@/lib/db/prisma';
 
 export type JobRecordInput = {
-  jobName: string; customerName: string; site: string; latitude: number | null;
+  customerId: string|null; serviceSiteId: string | null; jobName: string;
+  customerName: string;
+  site: string;
+  latitude: number | null;
   longitude: number | null;
   priority: JobQueuePriority;
   scheduledFor: string | null;
@@ -99,6 +102,8 @@ type JobRecordClient = {
     create: (args: {
       data: {
         jobNumber: string; jobName: string; orgId: string; customerName: string;
+        customerId: string | null;
+        serviceSiteId: string | null;
         site: string;
         latitude: number | null;
         longitude: number | null;
@@ -331,6 +336,8 @@ export async function createJobRecord(
   const row = await client.jobRecord.create({
     data: {
       jobNumber: buildJobNumber(),
+      customerId: input.customerId,
+      serviceSiteId: input.serviceSiteId,
       jobName: input.jobName,
       orgId,
       customerName: input.customerName,

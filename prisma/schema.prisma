@@ -124,6 +124,41 @@ model GeoCacheLease {
     @@index([leaseUntil])
 }
 
+model Customer {
+    id          String        @id @default(cuid())
+    orgId       String
+    displayName String
+    email       String?
+    phone       String?
+    notes       String?
+    sites       ServiceSite[]
+    jobs        JobRecord[]
+    createdAt   DateTime      @default(now())
+    updatedAt   DateTime      @updatedAt
+
+    @@index([orgId, displayName])
+    @@index([orgId, phone])
+    @@index([orgId, email])
+}
+
+model ServiceSite {
+    id         String      @id @default(cuid())
+    orgId      String
+    customerId String
+    label      String
+    address    String
+    latitude   Decimal?    @db.Decimal(9, 6)
+    longitude  Decimal?    @db.Decimal(9, 6)
+    isPrimary  Boolean     @default(false)
+    customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+    jobs       JobRecord[]
+    createdAt  DateTime    @default(now())
+    updatedAt  DateTime    @updatedAt
+
+    @@index([orgId, customerId, isPrimary])
+    @@index([orgId, address])
+}
+
 model ReplenishmentRequest {
     id                String   @id @default(cuid())
     orgId             String
@@ -142,45 +177,51 @@ model ReplenishmentRequest {
 }
 
 model JobRecord {
-    id                     String    @id @default(cuid())
+    id                     String       @id @default(cuid())
     jobNumber              String
     jobName                String
     orgId                  String
+    customerId             String?
+    serviceSiteId          String?
     customerName           String
     site                   String
-    latitude               Decimal?  @db.Decimal(9, 6)
-    longitude              Decimal?  @db.Decimal(9, 6)
+    latitude               Decimal?     @db.Decimal(9, 6)
+    longitude              Decimal?     @db.Decimal(9, 6)
     priority               String
     status                 String
     scheduledFor           DateTime?
     etaMinutes             Int?
     requiredSkus           Json
     followUpNote           String?
-    assignedTechnicianIds  Json      @default("[]")
+    assignedTechnicianIds  Json         @default("[]")
     assignedTechnicianName String?
-    laborRate              Decimal?  @db.Decimal(10, 2)
-    partEstimate           Decimal   @db.Decimal(10, 2)
-    laborEstimate          Decimal   @db.Decimal(10, 2)
+    laborRate              Decimal?     @db.Decimal(10, 2)
+    partEstimate           Decimal      @db.Decimal(10, 2)
+    laborEstimate          Decimal      @db.Decimal(10, 2)
     estimatedMinutes       Int
-    estimatedTotal         Decimal   @db.Decimal(10, 2)
+    estimatedTotal         Decimal      @db.Decimal(10, 2)
     quoteNotes             String?
     clockedInAt            DateTime?
     clockedOutAt           DateTime?
-    breakMinutes           Int       @default(0)
+    breakMinutes           Int          @default(0)
     timeClockNotes         String?
-    timeClockLedger        Json      @default("[]")
-    actualPartCost         Decimal?  @db.Decimal(10, 2)
-    actualLaborCost        Decimal?  @db.Decimal(10, 2)
+    timeClockLedger        Json         @default("[]")
+    actualPartCost         Decimal?     @db.Decimal(10, 2)
+    actualLaborCost        Decimal?     @db.Decimal(10, 2)
     actualMinutes          Int?
-    finalTotal             Decimal?  @db.Decimal(10, 2)
+    finalTotal             Decimal?     @db.Decimal(10, 2)
     closedOutAt            DateTime?
     closeoutNotes          String?
     invoice                Invoice?
-    createdAt              DateTime  @default(now())
-    updatedAt              DateTime  @updatedAt
+    customer               Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+    serviceSite            ServiceSite? @relation(fields: [serviceSiteId], references: [id], onDelete: SetNull)
+    createdAt              DateTime     @default(now())
+    updatedAt              DateTime     @updatedAt
 
     @@unique([orgId, jobNumber])
     @@index([orgId, status, updatedAt])
+    @@index([orgId, customerId, updatedAt])
+    @@index([orgId, serviceSiteId])
 }
 
 model Invoice {

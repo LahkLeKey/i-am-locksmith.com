@@ -43,7 +43,10 @@ The primary office persona who needs accurate inventory state to plan and execut
 The primary success metric is reducing median quote-to-scheduled-job time by at least 30 percent for authenticated users.
 
 ## Service Site
-The customer-facing physical address where a job is performed. A verified service site may include geographic coordinates for routing, but the entered address remains usable when location lookup is unavailable.
+The reusable physical location belonging to a Customer where one or more jobs may be performed. A verified service site may include geographic coordinates for routing, but the entered address remains usable when location lookup is unavailable.
+
+## Customer
+The person or business receiving locksmith service. A Customer may have multiple Service Sites and many Jobs. Jobs retain customer and site snapshots so historical invoices remain stable when CRM records change.
 
 ## Inventory Location
 A named place where stock is controlled, such as a garage, van, or shop. Inventory ledger events reference the location name; the canonical location record owns its type, optional physical address, and optional geographic coordinates.

@@ -18,8 +18,10 @@ type GeoAddressFieldProps = {
     value: string;
     onChange: (value: string) => void;
     onResolved: (result: GeocodeResult | null) => void;
+    resolvedLocation?: GeocodeResult | null;
     placeholder?: string;
     required?: boolean;
+    readOnly?: boolean;
 };
 
 export function GeoAddressField({
@@ -27,12 +29,13 @@ export function GeoAddressField({
     value,
     onChange,
     onResolved,
+    resolvedLocation = null,
     placeholder = 'Street address, city, state',
     required = false,
+    readOnly = false,
 }: GeoAddressFieldProps) {
     const inputId = `geo-address-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
     const [results, setResults] = useState<GeocodeResult[]>([]);
-    const [selectedResult, setSelectedResult] = useState<GeocodeResult | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
 
@@ -75,22 +78,22 @@ export function GeoAddressField({
                     onChange={(event) => {
                         onChange(event.target.value);
                         onResolved(null);
-                        setSelectedResult(null);
                         setResults([]);
                         setMessage(null);
                     }}
                     placeholder={placeholder}
                     className="min-w-0 flex-1 rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
                     required={required}
+                    readOnly={readOnly}
                 />
-                <button
+                {!readOnly ? <button
                     type="button"
                     onClick={searchAddress}
                     disabled={isSearching || value.trim().length === 0}
                     className="shrink-0 rounded-md border border-[#0f766e] px-3 py-2 text-xs font-semibold text-[#0f766e] disabled:opacity-50"
                 >
                     {isSearching ? 'Finding...' : 'Find address'}
-                </button>
+                </button> : null}
             </div>
             {results.length > 0 ? (
                 <div role="listbox" aria-label={`${label} results`} className="max-h-40 overflow-y-auto rounded-md border border-[#dbe3f0] bg-white">
@@ -103,7 +106,6 @@ export function GeoAddressField({
                             onClick={() => {
                                 onChange(result.displayName);
                                 onResolved(result);
-                                setSelectedResult(result);
                                 setResults([]);
                                 setMessage('Address verified with OpenStreetMap.');
                             }}
@@ -115,7 +117,7 @@ export function GeoAddressField({
                 </div>
             ) : null}
             {message ? <p className="text-[11px] text-[#64748b]">{message}</p> : null}
-            {selectedResult ? <GeoLocationMap location={selectedResult} /> : null}
+            {resolvedLocation ? <GeoLocationMap location={resolvedLocation} /> : null}
             <p className="text-[10px] text-[#64748b]">Address and map data © OpenStreetMap contributors</p>
         </div>
     );

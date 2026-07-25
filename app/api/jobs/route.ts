@@ -1,3 +1,4 @@
+import {getCustomerSite} from '@/lib/customers/repository';
 import type {JobQueuePriority, JobQueueStatus} from '@/lib/dashboard/types';
 import {listInventorySkuLocationBalances, reserveInventoryForJob} from '@/lib/inventory/ledger-repository';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
@@ -7,6 +8,8 @@ import {getTechnicianById} from '@/lib/technicians/repository';
 import {NextResponse} from 'next/server';
 
 type CreateJobRequest = {
+  customerId?: string|null;
+  serviceSiteId?: string | null;
   jobName?: string;
   customerName?: string;
   site?: string;
@@ -363,18 +366,42 @@ export async function POST(request: Request) {
     return NextResponse.json({error: 'Invalid JSON payload'}, {status: 400});
   }
 
-  const customerName = body.customerName?.trim();
-  const site = body.site?.trim();
+  let customerName = body.customerName?.trim();
+  let site = body.site?.trim();
+  let latitude = body.latitude ?? null;
+  let longitude = body.longitude ?? null;
+  let customerId: string|null = null;
+  let serviceSiteId: string|null = null;
+
+  if (body.customerId || body.serviceSiteId) {
+    if (!body.customerId || !body.serviceSiteId) {
+      return NextResponse.json(
+          {error: 'customerId and serviceSiteId must be provided together'},
+          {status: 400});
+    }
+    const crmSelection = await getCustomerSite(
+        authResult.orgId, body.customerId, body.serviceSiteId);
+    if (!crmSelection) {
+      return NextResponse.json(
+          {error: 'Customer service site not found'}, {status: 404});
+    }
+    customerId = crmSelection.customer.id;
+    serviceSiteId = crmSelection.site.id;
+    customerName = crmSelection.customer.displayName;
+    site = crmSelection.site.address;
+    latitude = crmSelection.site.latitude;
+    longitude = crmSelection.site.longitude;
+  }
 
   if (!customerName || !site) {
     return NextResponse.json(
         {error: 'customerName and site are required'}, {status: 400});
   }
 
-  const hasLatitude = body.latitude !== undefined && body.latitude !== null;
-  const hasLongitude = body.longitude !== undefined && body.longitude !== null;
+  const hasLatitude = latitude !== null;
+  const hasLongitude = longitude !== null;
   if (hasLatitude !== hasLongitude ||
-      (hasLatitude && !isValidCoordinates(body.latitude, body.longitude))) {
+      (hasLatitude && !isValidCoordinates(latitude, longitude))) {
     return NextResponse.json(
         {error: 'latitude and longitude must be valid coordinates'},
         {status: 400});
@@ -487,11 +514,13 @@ export async function POST(request: Request) {
       Number((computedPartEstimate + computedLaborEstimate).toFixed(2));
 
   const nextJob = await createJobRecord(authResult.orgId, {
+    customerId,
+    serviceSiteId,
     jobName: body.jobName?.trim() || `${customerName} - ${site}`,
     customerName,
     site,
-    latitude: hasLatitude ? body.latitude! : null,
-    longitude: hasLongitude ? body.longitude! : null,
+    latitude: hasLatitude ? latitude : null,
+    longitude: hasLongitude ? longitude : null,
     priority: body.priority ?? 'normal',
     scheduledFor: body.scheduledFor ?? null,
     requiredSkus: normalizedSkus,

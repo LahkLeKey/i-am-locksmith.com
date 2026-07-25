@@ -14,6 +14,7 @@ export type Role = (typeof ROLES)[number];
 export const ALL_PERMISSIONS = [
   'dashboard.read',     'jobs.read',          'jobs.create',
   'jobs.assign',        'jobs.update',        'jobs.complete',
+  'customers.read',     'customers.manage',
   'technicians.read',   'technicians.manage', 'invoices.read',
   'invoices.create',    'invoices.send',      'invoices.mark_paid',
   'invoices.void',      'inventory.read',     'inventory.adjust',
@@ -32,6 +33,8 @@ const DISPATCHER_PERMISSIONS: Permission[] = [
   'jobs.assign',
   'jobs.update',
   'jobs.complete',
+  'customers.read',
+  'customers.manage',
   'technicians.read',
   'invoices.read',
   'invoices.create',
@@ -44,6 +47,7 @@ const TECHNICIAN_PERMISSIONS: Permission[] = [
   'technicians.read',
   'jobs.update',
   'jobs.complete',
+  'customers.read',
   'inventory.read',
   'inventory.reserve',
 ];
@@ -70,6 +74,7 @@ const ACCOUNTANT_PERMISSIONS: Permission[] = [
 const VIEWER_AUDITOR_PERMISSIONS: Permission[] = [
   'dashboard.read',
   'jobs.read',
+  'customers.read',
   'technicians.read',
   'invoices.read',
   'inventory.read',
@@ -90,6 +95,7 @@ export const RBAC_MATRIX: Record<Role, readonly Permission[]> = {
 export const ROUTE_PERMISSION_MAP = {
   '/dashboard': 'dashboard.read',
   '/jobs': 'jobs.read',
+  '/customers': 'customers.read',
   '/technicians': 'technicians.manage',
   '/inventory': 'inventory.read',
   '/invoices': 'invoices.read',
@@ -100,6 +106,9 @@ export const ROUTE_PERMISSION_MAP = {
   'GET /api/technicians': 'technicians.read',
   'POST /api/technicians': 'technicians.manage',
   'PATCH /api/technicians': 'technicians.manage',
+  'GET /api/customers': 'customers.read',
+  'POST /api/customers': 'customers.manage',
+  'PATCH /api/customers': 'customers.manage',
 } as const satisfies Record<string, Permission>;
 
 export function normalizeRole(value: unknown): Role|null {

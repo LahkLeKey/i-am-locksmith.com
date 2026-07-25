@@ -8,10 +8,12 @@ import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { InventoryActionCard } from '@/app/components/inventory/shared/inventory-shared';
 import { GeoAddressField } from '@/app/components/shared/geo-address-field';
+import { JobCustomerStep } from './job-customer-step';
 import { WizardProgressBar, WizardNavigation } from '@/app/components/shared/ui';
 import { WizardStep as WizardStepComponent, type WizardStepConfig } from '@/app/components/shared/ui';
 import type { TechnicianOption, InventoryPart, SelectedInventoryLookup } from '@/lib/domains/shared/types';
 import type { GeocodeResult } from '@/lib/geo/types';
+import type { CustomerRecord } from '@/lib/customers/types';
 import type { JobDraft, CloseoutDraft } from '@/lib/domains/jobs/types';
 import { initialJobWorkflowStep } from '@/lib/domains/jobs/utils';
 import { LOCATION_TYPE_LABELS } from '@/lib/inventory/locations';
@@ -441,12 +443,14 @@ export function JobsCrudPanel({
     canRecordPayments,
     inventoryLookupParts,
     technicians,
+    initialCustomers,
 }: {
     initialJobs: JobQueueItem[];
     initialInvoices: JobInvoiceSummary[];
     canRecordPayments: boolean;
     inventoryLookupParts: InventoryPart[];
     technicians: TechnicianOption[];
+    initialCustomers: CustomerRecord[];
 }) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -455,6 +459,9 @@ export function JobsCrudPanel({
 
     const [jobName, setJobName] = useState('');
     const [customerName, setCustomerName] = useState('');
+    const [customers, setCustomers] = useState(initialCustomers);
+    const [customerId, setCustomerId] = useState('');
+    const [serviceSiteId, setServiceSiteId] = useState('');
     const [site, setSite] = useState('');
     const [siteCoordinates, setSiteCoordinates] = useState<GeocodeResult | null>(null);
     const [priority, setPriority] = useState<JobQueuePriority>('normal');
@@ -513,6 +520,8 @@ export function JobsCrudPanel({
     useEffect(() => {
         const requestedView = searchParams.get('view');
         const requestedJobId = searchParams.get('job');
+        const requestedCustomerId = searchParams.get('customer');
+        const requestedSiteId = searchParams.get('site');
         if (requestedView === 'active' || requestedView === 'scheduled' || requestedView === 'payment' || requestedView === 'closed' || requestedView === 'all') {
             setQueueView(requestedView);
         }
@@ -522,7 +531,28 @@ export function JobsCrudPanel({
             setActiveJobWizardStep(initialJobWorkflowStep(requestedJob.status));
             setIsActiveWorkflowOpen(true);
         }
-    }, [initialJobs, searchParams]);
+        if (searchParams.get('new') === '1' && requestedCustomerId && requestedSiteId) {
+            const requestedCustomer = initialCustomers.find((customer) => customer.id === requestedCustomerId);
+            const requestedSite = requestedCustomer?.sites.find((entry) => entry.id === requestedSiteId);
+            if (requestedCustomer && requestedSite) {
+                setCustomerId(requestedCustomer.id);
+                setServiceSiteId(requestedSite.id);
+                setCustomerName(requestedCustomer.displayName);
+                setSite(requestedSite.address);
+                setSiteCoordinates(
+                    requestedSite.latitude !== null && requestedSite.longitude !== null ? {
+                        displayName: requestedSite.address,
+                        latitude: requestedSite.latitude,
+                        longitude: requestedSite.longitude,
+                        osmType: 'crm-site',
+                        osmId: 0,
+                    } : null,
+                );
+                setWizardStep(1);
+                setIsAddWizardOpen(true);
+            }
+        }
+    }, [initialCustomers, initialJobs, searchParams]);
 
     const jobs = useMemo(() => [...jobsState].sort((left, right) => right.id.localeCompare(left.id)), [jobsState]);
     const visibleJobs = useMemo(() => jobs.filter((job) => {
@@ -769,6 +799,8 @@ export function JobsCrudPanel({
         setWizardStep(1);
         setJobName('');
         setCustomerName('');
+        setCustomerId('');
+        setServiceSiteId('');
         setSite('');
         setSiteCoordinates(null);
         setPriority('normal');
@@ -785,7 +817,9 @@ export function JobsCrudPanel({
 
     function canAdvanceFromStep(step: AddJobWizardStep): boolean {
         if (step === 1) {
-            return jobName.trim().length > 0 && customerName.trim().length > 0 && site.trim().length > 0;
+            return customerId.trim().length > 0 && serviceSiteId.trim().length > 0 &&
+                jobName.trim().length > 0 && customerName.trim().length > 0 &&
+                site.trim().length > 0;
         }
 
         if (step === 2) {
@@ -871,7 +905,7 @@ export function JobsCrudPanel({
 
                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                                 {[
-                                    { step: 1 as const, title: 'Job Details', desc: 'Customer, location, and schedule' },
+                                    { step: 1 as const, title: 'Customer & Site', desc: 'CRM details, location, and job setup' },
                                     { step: 2 as const, title: 'Parts', desc: 'Inventory requirements' },
                                     { step: 3 as const, title: 'Technician + Labor', desc: 'Assign and estimate' },
                                     { step: 4 as const, title: 'Review + Submit', desc: 'Verify and create' },
@@ -895,66 +929,72 @@ export function JobsCrudPanel({
                             </div>
 
                             {wizardStep === 1 ? (
-                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Job Name</span>
-                                        <input
-                                            value={jobName}
-                                            onChange={(event) => setJobName(event.target.value)}
-                                            placeholder="Short job name"
-                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                            required
-                                        />
-                                    </label>
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Customer</span>
-                                        <input
-                                            value={customerName}
-                                            onChange={(event) => setCustomerName(event.target.value)}
-                                            placeholder="Customer name"
-                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                            required
-                                        />
-                                    </label>
-                                    <GeoAddressField
-                                        label="Service address"
-                                        value={site}
-                                        onChange={setSite}
-                                        onResolved={setSiteCoordinates}
-                                        required
+                                <div className="space-y-6">
+                                    <JobCustomerStep
+                                        customers={customers}
+                                        customerId={customerId}
+                                        serviceSiteId={serviceSiteId}
+                                        customerName={customerName}
+                                        site={site}
+                                        siteCoordinates={siteCoordinates}
+                                        onCustomerIdChange={setCustomerId}
+                                        onServiceSiteIdChange={setServiceSiteId}
+                                        onCustomerNameChange={setCustomerName}
+                                        onSiteChange={setSite}
+                                        onSiteResolved={setSiteCoordinates}
+                                        onCustomerCreated={(customer) => setCustomers((current) => [...current, customer].sort((left, right) => left.displayName.localeCompare(right.displayName)))}
+                                        onCustomerUpdated={(customer) => setCustomers((current) => current.map((candidate) => candidate.id === customer.id ? customer : candidate))}
                                     />
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Priority</span>
-                                        <select
-                                            value={priority}
-                                            onChange={(event) => setPriority(event.target.value as JobQueuePriority)}
-                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                        >
-                                            {PRIORITIES.map((entry) => (
-                                                <option key={entry} value={entry}>
-                                                    {entry}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                    <label className="space-y-1">
-                                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Scheduled For</span>
-                                        <input
-                                            type="datetime-local"
-                                            value={scheduledFor}
-                                            onChange={(event) => setScheduledFor(event.target.value)}
-                                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                                        />
-                                    </label>
-                                    <div className="sm:col-span-2 lg:col-span-3">
-                                        <RichTextMarkdownField
-                                            label="Customer Note"
-                                            value={followUpNote}
-                                            onChange={setFollowUpNote}
-                                            placeholder="Call-ahead instructions or customer context"
-                                            minRows={4}
-                                        />
-                                    </div>
+                                    <section className="border-t border-[#dbe3f0] pt-4" aria-labelledby="job-setup-heading">
+                                        <div className="mb-3">
+                                            <h2 id="job-setup-heading" className="text-sm font-semibold text-[#0f172a]">Job setup</h2>
+                                            <p className="mt-1 text-xs text-[#64748b]">Define the work request after the customer and location are settled.</p>
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Job Name</span>
+                                                <input
+                                                    value={jobName}
+                                                    onChange={(event) => setJobName(event.target.value)}
+                                                    placeholder="Short job name"
+                                                    className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                                    required
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Priority</span>
+                                                <select
+                                                    value={priority}
+                                                    onChange={(event) => setPriority(event.target.value as JobQueuePriority)}
+                                                    className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                                >
+                                                    {PRIORITIES.map((entry) => (
+                                                        <option key={entry} value={entry}>
+                                                            {entry}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#475569]">Scheduled For</span>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={scheduledFor}
+                                                    onChange={(event) => setScheduledFor(event.target.value)}
+                                                    className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                                                />
+                                            </label>
+                                            <div className="sm:col-span-2 lg:col-span-3">
+                                                <RichTextMarkdownField
+                                                    label="Customer Note"
+                                                    value={followUpNote}
+                                                    onChange={setFollowUpNote}
+                                                    placeholder="Call-ahead instructions or customer context"
+                                                    minRows={4}
+                                                />
+                                            </div>
+                                        </div>
+                                    </section>
                                 </div>
                             ) : null}
 
@@ -1140,6 +1180,8 @@ export function JobsCrudPanel({
                                                         method: 'POST',
                                                         headers: { 'content-type': 'application/json' },
                                                         body: JSON.stringify({
+                                                            customerId: customerId || null,
+                                                            serviceSiteId: serviceSiteId || null,
                                                             jobName,
                                                             customerName,
                                                             site,

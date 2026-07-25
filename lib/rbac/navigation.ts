@@ -7,6 +7,7 @@ export type NavItem = {
 export const NAV_ITEMS: readonly NavItem[] = [
   {href: '/dashboard', label: 'Dashboard', permission: 'dashboard.read'},
   {href: '/jobs', label: 'Jobs', permission: 'jobs.read'},
+  {href: '/customers', label: 'Customers', permission: 'customers.read'},
   {
     href: '/technicians',
     label: 'Technicians',

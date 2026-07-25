@@ -11,6 +11,8 @@ vi.mock('@/lib/inventory/parts-repository', () => ({
                                               updateInventoryPart: vi.fn(),
                                             }));
 
+vi.mock('@/lib/customers/repository', () => ({getCustomerSite: vi.fn()}));
+
 vi.mock('@/lib/inventory/ledger-repository', () => ({
                                                listInventorySkuLocationBalances:
                                                    vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('@/lib/technicians/repository', () => ({
                                         }));
 
 import {authorizePermission, getAuthorizationContext} from '@/lib/rbac/server';
+import {getCustomerSite} from '@/lib/customers/repository';
 import {createInventoryPart, listInventoryParts, updateInventoryPart} from '@/lib/inventory/parts-repository';
 import {listInventorySkuLocationBalances, reserveInventoryForJob} from '@/lib/inventory/ledger-repository';
 import {createJobRecord, deleteJobRecord, getJobRecord, listJobRecords, reopenJobRecord, updateJobRecord} from '@/lib/jobs/repository';
@@ -39,6 +42,7 @@ import {getTechnicianById} from '@/lib/technicians/repository';
 import {DELETE, GET, PATCH, POST} from './route';
 
 const mockedAuthorizePermission = vi.mocked(authorizePermission);
+const mockedGetCustomerSite = vi.mocked(getCustomerSite);
 const mockedGetAuthorizationContext = vi.mocked(getAuthorizationContext);
 
 const mockedListInventoryParts = vi.mocked(listInventoryParts);
@@ -96,6 +100,7 @@ const BASE_JOB = {
 describe('jobs api route', () => {
   beforeEach(() => {
     mockedAuthorizePermission.mockReset();
+    mockedGetCustomerSite.mockReset();
     mockedGetAuthorizationContext.mockReset();
 
     mockedListInventoryParts.mockReset();
@@ -234,6 +239,56 @@ describe('jobs api route', () => {
             }),
         );
     expect(mockedGetTechnicianById).toHaveBeenCalledWith('org_1', 'tech_1');
+  });
+
+  it('derives job snapshots from a selected CRM customer site', async () => {
+    mockedGetCustomerSite.mockResolvedValue({
+      customer: {
+        id: 'customer_1',
+        orgId: 'org_1',
+        displayName: 'Northside Medical',
+        email: null,
+        phone: null,
+        notes: null,
+        sites: [],
+      },
+      site: {
+        id: 'site_1',
+        label: 'Main entrance',
+        address: '123 Main Street, Minneapolis, Minnesota',
+        latitude: 44.9778,
+        longitude: -93.265,
+        isPrimary: true,
+      },
+    });
+    const response = await POST(new Request('http://localhost/api/jobs', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        customerId: 'customer_1',
+        serviceSiteId: 'site_1',
+        assignedTechnicianId: 'tech_1',
+        quote: {
+          partEstimate: 0,
+          laborEstimate: 0,
+          estimatedMinutes: 45,
+          estimatedTotal: 0
+        },
+      }),
+    }));
+
+    expect(response?.status).toBe(200);
+    expect(mockedGetCustomerSite)
+        .toHaveBeenCalledWith('org_1', 'customer_1', 'site_1');
+    expect(mockedCreateJobRecord)
+        .toHaveBeenCalledWith('org_1', expect.objectContaining({
+          customerId: 'customer_1',
+          serviceSiteId: 'site_1',
+          customerName: 'Northside Medical',
+          site: '123 Main Street, Minneapolis, Minnesota',
+          latitude: 44.9778,
+          longitude: -93.265,
+        }));
   });
 
   it('reserves a selected SKU from its chosen source location', async () => {

@@ -13,6 +13,7 @@ import { listInventoryLocations } from '@/lib/inventory/location-repository';
 import { listInvoices } from '@/lib/invoices/repository';
 import { listJobRecords } from '@/lib/jobs/repository';
 import { listTechnicians } from '@/lib/technicians/repository';
+import { listCustomers } from '@/lib/customers/repository';
 
 import { InventoryExceptionPanel } from '@/app/components/inventory/shared/inventory-exception-panel';
 import { InventoryReplenishmentPanel } from '@/app/components/inventory/shared/inventory-replenishment-panel';
@@ -43,9 +44,10 @@ export default async function JobsPage() {
     'inventory.read',
   );
 
-  const [jobs, invoices] = await Promise.all([
+  const [jobs, invoices, customers] = await Promise.all([
     listJobRecords(context.orgId),
     listInvoices(context.orgId),
+    listCustomers(context.orgId),
   ]);
   const technicians = await listTechnicians(context.orgId);
   const dashboardData = canReadInventory ?
@@ -116,6 +118,7 @@ export default async function JobsPage() {
       </article>
       <JobsCrudPanel
         initialJobs={jobs}
+        initialCustomers={customers}
         canRecordPayments={hasPermission(
           context.effectivePermissions,
           'invoices.mark_paid',
