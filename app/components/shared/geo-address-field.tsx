@@ -70,26 +70,26 @@ export function GeoAddressField({
             </label>
             <div className="flex gap-2">
                 <input
-                        id={inputId}
-                        value={value}
-                        onChange={(event) => {
-                            onChange(event.target.value);
-                            onResolved(null);
-                            setSelectedResult(null);
-                            setResults([]);
-                            setMessage(null);
-                        }}
-                        placeholder={placeholder}
-                        className="min-w-0 flex-1 rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
-                        required={required}
+                    id={inputId}
+                    value={value}
+                    onChange={(event) => {
+                        onChange(event.target.value);
+                        onResolved(null);
+                        setSelectedResult(null);
+                        setResults([]);
+                        setMessage(null);
+                    }}
+                    placeholder={placeholder}
+                    className="min-w-0 flex-1 rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                    required={required}
                 />
                 <button
-                        type="button"
-                        onClick={searchAddress}
-                        disabled={isSearching || value.trim().length === 0}
-                        className="shrink-0 rounded-md border border-[#0f766e] px-3 py-2 text-xs font-semibold text-[#0f766e] disabled:opacity-50"
-                    >
-                        {isSearching ? 'Finding...' : 'Find address'}
+                    type="button"
+                    onClick={searchAddress}
+                    disabled={isSearching || value.trim().length === 0}
+                    className="shrink-0 rounded-md border border-[#0f766e] px-3 py-2 text-xs font-semibold text-[#0f766e] disabled:opacity-50"
+                >
+                    {isSearching ? 'Finding...' : 'Find address'}
                 </button>
             </div>
             {results.length > 0 ? (
