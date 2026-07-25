@@ -127,11 +127,10 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                             key={type}
                             type="button"
                             onClick={() => setLocationFilter(type)}
-                            className={`whitespace-nowrap px-4 py-2.5 font-medium transition-colors ${
-                                locationFilter === type
+                            className={`whitespace-nowrap px-4 py-2.5 font-medium transition-colors ${locationFilter === type
                                     ? 'border-b-2 border-[#0f766e] text-[#0f766e]'
                                     : 'text-[#64748b] hover:text-[#334155]'
-                            }`}
+                                }`}
                         >
                             {label}
                             {type !== 'all' && (
@@ -180,13 +179,12 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                                                 </Link>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                                    categorizeLocation(part.location) === 'van'
+                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${categorizeLocation(part.location) === 'van'
                                                         ? 'bg-[#dbeafe] text-[#1e40af]'
                                                         : categorizeLocation(part.location) === 'shop'
-                                                        ? 'bg-[#d1fae5] text-[#065f46]'
-                                                        : 'bg-[#f1f5f9] text-[#475569]'
-                                                }`}>
+                                                            ? 'bg-[#d1fae5] text-[#065f46]'
+                                                            : 'bg-[#f1f5f9] text-[#475569]'
+                                                    }`}>
                                                     {formatLocationLabel(part.location)}
                                                 </span>
                                             </td>
@@ -198,11 +196,10 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                                             </td>
                                             <td className="px-4 py-3">
                                                 {isLowStock ? (
-                                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                                        part.severity === 'critical'
+                                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${part.severity === 'critical'
                                                             ? 'bg-[#fee2e2] text-[#991b1b]'
                                                             : 'bg-[#fff7ed] text-[#92400e]'
-                                                    }`}>
+                                                        }`}>
                                                         {part.severity}
                                                     </span>
                                                 ) : (
