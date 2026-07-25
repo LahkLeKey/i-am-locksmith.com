@@ -31,16 +31,16 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
     const context = await requireRouteContext('/inventory');
     const orgId = requireOrgId(context.orgId);
 
-    const part = await getInventoryPartById(partId);
+    const part = await getInventoryPartById(orgId, partId);
 
     if (!part) {
         return (
             <section className="space-y-4">
                 <Link
-                    href="/inventory/catalog"
+                    href="/inventory"
                     className="text-xs text-[#0f766e] hover:underline"
                 >
-                    ← Back to Catalog
+                    ← Back to Inventory
                 </Link>
                 <div className="rounded-md border border-[#e5e7eb] bg-[#fff7ed] p-4">
                     <p className="text-sm font-semibold text-[#92400e]">Part not found</p>
@@ -55,7 +55,7 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
     const balancesByLocation = await listInventorySkuLocationBalances(orgId);
     const partBalances = balancesByLocation.filter((b) => b.sku.toLowerCase() === part.sku.toLowerCase());
     const recentEntries = await listInventoryLedgerEntries(orgId, { sku: part.sku });
-    const partTimeline = recentEntries.slice(0, 10);
+    const partTimeline = recentEntries.slice(-10).reverse();
 
     const totalOnHand = partBalances.reduce((sum, b) => sum + b.onHand, 0);
     const totalReserved = partBalances.reduce((sum, b) => sum + b.reserved, 0);
@@ -67,10 +67,10 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
             <div className="flex items-center justify-between">
                 <div>
                     <Link
-                        href="/inventory/catalog"
+                        href="/inventory"
                         className="text-xs text-[#0f766e] hover:underline"
                     >
-                        ← Back to Catalog
+                        ← Back to Inventory
                     </Link>
                     <h1 className="mt-2 text-2xl font-semibold">{part.itemName}</h1>
                     <p className="mt-1 text-sm text-[#4b5563]">SKU: {part.sku}</p>
@@ -81,7 +81,19 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                 </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
+            <nav aria-label="SKU detail sections" className="flex gap-1 overflow-x-auto border-b border-[#e5e7eb] text-xs">
+                <a href="#overview" className="whitespace-nowrap px-3 py-2 font-medium text-[#64748b] hover:text-[#0f172a]">
+                    Overview
+                </a>
+                <a href="#locations" className="whitespace-nowrap px-3 py-2 font-medium text-[#64748b] hover:text-[#0f172a]">
+                    Locations ({partBalances.length})
+                </a>
+                <a href="#activity" className="whitespace-nowrap px-3 py-2 font-medium text-[#64748b] hover:text-[#0f172a]">
+                    Activity ({partTimeline.length})
+                </a>
+            </nav>
+
+            <div id="overview" className="scroll-mt-6 grid gap-3 md:grid-cols-2">
                 <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
                     <p className="text-xs text-[#6b7280]">Supplier</p>
                     <p className="mt-1 text-sm font-semibold">{part.supplier}</p>
@@ -142,7 +154,7 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                 </div>
             </article>
 
-            <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
+            <article id="locations" className="scroll-mt-6 rounded-md border border-[#e5e7eb] bg-white p-4">
                 <h2 className="font-semibold">Stock by Location</h2>
                 {partBalances.length > 0 ? (
                     <div className="mt-4 overflow-x-auto">
@@ -172,7 +184,7 @@ export default async function PartDetailPage(props: { params: PartDetailPagePara
                 )}
             </article>
 
-            <article className="rounded-md border border-[#e5e7eb] bg-white p-4">
+            <article id="activity" className="scroll-mt-6 rounded-md border border-[#e5e7eb] bg-white p-4">
                 <h2 className="font-semibold">Recent Transactions</h2>
                 {partTimeline.length > 0 ? (
                     <div className="mt-4 overflow-x-auto">

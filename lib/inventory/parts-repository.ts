@@ -29,6 +29,8 @@ type InventoryPartClient = {
     findMany: (args: {
       where: {orgId: string}; orderBy: Array<{sku?: 'asc'; itemName?: 'asc'}>
     }) => Promise<InventoryPartRecord[]>;
+    findFirst: (args: {where: {id: string; orgId: string}}) =>
+      Promise<InventoryPartRecord|null>;
     create: (args: {
       data:
           InventoryPartInput&{
@@ -73,13 +75,13 @@ export async function listInventoryParts(orgId: string):
   return rows.map((row) => toInventoryPartRecord(row as InventoryPartRow));
 }
 
-export async function getInventoryPartById(id: string):
+export async function getInventoryPartById(orgId: string, id: string):
     Promise<InventoryPartRecord|null> {
   const client = await getClient();
 
   try {
-    const row = await (prisma.inventoryPart.findUnique as any)({
-      where: {id},
+    const row = await client.inventoryPart.findFirst({
+      where: {id, orgId},
     });
 
     if (!row) return null;

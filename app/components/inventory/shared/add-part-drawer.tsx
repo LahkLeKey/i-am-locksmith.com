@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { INVENTORY_SERVICE_LINE_OPTIONS, ServiceLineBadgeRow } from './inventory-shared';
 
 const SEVERITY_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
@@ -13,13 +13,50 @@ export function AddPartDrawer({
     onPartAdded,
     trigger,
 }: {
-    onPartAdded?: (part: any) => void;
+    onPartAdded?: () => void;
     trigger?: React.ReactNode;
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [isPending, setIsPending] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const dialog = dialogRef.current;
+        const focusable = dialog?.querySelectorAll<HTMLElement>(
+            'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])',
+        );
+        focusable?.[0]?.focus();
+
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.key === 'Escape') {
+                setIsOpen(false);
+                return;
+            }
+
+            if (event.key !== 'Tab' || !focusable?.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            triggerRef.current?.focus();
+        };
+    }, [isOpen]);
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -58,7 +95,7 @@ export function AddPartDrawer({
 
             setFeedback(payload?.message ?? 'Part created successfully.');
             form.reset();
-            onPartAdded?.(payload.part);
+            onPartAdded?.();
 
             setTimeout(() => {
                 setIsOpen(false);
@@ -73,18 +110,22 @@ export function AddPartDrawer({
     return (
         <>
             <button
+                ref={triggerRef}
+                type="button"
                 onClick={() => setIsOpen(true)}
-                className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d5f56]"
+                className="w-full rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d5f56] sm:w-auto"
             >
                 {trigger || '+ Add Part'}
             </button>
 
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-end bg-black/30 sm:items-center">
-                    <div className="w-full max-h-[90vh] overflow-y-auto bg-white sm:max-w-2xl sm:rounded-lg">
+                <div className="fixed inset-0 z-50 flex items-end bg-black/30 p-4 sm:items-center sm:justify-center">
+                    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="add-part-title" className="max-h-[90vh] w-full overflow-y-auto bg-white sm:max-w-2xl sm:rounded-lg">
                         <div className="sticky top-0 flex items-center justify-between border-b border-[#e5e7eb] bg-white px-6 py-4">
-                            <h2 className="text-lg font-semibold">Add New Part</h2>
+                            <h2 id="add-part-title" className="text-lg font-semibold">Add New SKU</h2>
                             <button
+                                type="button"
+                                aria-label="Close add SKU dialog"
                                 onClick={() => setIsOpen(false)}
                                 className="text-[#6b7280] hover:text-[#111827]"
                             >

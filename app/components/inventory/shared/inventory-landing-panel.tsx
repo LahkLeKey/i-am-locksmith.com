@@ -2,13 +2,17 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import type { InventoryCatalogRow } from '@/lib/inventory/read-model';
 import { categorizeLocation, formatLocationLabel, LOCATION_TYPE_LABELS, type LocationType } from '@/lib/inventory/locations';
 import { TransferWizard } from './transfer-wizard';
 import { PurchaseOrderWizard } from './purchase-order-wizard';
+import { InventorySkuCard } from './inventory-sku-card';
+import { AddPartDrawer } from './add-part-drawer';
 
 type ActiveWizard = 'transfer' | 'purchase-order' | null;
+type CatalogView = 'table' | 'cards';
 
 type InventoryLandingPanelProps = {
     catalogRows: InventoryCatalogRow[];
@@ -17,9 +21,11 @@ type InventoryLandingPanelProps = {
 };
 
 export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount }: InventoryLandingPanelProps) {
+    const router = useRouter();
     const [search, setSearch] = useState('');
     const [locationFilter, setLocationFilter] = useState<LocationType | 'all'>('all');
     const [activeWizard, setActiveWizard] = useState<ActiveWizard>(null);
+    const [catalogView, setCatalogView] = useState<CatalogView>('table');
 
     const locations = useMemo(
         () => Array.from(new Set(catalogRows.map((r) => r.location))).sort(),
@@ -92,15 +98,19 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
             {/* Catalog Table */}
             <section className="rounded-md border border-[#e5e7eb] bg-white">
                 {/* Toolbar */}
-                <div className="flex flex-wrap items-center gap-3 border-b border-[#e5e7eb] px-4 py-3">
-                    <input
-                        type="search"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search part, SKU, supplier, or location…"
-                        className="flex-1 min-w-52 rounded-md border border-[#d1d5db] px-3 py-1.5 text-xs"
-                    />
-                    <div className="ml-auto flex gap-2">
+                <div className="flex flex-wrap items-end gap-3 border-b border-[#e5e7eb] px-4 py-3">
+                    <label className="flex w-full flex-1 flex-col gap-1 sm:min-w-52">
+                        <span className="text-[11px] font-semibold text-[#475569]">Search inventory</span>
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Part, SKU, supplier, or location"
+                            className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-xs"
+                        />
+                    </label>
+                    <div className="grid w-full grid-cols-1 gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap">
+                        <AddPartDrawer onPartAdded={() => router.refresh()} trigger="+ Add SKU" />
                         <button
                             type="button"
                             onClick={() => setActiveWizard('transfer')}
@@ -145,10 +155,38 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                             )}
                         </button>
                     ))}
+                    <div className="ml-auto hidden items-center gap-1 px-3 md:flex" aria-label="Catalog view">
+                        <button
+                            type="button"
+                            onClick={() => setCatalogView('table')}
+                            aria-pressed={catalogView === 'table'}
+                            className={`rounded px-2 py-1 text-[11px] font-semibold ${catalogView === 'table' ? 'bg-[#e2e8f0] text-[#0f172a]' : 'text-[#64748b] hover:bg-[#f1f5f9]'}`}
+                        >
+                            Table
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setCatalogView('cards')}
+                            aria-pressed={catalogView === 'cards'}
+                            className={`rounded px-2 py-1 text-[11px] font-semibold ${catalogView === 'cards' ? 'bg-[#e2e8f0] text-[#0f172a]' : 'text-[#64748b] hover:bg-[#f1f5f9]'}`}
+                        >
+                            Cards
+                        </button>
+                    </div>
                 </div>
 
-                {/* Table */}
-                <div className="overflow-x-auto">
+                <div className={`grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3 ${catalogView === 'table' ? 'md:hidden' : ''}`}>
+                    {filteredRows.length === 0 ? (
+                        <p className="py-6 text-center text-xs text-[#64748b]">
+                            {search ? `No results for "${search}"` : 'No parts in this location.'}
+                        </p>
+                    ) : (
+                        filteredRows.map((part) => <InventorySkuCard key={part.id} part={part} />)
+                    )}
+                </div>
+
+                {/* Desktop table */}
+                <div className={`hidden overflow-x-auto ${catalogView === 'table' ? 'md:block' : ''}`}>
                     <table className="min-w-full divide-y divide-[#e5e7eb] text-left text-xs">
                         <thead className="bg-[#f8fafc] text-[#475569]">
                             <tr>
@@ -173,9 +211,18 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                                     return (
                                         <tr key={part.id} className="align-middle hover:bg-[#f9fafb]">
                                             <td className="px-4 py-3">
-                                                <Link href={`/inventory/parts/${part.id}`} className="block hover:underline">
-                                                    <p className="font-semibold text-[#0f766e]">{part.itemName}</p>
-                                                    <p className="text-[11px] text-[#64748b]">{part.sku}</p>
+                                                <Link
+                                                    href={`/inventory/parts/${part.id}`}
+                                                    aria-label={`Open ${part.itemName}, SKU ${part.sku}`}
+                                                    className="group block rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f766e]"
+                                                >
+                                                    <p className="font-semibold text-[#0f172a] group-hover:text-[#0f766e] group-hover:underline">
+                                                        {part.itemName}
+                                                    </p>
+                                                    <p className="font-mono text-[11px] font-semibold text-[#64748b]">SKU {part.sku}</p>
+                                                    <p className="mt-1 max-w-64 truncate text-[10px] text-[#94a3b8]">
+                                                        {part.compatibilityNote || part.serviceLines.join(' · ')}
+                                                    </p>
                                                 </Link>
                                             </td>
                                             <td className="px-4 py-3">
@@ -212,9 +259,10 @@ export function InventoryLandingPanel({ catalogRows, lowStockCount, openPOCount 
                                             <td className="px-4 py-3">
                                                 <Link
                                                     href={`/inventory/parts/${part.id}`}
-                                                    className="text-[11px] text-[#0f766e] hover:underline"
+                                                    aria-label={`View details for ${part.itemName}`}
+                                                    className="whitespace-nowrap text-[11px] font-semibold text-[#0f766e] hover:underline"
                                                 >
-                                                    View
+                                                    Open details →
                                                 </Link>
                                             </td>
                                         </tr>

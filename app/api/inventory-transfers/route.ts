@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     // Verify all parts exist and have sufficient stock
     const balances = await listInventorySkuLocationBalances(orgId);
     for (const {id, quantity} of parts) {
-      const part = await getInventoryPartById(id);
+      const part = await getInventoryPartById(orgId, id);
       if (!part) {
         return Response.json({error: `Part ${id} not found`}, {status: 404});
       }
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
     // Execute transfers
     for (const {id, quantity} of parts) {
-      const part = await getInventoryPartById(id);
+      const part = await getInventoryPartById(orgId, id);
       if (!part) continue;
 
       const reference = `transfer-${Date.now()}-${part.sku}`;
